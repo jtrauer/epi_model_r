@@ -2,14 +2,14 @@
 library(deSolve)
 
 # generic model builder function
-fixed_flows <- 
+create_flows_dataframe <- function() {
   data.frame(flow_name=character(0), 
              from_compartment=character(0),
              to_compartment=character(0))
-infection_flows <-
-  data.frame(flow_name=character(0),
-             from_compartment=character(0),
-             to_compartment=character(0))
+}
+
+fixed_flows <- create_flows_dataframe()
+infection_flows <- create_flows_dataframe()
 
 make_epi_model <- 
   function(compartment_names, infection_flows, fixed_flows) {
