@@ -1,21 +1,6 @@
 
 library(deSolve)
 
-# request model features
-parameters <- 
-  c(beta = 400, recovery = 365 / 13, immunity_wane = 100)
-compartments <- 
-  c("susceptible", "infectious", "recovered")
-times <- 
-  seq(from=0, to=60/365, by=1/365)
-initial_conditions <- 
-  c(susceptible=0.999, infectious=0.001, recovered=0)
-fixed_flows <- matrix(nrow = 0, ncol = 3)
-infection_flows <- matrix(nrow = 0, ncol = 3)
-fixed_flows <- rbind(fixed_flows, c("recovery", "infectious", "recovered"))
-infection_flows <- 
-  rbind(infection_flows,c("beta", "susceptible", "infectious"))
-
 # generic model builder function
 make_epi_model <- 
   function(compartment_names, infection_flow, fixed_flows) {
@@ -53,10 +38,3 @@ make_epi_model <-
   }
   epi_model_function
 }
-
-epi_model <- make_epi_model(compartments, infection_flows, fixed_flows)
-out <- as.data.frame(
-  ode(func=epi_model, y=initial_conditions, times=times, parms=parameters
-    )
-)
-plot(out$time, out$infectious)
