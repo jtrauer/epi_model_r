@@ -11,10 +11,12 @@ fixed_flows <- rbind(
   data.frame(flow_name="recovery",
              from_compartment="infectious",
              to_compartment="recovered"))
-
-infection_flows <- rbind(infection_flows,c("beta", "susceptible", "infectious"))
-
-epi_model <- make_epi_model(compartments, infection_flows, fixed_flows)
+infection_flows <- rbind(
+  infection_flows_frame,
+  data.frame(flow_name="beta",
+             from_compartment="susceptible",
+             to_compartment="infectious"))
+epi_model <- make_epi_model(compartments, infection_flows_frame, fixed_flows)
 out <- as.data.frame(
   ode(func=epi_model, y=initial_conditions, times=times, parms=parameters
   )
