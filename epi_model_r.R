@@ -20,23 +20,23 @@ make_epi_model <-
     ode_equations <- rep(0, length(compartment_names))
     
     # apply fixed flows
-    for (i in seq(length(fixed_flows))) {
-      from_compartment <- match(fixed_flows$from_compartment[i], compartment_names)
-      to_compartment <- match(fixed_flows$to_compartment[i], compartment_names)
-      net_flow <- parameters[as.character(fixed_flows$flow_name[i])] * 
+    for (flow in 1: nrow(fixed_flows)) {
+      from_compartment <- match(fixed_flows$from_compartment[flow], compartment_names)
+      to_compartment <- match(fixed_flows$to_compartment[flow], compartment_names)
+      net_flow <- parameters[as.character(fixed_flows$flow_name[flow])] * 
         compartment_values[from_compartment]
       ode_equations[from_compartment] <- ode_equations[from_compartment] - net_flow
       ode_equations[to_compartment] <- ode_equations[to_compartment] + net_flow
     }
     
     # apply the infection flow
-    for (i in seq(length(infection_flows))) {
+    for (flow in 1: nrow(infection_flows)) {
       infectious_compartment <- match("infectious", compartment_names)
       from_compartment <- 
-        match(infection_flows$from_compartment[i], compartment_names)
-      to_compartment <- match(infection_flows$to_compartment[i], compartment_names)
+        match(infection_flows$from_compartment[flow], compartment_names)
+      to_compartment <- match(infection_flows$to_compartment[flow], compartment_names)
       net_flow <- 
-        parameters[infection_flows$flow_name[i]] * 
+        parameters[infection_flows$flow_name[flow]] * 
         compartment_values[from_compartment] * 
         compartment_values[infectious_compartment]
       ode_equations[from_compartment] <- ode_equations[from_compartment] - net_flow
