@@ -2,19 +2,14 @@
 source("epi_model_r.r")
 
 # request model features
-parameters <- 
-  c(beta = 400, recovery = 365 / 13, immunity_wane = 100)
-compartments <- 
-  c("susceptible", "infectious", "recovered")
-times <- 
-  seq(from=0, to=60/365, by=1/365)
-initial_conditions <- 
-  c(susceptible=0.999, infectious=0.001, recovered=0)
+parameters <- c(beta = 400, recovery = 365 / 13, immunity_wane = 100)
+compartments <- c("susceptible", "infectious", "recovered")
+times <- seq(from=0, to=60/365, by=1/365)
+initial_conditions <- c(susceptible=0.999, infectious=0.001, recovered=0)
 fixed_flows <- matrix(nrow = 0, ncol = 3)
 infection_flows <- matrix(nrow = 0, ncol = 3)
 fixed_flows <- rbind(fixed_flows, c("recovery", "infectious", "recovered"))
-infection_flows <- 
-  rbind(infection_flows,c("beta", "susceptible", "infectious"))
+infection_flows <- rbind(infection_flows,c("beta", "susceptible", "infectious"))
 
 epi_model <- make_epi_model(compartments, infection_flows, fixed_flows)
 out <- as.data.frame(
