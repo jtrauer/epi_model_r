@@ -21,6 +21,38 @@ increment_vector_element <- function(vector, number, increment) {
   vector
 }
 
+# initialise compartments to zero values
+initialise_compartments <- function(compartment_names) {
+  if(!(is.character(compartment_names))) {
+    stop("compartment names are not character")
+  }
+  initial_conditions <- numeric(length(compartment_names))
+  initial_conditions <- setNames(inits, compartment_names)
+}
+
+# set a compartment's starting value to a positive number (having previous set to zero)
+set_compartment_start_value <- function(initial_conditions, compartment_name, value) {
+  if(!(compartment_name %in% names(initial_conditions))) {
+    stop("compartment name not found in compartment list")
+  }
+  if(!(is.numeric(value))) {
+    stop("requested starting compartment value is not numeric")
+  }
+  if(value < 0) {
+    stop("requested starting compartment value is negative")
+  }
+  initial_conditions[compartment_name] <- value
+  initial_conditions
+}
+
+# make initial condition values up to starting total (default being 1)
+make_initial_conditions_sum_to_total <- function(initial_conditions, total=1,
+                                                 starting_name="susceptible") {
+  initial_conditions <- set_compartment_start_value(
+    initial_conditions, starting_name, total - sum(initial_conditions))
+}
+
+# define functions to add flows to model
 add_flow <- function(flow_frame, flow_name, from_compartment, to_compartment,
                      parameters, compartments) {
   if(!(flow_name %in% names(parameters))) {
@@ -41,7 +73,6 @@ add_flow <- function(flow_frame, flow_name, from_compartment, to_compartment,
   flow_frame
 }
 
-# define functions to add flows to model
 apply_infection_flow <- 
   function(ode_equations, compartment_names, compartment_values, parameters,
            flows, infectious_compartment) {
