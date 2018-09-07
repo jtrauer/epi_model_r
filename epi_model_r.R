@@ -15,6 +15,37 @@ create_flows_dataframe <- function() {
 fixed_flows <- create_flows_dataframe()
 infection_flows <- create_flows_dataframe()
 
+# define functions to add flows to model
+apply_infection_flow <- 
+  function(ode_equations, compartment_names, parameters, compartment_values,
+           flows, infectious_compartment) {
+  for (flow in 1: nrow(flows)) {
+    infectious_compartment <- match("infectious", compartment_names)
+    from_compartment <- match(flows$from_compartment[flow], compartment_names)
+    to_compartment <- match(flows$to_compartment[flow], compartment_names)
+    net_flow <- 
+      parameters[flows$flow_name[flow]] * 
+      compartment_values[from_compartment] * 
+      compartment_values[infectious_compartment]
+    ode_equations[from_compartment] <- ode_equations[from_compartment] - net_flow
+    ode_equations[to_compartment] <- ode_equations[to_compartment] + net_flow
+  }
+  ode_equations
+}
+
+apply_fixed_flow <- 
+  function(ode_equations, compartment_names, parameters, compartment_values, flows) {
+  for (flow in 1: nrow(flows)) {
+    from_compartment <- match(flows$from_compartment[flow], compartment_names)
+    to_compartment <- match(flows$to_compartment[flow], compartment_names)
+    net_flow <- parameters[as.character(flows$flow_name[flow])] * 
+      compartment_values[from_compartment]
+    ode_equations[from_compartment] <- ode_equations[from_compartment] - net_flow
+    ode_equations[to_compartment] <- ode_equations[to_compartment] + net_flow
+  }
+  ode_equations
+}
+
 # model builder function
 make_epi_model <- 
   function(compartment_names, infection_flows, fixed_flows) {
@@ -24,28 +55,16 @@ make_epi_model <-
     # initialise ode equations to zero for each compartment
     ode_equations <- rep(0, length(compartment_names))
     
-    # apply fixed flow(s)
-    for (flow in 1: nrow(fixed_flows)) {
-      from_compartment <- match(fixed_flows$from_compartment[flow], compartment_names)
-      to_compartment <- match(fixed_flows$to_compartment[flow], compartment_names)
-      net_flow <- parameters[as.character(fixed_flows$flow_name[flow])] * compartment_values[from_compartment]
-      ode_equations[from_compartment] <- ode_equations[from_compartment] - net_flow
-      ode_equations[to_compartment] <- ode_equations[to_compartment] + net_flow
-    }
-    
-    # apply infection flow(s)
-    for (flow in 1: nrow(infection_flows)) {
-      infectious_compartment <- match("infectious", compartment_names)
-      from_compartment <- match(infection_flows$from_compartment[flow], compartment_names)
-      to_compartment <- match(infection_flows$to_compartment[flow], compartment_names)
-      net_flow <- 
-        parameters[infection_flows$flow_name[flow]] * 
-        compartment_values[from_compartment] * 
-        compartment_values[infectious_compartment]
-      ode_equations[from_compartment] <- ode_equations[from_compartment] - net_flow
-      ode_equations[to_compartment] <- ode_equations[to_compartment] + net_flow
-    }
+    # apply flows
+    ode_equations <- 
+      apply_fixed_flow(
+        ode_equations, compartment_names, parameters, compartment_values, fixed_flows)
+    ode_equations <-
+      apply_infection_flow(
+        ode_equations, compartment_names, parameters, compartment_values,
+        infection_flows, infectious_compartment)
     list(ode_equations)
   }
   epi_model_function
 }
+
