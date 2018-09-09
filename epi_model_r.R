@@ -70,7 +70,6 @@ add_flow <- function(flow_frame, flow_name, from_compartment, to_compartment,
                from_compartment=from_compartment,
                to_compartment=to_compartment)
   )
-  flow_frame
 }
 
 apply_infection_flow <- 
@@ -123,7 +122,6 @@ make_epi_model <-
       infection_flows, infectious_compartment)
     list(ode_equations)
   }
-  epi_model_function
 }
 
 # run model
@@ -133,5 +131,4 @@ run_model <- function (compartments, infection_flows, fixed_flows) {
     ode(func=epi_model, y=initial_conditions, times=times, parms=parameters
     )
   )  
-  out
 }
