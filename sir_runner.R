@@ -5,7 +5,8 @@ source("epi_model_r.R")
 # from the instructions contained in this file
 
 sir_model <- EpiModel$new(c(beta=400, recovery=365/13), 
-                          c("susceptible", "infectious", "recovered"))
+                          c("susceptible", "infectious", "recovered"),
+                          seq(from=0, to=60/365, by=1/365))
 sir_model$initialise_compartments()
 sir_model$set_compartment_start_value("infectious", 0.001)
 sir_model$make_initial_conditions_to_total()

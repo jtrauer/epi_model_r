@@ -23,11 +23,13 @@ EpiModel <- R6Class(
     initial_conditions = list(),
     infectious_compartment = NULL,
     outputs = NULL,
-    initialize = function(parameters = NULL, compartments = NULL,
+    times = NULL,
+    initialize = function(parameters = NULL, compartments = NULL, times = NULL,
                           infectious_compartment = "infectious") {
       self$parameters <- parameters
       self$compartments <- compartments
       self$infectious_compartment <- infectious_compartment
+      self$times <- times
     },
     
     # initialise compartments to zero values
@@ -36,7 +38,7 @@ EpiModel <- R6Class(
         stop("compartment names are not character")
       }
       self$initial_conditions <- numeric(length(self$compartments))
-      self$initial_conditions <- setNames(inits, self$compartments)
+      self$initial_conditions <- setNames(self$initial_conditions, self$compartments)
     },
     
     # populate compartments with a starting value
@@ -136,7 +138,7 @@ EpiModel <- R6Class(
     # integrate the model odes  
     run_model = function () {
       self$outputs <- as.data.frame(ode(
-        func=self$make_model_function(), y=initial_conditions, times=times)
+        func=self$make_model_function(), y=self$initial_conditions, times=self$times)
       )  
     }
   )
