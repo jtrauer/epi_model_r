@@ -135,10 +135,8 @@ EpiModel <- R6Class(
 
     # integrate the model odes  
     run_model = function () {
-      epi_model <- self$make_model_function()
-      self$outputs <- as.data.frame(
-        ode(func=epi_model, y=initial_conditions, times=times
-        )
+      self$outputs <- as.data.frame(ode(
+        func=self$make_model_function(), y=initial_conditions, times=times)
       )  
     }
   )
