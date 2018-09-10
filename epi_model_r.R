@@ -15,7 +15,9 @@ increment_vector_element <- function(vector, number, increment) {
   vector
 }
 
-# main model object
+# objects
+
+# main epidemiological model object
 EpiModel <- R6Class(
   "EpiModel",
   public = list(
@@ -26,8 +28,9 @@ EpiModel <- R6Class(
     parameters = list(),
     outputs = NULL,
     times = NULL,
+    universal_death_rate = 0,
     initialize = function(parameters=NULL, compartments=NULL, times=NULL,
-                          infectious_compartment="infectious") {
+                          infectious_compartment="infectious", universal_death_rate=0) {
       if(!(is.numeric(parameters))) {stop("parameter values are not numeric")}
       self$parameters <- parameters
       if(!(is.character(compartments))) {stop("compartment names are not character")}
@@ -39,6 +42,8 @@ EpiModel <- R6Class(
       if(!(is.numeric(times))) {stop("time values are not numeric")}
       self$times <- times
       self$initialise_compartments()
+      if(!(is.numeric(universal_death_rate))) {stop("universal death rate is not numeric")}
+      self$universal_death_rate <- universal_death_rate
     },
     
     # initialise compartments to zero values
@@ -121,6 +126,16 @@ EpiModel <- R6Class(
         }
         ode_equations
       },
+    
+    #
+    apply_universal_death_flow =
+      function(ode_equations, compartment_values){
+        for (c in 1: length(ode_equations)) {
+          ode_equations[c] <- ode_equations[c] - 
+            compartment_values[c] * self$universal_death_rate
+        }
+        ode_equations
+      },
 
     # create derivative function
     make_model_function = function() {
@@ -132,6 +147,8 @@ EpiModel <- R6Class(
             # apply flows
             ode_equations <- self$apply_fixed_flow(ode_equations, compartment_values)
             ode_equations <- self$apply_infection_flow(ode_equations, compartment_values)
+            ode_equations <- 
+              self$apply_universal_death_flow(ode_equations, compartment_values)
             list(ode_equations)
           }
       },
