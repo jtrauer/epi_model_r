@@ -22,6 +22,7 @@ EpiModel <- R6Class(
     flows = list(),
     initial_conditions = list(),
     infectious_compartment = NULL,
+    outputs = NULL,
     initialize = function(parameters = NULL, compartments = NULL,
                           infectious_compartment = "infectious") {
       self$parameters <- parameters
@@ -54,7 +55,7 @@ EpiModel <- R6Class(
     },
     
     # make initial condition values up to starting total (default being 1)
-    make_initial_conditions_sum_to_total = function(total=1, starting_name="susceptible") {
+    make_initial_conditions_to_total = function(total=1, starting_name="susceptible") {
       self$initial_conditions <- self$set_compartment_start_value(
         starting_name, total - sum(self$initial_conditions))
     },
@@ -130,9 +131,15 @@ EpiModel <- R6Class(
             ode_equations <- self$apply_infection_flow(ode_equations, compartment_values)
             list(ode_equations)
           }
-      }
+      },
+
+    # integrate the model odes  
+    run_model = function () {
+      epi_model <- self$make_model_function()
+      self$outputs <- as.data.frame(
+        ode(func=epi_model, y=initial_conditions, times=times
+        )
+      )  
+    }
   )
 )
-
-
-
