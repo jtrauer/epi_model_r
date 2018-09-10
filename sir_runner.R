@@ -11,7 +11,5 @@ sir_model$set_compartment_start_value("infectious", 0.001)
 sir_model$make_initial_conditions_to_total()
 sir_model$add_flow("fixed_flows", "recovery", "infectious", "recovered")
 sir_model$add_flow("infection_flows", "beta", "susceptible", "infectious")
-
-# run model
 sir_model$run_model()
 plot(sir_model$outputs$time, sir_model$outputs$infectious)
