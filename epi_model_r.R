@@ -78,7 +78,7 @@ EpiModel <- R6Class(
       )
     },
     
-    # add the infection flow to the odes
+    # apply the infection flow to odes
     apply_infection_flow = function(
       ode_equations, compartment_values) {
       for (f in 1: nrow(self$flows$infection_flows)) {
@@ -98,7 +98,7 @@ EpiModel <- R6Class(
       ode_equations
     },
     
-    # add a fixed flow to the odes
+    # add a fixed flow to odes
     apply_fixed_flow =
       function(ode_equations, compartment_values) {
         for (f in 1: nrow(self$flows$fixed_flows)) {
@@ -114,34 +114,25 @@ EpiModel <- R6Class(
                                      net_flow)
         }
         ode_equations
+      },
+
+    # create derivative function
+    make_model_function =
+      function() {
+        epi_model_function <- 
+          function(time, compartment_values, parameters) {
+            
+            # initialise to zero for each compartment
+            ode_equations <- rep(0, length(self$compartments))
+            
+            # apply flows
+            ode_equations <- self$apply_fixed_flow(ode_equations, compartment_values)
+            ode_equations <- self$apply_infection_flow(ode_equations, compartment_values)
+            list(ode_equations)
+          }
       }
   )
 )
 
-# model builder function
-make_epi_model <- 
-  function(model, compartment_names, infection_flows, fixed_flows) {
-  epi_model_function <- 
-    function(time, compartment_values, parameters) {
-      
-    # initialise ode equations to zero for each compartment
-    ode_equations <- rep(0, length(compartment_names))
-    
-    # apply flows
-    ode_equations <- model$apply_fixed_flow(
-      ode_equations, compartment_values)
-    ode_equations <- model$apply_infection_flow(
-      ode_equations, compartment_values)
-    list(ode_equations)
-  }
-}
 
-# run model
-run_model <- function (model, compartments, infection_flows, fixed_flows) {
-  epi_model <- make_epi_model(model, compartments, infection_flows, fixed_flows)
-  out <- as.data.frame(
-    ode(func=epi_model, y=initial_conditions, times=times, parms=parameters
-    )
-  )  
-}
 
