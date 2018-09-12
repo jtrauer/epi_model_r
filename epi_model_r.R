@@ -33,9 +33,10 @@ EpiModel <- R6Class(
     entry_compartment = "susceptible",
     birth_approach = "no_births",
     variable_quantities = list(),
-    initialize = function(parameters=NULL, compartments=NULL, times=NULL,
-                          infectious_compartment="infectious", universal_death_rate=0,
-                          birth_approach = "no_births") {
+    
+    # initialise basic model characteristics from inputs and check appropriately requested
+    initialize = function(parameters, compartments, times, infectious_compartment="infectious", 
+                          universal_death_rate=0, birth_approach = "no_births") {
       if(!(is.numeric(parameters))) {stop("parameter values are not numeric")}
       self$parameters <- parameters
       if(!(is.character(compartments))) {stop("compartment names are not character")}
