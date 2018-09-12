@@ -28,9 +28,14 @@ EpiModel <- R6Class(
     parameters = list(),
     outputs = NULL,
     times = NULL,
+    crude_birth_rate = 20 / 1e3,
     universal_death_rate = 0,
+    entry_compartment = "susceptible",
+    birth_approach = "no_births",
+    variable_quantities = list(),
     initialize = function(parameters=NULL, compartments=NULL, times=NULL,
-                          infectious_compartment="infectious", universal_death_rate=0) {
+                          infectious_compartment="infectious", universal_death_rate=0,
+                          birth_approach = "no_births") {
       if(!(is.numeric(parameters))) {stop("parameter values are not numeric")}
       self$parameters <- parameters
       if(!(is.character(compartments))) {stop("compartment names are not character")}
@@ -44,6 +49,11 @@ EpiModel <- R6Class(
       self$initialise_compartments()
       if(!(is.numeric(universal_death_rate))) {stop("universal death rate is not numeric")}
       self$universal_death_rate <- universal_death_rate
+      
+      available_birth_approaches <- c("add_crude_birth_rate", "replace_deaths", "no_births")
+      if(!(birth_approach %in% available_birth_approaches)) 
+        {stop("requested birth approach not available")}
+      self$birth_approach <- birth_approach
     },
     
     # initialise compartments to zero values
@@ -127,12 +137,31 @@ EpiModel <- R6Class(
         ode_equations
       },
     
-    #
+    # apply a population-wide death rate to all compartments
     apply_universal_death_flow =
       function(ode_equations, compartment_values){
-        for (c in 1: length(ode_equations)) {
-          ode_equations[c] <- ode_equations[c] - 
-            compartment_values[c] * self$universal_death_rate
+        self$variable_quantities$total_deaths <- 
+          sum(compartment_values) * self$universal_death_rate
+        if (!(self$universal_death_rate == 0)) {
+          for (c in 1: length(ode_equations)) {
+            ode_equations[c] <- ode_equations[c] - 
+              compartment_values[c] * self$universal_death_rate
+          }
+        }
+        ode_equations
+      },
+    
+    # apply a population-wide death rate to all compartments
+    apply_birth_rate =
+      function(ode_equations, compartment_values){
+        entry_compartment <- match(self$entry_compartment, self$compartments)
+        if (self$birth_approach == "add_crude_birth_rate") {
+          ode_equations[entry_compartment] <- 
+            ode_equations[entry_compartment] + sum(compartment_values) * self$crude_birth_rate
+        }
+        else if (self$birth_approach == "replace_deaths") {
+          ode_equations[entry_compartment] <- 
+            ode_equations[entry_compartment] + self$variable_quantities$total_deaths
         }
         ode_equations
       },
@@ -149,6 +178,7 @@ EpiModel <- R6Class(
             ode_equations <- self$apply_infection_flow(ode_equations, compartment_values)
             ode_equations <- 
               self$apply_universal_death_flow(ode_equations, compartment_values)
+            ode_equations <- self$apply_birth_rate(ode_equations, compartment_values)
             list(ode_equations)
           }
       },
