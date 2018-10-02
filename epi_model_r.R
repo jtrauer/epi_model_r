@@ -1,6 +1,7 @@
 
 library(deSolve)
 library(R6)
+library(stringr)
 
 # this file contains the main model builder function, that is intended to be agnostic
 # to the type and complexity of model that the user wants to build
@@ -21,6 +22,7 @@ increment_vector_element <- function(vector, number, increment) {
 EpiModel <- R6Class(
   "EpiModel",
   public = list(
+    compartment_types = list(),
     compartments = list(),
     initial_conditions = list(),
     flows = list(),
@@ -33,14 +35,30 @@ EpiModel <- R6Class(
     entry_compartment = "susceptible",
     birth_approach = "no_births",
     variable_quantities = list(),
+    compartment_strata = vector(),
+    compartments_to_stratify = list(),
     
     # initialise basic model characteristics from inputs and check appropriately requested
-    initialize = function(parameters, compartments, times, infectious_compartment="infectious", 
-                          universal_death_rate=0, birth_approach = "no_births") {
+    initialize = function(parameters, compartment_types, times, infectious_compartment="infectious", 
+                          universal_death_rate=0, birth_approach = "no_births",
+                          compartment_strata=NULL, compartments_to_stratify=list()) {
       if(!(is.numeric(parameters))) {stop("parameter values are not numeric")}
       self$parameters <- parameters
-      if(!(is.character(compartments))) {stop("compartment names are not character")}
-      self$compartments <- compartments
+
+      if(!(is.character(compartment_types))) {stop("compartment names are not character")}
+      self$compartment_types <- compartment_types
+      self$compartments <- compartment_types
+      
+      # stratification-related checks
+      if(!(is.list(compartment_strata))) {stop("compartment_strata not list")}
+      if(!(is.list(compartments_to_stratify))) {stop("compartments_to_stratify not list")}
+      if (length(compartment_strata) != length(compartments_to_stratify)) {
+        stop("length of lists of compartments to stratify and strata for them unequal")
+      }
+      self$compartment_strata <- compartment_strata
+      self$compartments_to_stratify <- compartments_to_stratify
+      self$stratify_compartments()
+      
       if(!(is.character(infectious_compartment))) {
         stop("infectious compartment name is not character")
       }
@@ -55,14 +73,58 @@ EpiModel <- R6Class(
       if(!(birth_approach %in% available_birth_approaches)) 
         {stop("requested birth approach not available")}
       self$birth_approach <- birth_approach
+      },
+    
+    # stratify a specific compartment or sequence of compartments
+    stratify_compartments = function() {
+      for (s in seq(length(self$compartments_to_stratify))) {
+        
+        # determine compartments for stratification, depending on whether
+        # a list or the string "all" has been passed
+        if (self$compartments_to_stratify[s] == "all") {
+          compartments_to_stratify <- self$compartment_types
+        }
+        else if (typeof(self$compartments_to_stratify[s]) == "list") {
+          compartments_to_stratify <- self$compartments_to_stratify[[s]]
+        }
+        
+        # loop over the compartment types
+        for (compartment in self$compartments) {
+          
+          # determine whether the compartment's stem (first argument to grepl)
+          # is in the vector of compartment types (second argument to grepl)
+          if (grepl(str_split(compartment, fixed("_"))[[1]][[1]], 
+                    paste(compartments_to_stratify, collapse="_"))) {
+
+            # remove the unstratified compartment and append the additional ones
+            self$stratify_compartment(compartment, self$compartment_strata[[s]])
+          }
+        }
+      }
+      print(self$compartments)
     },
     
+    stratify_compartment = function(compartment, strata) {
+      self$remove_compartment(compartment)
+      for (stratum in strata) {
+        self$add_compartment(paste(compartment, stratum, sep = "_"))
+      }
+    },
+    
+    # two simple methods to remove or add compartments
+    remove_compartment = function(compartment) {
+      self$compartments <- self$compartments[!self$compartments %in% c(compartment)]
+    },
+    add_compartment = function(compartment) {
+      self$compartments <- append(self$compartments, compartment)
+    },
+
     # initialise compartments to zero values
     initialise_compartments = function() {
       self$initial_conditions <- numeric(length(self$compartments))
       self$initial_conditions <- setNames(self$initial_conditions, self$compartments)
     },
-    
+        
     # populate compartments with a starting value
     set_compartment_start_value = function(compartment_name, value) {
       if(!(compartment_name %in% names(self$initial_conditions))) {
