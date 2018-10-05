@@ -50,14 +50,15 @@ EpiModel <- R6Class(
                           initial_conditions_sum_to_one = TRUE, infectious_compartment="infectious",
                           universal_death_rate=0, birth_approach = "no_births",
                           compartment_strata=NULL,compartments_to_stratify=list()) {
-      if(!(is.numeric(parameters))) {stop("parameter values are not numeric")}
+      if (!(is.numeric(parameters))) {stop("parameter values are not numeric")}
       self$parameters <- parameters
 
-      if(!(is.character(compartment_types))) {stop("compartment names are not character")}
+      if (!(is.character(compartment_types))) {stop("compartment names are not character")}
       self$compartment_types <- compartment_types
       self$compartments <- compartment_types
       self$initial_compartment_values <- initial_compartment_values
       
+      # sum initial conditions to one if requested to do so
       if (initial_conditions_sum_to_one) {
         self$sum_initial_compartments_to_total("susceptible", 1)
       }
@@ -162,6 +163,12 @@ EpiModel <- R6Class(
 
     # make initial conditions sum to a certain value    
     sum_initial_compartments_to_total = function(compartment, total) {
+      if (!(compartment %in% self$compartments)) {
+        stop("starting compartment to populate with initial values not found")
+      }
+      else if (Reduce("+", self$initial_compartment_values) > total) {
+        stop("requested total value for starting compartments less greater than requested total")
+      }
       self$initial_compartment_values[compartment] <- 
         total - Reduce("+", self$initial_compartment_values)
     },
