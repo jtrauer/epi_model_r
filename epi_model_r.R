@@ -29,8 +29,7 @@ EpiModel <- R6Class(
   public = list(
     compartment_types = list(),
     compartments = list(),
-    initial_compartment_values = list(),
-    initial_conditions = c(),
+    initial_conditions = list(),
     initial_conditions_sum_to_one = TRUE,
     flows = list(),
     infectious_compartment = NULL,
@@ -46,7 +45,7 @@ EpiModel <- R6Class(
     compartments_to_stratify = list(),
     
     # initialise basic model characteristics from inputs and check appropriately requested
-    initialize = function(parameters, compartment_types, times, initial_compartment_values,
+    initialize = function(parameters, compartment_types, times, initial_conditions,
                           initial_conditions_sum_to_one = TRUE, infectious_compartment="infectious",
                           universal_death_rate=0, birth_approach = "no_births",
                           compartment_strata=NULL,compartments_to_stratify=list()) {
@@ -56,8 +55,8 @@ EpiModel <- R6Class(
       if (!(is.character(compartment_types))) {stop("compartment names are not character")}
       self$compartment_types <- compartment_types
       self$compartments <- compartment_types
-      self$initial_compartment_values <- initial_compartment_values
-      
+      self$initial_conditions <- initial_conditions
+
       # sum initial conditions to one if requested to do so
       if (initial_conditions_sum_to_one) {
         self$sum_initial_compartments_to_total("susceptible", 1)
@@ -77,8 +76,11 @@ EpiModel <- R6Class(
         self$stratify_compartments()
       }
 
-      self$initialise_compartments_to_zero()
-      self$set_compartment_start_values()
+      for (compartment in self$compartments) {
+        if (!(compartment %in% names(self$initial_conditions))) {
+          self$initial_conditions[compartment] <- 0
+        }
+      }
 
       if(!(is.character(infectious_compartment))) {
         stop("infectious compartment name is not character")
@@ -129,12 +131,12 @@ EpiModel <- R6Class(
       for (stratum in strata) {
         self$add_compartment(paste(compartment, stratum, sep = "_"))
         
-        if (compartment %in% names(self$initial_compartment_values)) {
+        if (compartment %in% names(self$initial_conditions)) {
           for (stratum in strata) {
-            self$initial_compartment_values[paste(compartment, stratum, sep = "_")] <-
-              self$initial_compartment_values[[compartment]] / length(strata)
+            self$initial_conditions[paste(compartment, stratum, sep = "_")] <-
+              self$initial_conditions[[compartment]] / length(strata)
           }
-          self$initial_compartment_values[compartment] <- NULL
+          self$initial_conditions[compartment] <- NULL
         }
       }
     },
@@ -153,24 +155,16 @@ EpiModel <- R6Class(
       self$initial_conditions <- setNames(self$initial_conditions, self$compartments)
     },
 
-    # populate compartments with their starting values
-    set_compartment_start_values = function() {
-      for (compartment in names(self$initial_compartment_values)) {
-        self$initial_conditions[compartment] <- 
-          self$initial_compartment_values[compartment]
-      }
-    },
-
     # make initial conditions sum to a certain value    
     sum_initial_compartments_to_total = function(compartment, total) {
       if (!(compartment %in% self$compartments)) {
         stop("starting compartment to populate with initial values not found")
       }
-      else if (Reduce("+", self$initial_compartment_values) > total) {
+      else if (Reduce("+", self$initial_conditions) > total) {
         stop("requested total value for starting compartments less greater than requested total")
       }
-      self$initial_compartment_values[compartment] <- 
-        total - Reduce("+", self$initial_compartment_values)
+      self$initial_conditions[compartment] <- 
+        total - Reduce("+", self$initial_conditions)
     },
 
     # define functions to add flows to model
