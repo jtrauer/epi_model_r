@@ -56,6 +56,7 @@ EpiModel <- R6Class(
 
       if (!(is.character(compartment_types)))
         {stop("compartment types are not character")}
+      self$compartment_types <- compartment_types
 
       # set initial conditions
       self$compartments <- list()
@@ -81,7 +82,9 @@ EpiModel <- R6Class(
         self$stratify_compartments(
           compartment_types, compartment_strata, compartments_to_stratify)
       }
-
+      
+      print(self$compartments)
+      
       if(!(is.character(infectious_compartment))) 
         {stop("infectious compartment name is not character")}
       self$infectious_compartment <- infectious_compartment
@@ -112,20 +115,21 @@ EpiModel <- R6Class(
         
     # stratify a specific compartment or sequence of compartments
     stratify_compartments = function(
-      compartment_types, compartment_strata, compartments_to_stratify) {
-      for (s in seq(length(compartments_to_stratify))) {
+      compartment_types, compartment_strata, compartment_sets_to_stratify) {
+      
+      for (s in seq(length(compartment_sets_to_stratify))) {
         
         # determine compartments for stratification, depending on whether
         # a list or the string "all" has been passed
-        if (compartments_to_stratify[s] == "all") {
-          compartments_to_stratify <- compartment_types
+        if (compartment_sets_to_stratify[s] == "all") {
+          compartments_to_stratify <- self$compartment_types
         }
         else if (typeof(self$compartments_to_stratify[s]) == "list") {
-          compartments_to_stratify <- compartments_to_stratify[[s]]
+          compartments_to_stratify <- compartment_sets_to_stratify[[s]]
         }
         
         # loop over the compartment types
-        for (compartment in self$compartments) {
+        for (compartment in names(self$compartments)) {
           
           # determine whether the compartment's stem (first argument to grepl)
           # is in the vector of compartment types (second argument to grepl)
@@ -141,31 +145,13 @@ EpiModel <- R6Class(
     
     # stratify a single compartment using the two methods below  
     stratify_compartment = function(compartment, strata) {
-      self$remove_compartment(compartment)
       for (stratum in strata) {
-        self$add_compartment(paste(compartment, stratum, sep = "_"))
-        
-        if (compartment %in% names(self$initial_conditions)) {
-          compartment_value <- self$initial_conditions[[compartment]] / length(strata)
-        }
-        else {
-          compartment_value <- 0
-        }
-          
         for (stratum in strata) {
-          self$initial_conditions[paste(compartment, stratum, sep = "_")] <-
-            compartment_value
+          self$compartments[paste(compartment, stratum, sep = "_")] <-
+            self$compartments[[compartment]] / length(strata)
         }
-        self$initial_conditions[compartment] <- NULL
       }
-    },
-    
-    # two simple methods to remove or add compartments
-    remove_compartment = function(compartment) {
-      self$compartments <- self$compartments[!self$compartments %in% c(compartment)]
-    },
-    add_compartment = function(compartment) {
-      self$compartments <- append(self$compartments, compartment)
+      self$compartments[compartment] <- NULL
     },
 
     # define functions to add flows to model
