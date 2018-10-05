@@ -27,13 +27,13 @@ find_compartment_stem = function(compartment) {
 EpiModel <- R6Class(
   "EpiModel",
   public = list(
+    parameters = list(),
     compartment_types = list(),
     compartments = list(),
     initial_conditions = list(),
     initial_conditions_sum_to_one = TRUE,
     flows = list(),
     infectious_compartment = NULL,
-    parameters = list(),
     outputs = NULL,
     times = NULL,
     crude_birth_rate = 20 / 1e3,
@@ -46,13 +46,16 @@ EpiModel <- R6Class(
     
     # initialise basic model characteristics from inputs and check appropriately requested
     initialize = function(parameters, compartment_types, times, initial_conditions,
-                          initial_conditions_sum_to_one = TRUE, infectious_compartment="infectious",
-                          universal_death_rate=0, birth_approach = "no_births",
-                          compartment_strata=NULL, compartments_to_stratify=list()) {
-      if (!(is.numeric(parameters))) {stop("parameter values are not numeric")}
+                          initial_conditions_sum_to_one = TRUE,
+                          infectious_compartment="infectious", universal_death_rate=0, 
+                          birth_approach = "no_births", compartment_strata=NULL, 
+                          compartments_to_stratify=list()) {
+      if (!(is.numeric(parameters))) 
+        {stop("parameter values are not numeric")}
       self$parameters <- parameters
 
-      if (!(is.character(compartment_types))) {stop("compartment types are not character")}
+      if (!(is.character(compartment_types)))
+        {stop("compartment types are not character")}
 
       # set initial conditions
       self$compartments <- list()
@@ -60,9 +63,7 @@ EpiModel <- R6Class(
         if (compartment %in% names(initial_conditions)) {
           self$compartments[compartment] <- initial_conditions[compartment]
         }
-        else {
-          self$compartments[compartment] <- 0
-        }
+        else {self$compartments[compartment] <- 0}
       }
       if (initial_conditions_sum_to_one) {
         self$sum_initial_compartments_to_total("susceptible", 1)
@@ -81,21 +82,34 @@ EpiModel <- R6Class(
           compartment_types, compartment_strata, compartments_to_stratify)
       }
 
-      if(!(is.character(infectious_compartment))) {
-        stop("infectious compartment name is not character")
-      }
+      if(!(is.character(infectious_compartment))) 
+        {stop("infectious compartment name is not character")}
       self$infectious_compartment <- infectious_compartment
       if(!(is.numeric(times))) {stop("time values are not numeric")}
       self$times <- times
-      if(!(is.numeric(universal_death_rate))) {stop("universal death rate is not numeric")}
+      if(!(is.numeric(universal_death_rate))) 
+        {stop("universal death rate is not numeric")}
       self$universal_death_rate <- universal_death_rate
       
-      available_birth_approaches <- c("add_crude_birth_rate", "replace_deaths", "no_births")
+      available_birth_approaches <- 
+        c("add_crude_birth_rate", "replace_deaths", "no_births")
       if(!(birth_approach %in% available_birth_approaches)) 
         {stop("requested birth approach not available")}
       self$birth_approach <- birth_approach
       },
-    
+
+    # make initial conditions sum to a certain value    
+    sum_initial_compartments_to_total = function(compartment, total) {
+      if (!(compartment %in% names(self$compartments))) {
+        stop("starting compartment to populate with initial values not found")
+      }
+      else if (Reduce("+", self$compartments) > total) {
+        stop("requested total value for starting compartments less greater than requested total")
+      }
+      self$compartments[compartment] <- 
+        total - Reduce("+", self$compartments)
+    },
+        
     # stratify a specific compartment or sequence of compartments
     stratify_compartments = function(
       compartment_types, compartment_strata, compartments_to_stratify) {
@@ -152,18 +166,6 @@ EpiModel <- R6Class(
     },
     add_compartment = function(compartment) {
       self$compartments <- append(self$compartments, compartment)
-    },
-
-    # make initial conditions sum to a certain value    
-    sum_initial_compartments_to_total = function(compartment, total) {
-      if (!(compartment %in% names(self$compartments))) {
-        stop("starting compartment to populate with initial values not found")
-      }
-      else if (Reduce("+", self$compartments) > total) {
-        stop("requested total value for starting compartments less greater than requested total")
-      }
-      self$compartments[compartment] <- 
-        total - Reduce("+", self$compartments)
     },
 
     # define functions to add flows to model
