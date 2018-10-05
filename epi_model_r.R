@@ -97,7 +97,7 @@ EpiModel <- R6Class(
           
           # determine whether the compartment's stem (first argument to grepl)
           # is in the vector of compartment types (second argument to grepl)
-          if (grepl(str_split(compartment, fixed("_"))[[1]][[1]], 
+          if (grepl(self$find_compartment_stem(compartment),
                     paste(compartments_to_stratify, collapse="_"))) {
 
             # remove the unstratified compartment and append the additional ones
@@ -105,9 +105,15 @@ EpiModel <- R6Class(
           }
         }
       }
-      print(self$compartments)
     },
     
+    # find the stem of the compartment name as the text leading up to the first occurrence of _
+    find_compartment_stem = function(compartment) {
+      str_split(compartment, fixed("_"))[[1]][[1]]
+    },
+  
+
+    # stratify a single compartment using the two methods below  
     stratify_compartment = function(compartment, strata) {
       self$remove_compartment(compartment)
       for (stratum in strata) {
