@@ -42,14 +42,14 @@ EpiModel <- R6Class(
     birth_approach = "no_births",
     variable_quantities = list(),
     compartment_strata = vector(),
-    compartments_to_stratify = list(),
+    compartment_sets_to_stratify = list(),
     
     # initialise basic model characteristics from inputs and check appropriately requested
     initialize = function(parameters, compartment_types, times, initial_conditions,
                           initial_conditions_sum_to_one = TRUE,
                           infectious_compartment="infectious", universal_death_rate=0, 
                           birth_approach = "no_births", compartment_strata=NULL, 
-                          compartments_to_stratify=list()) {
+                          compartment_sets_to_stratify=list()) {
       if (!(is.numeric(parameters))) {
         stop("parameter values are not numeric")
         }
@@ -75,16 +75,16 @@ EpiModel <- R6Class(
       # stratification
       if (!(is.list(compartment_strata) || is.null(compartment_strata))) 
         {stop("compartment_strata not list")}
-      if (!(is.list(compartments_to_stratify)) || is.null(compartments_to_stratify)) 
-        {stop("compartments_to_stratify not list")}
-      if (length(compartment_strata) != length(compartments_to_stratify)) {
+      if (!(is.list(compartment_sets_to_stratify)) || is.null(compartment_sets_to_stratify)) 
+        {stop("compartment_sets_to_stratify not list")}
+      if (length(compartment_strata) != length(compartment_sets_to_stratify)) {
         stop("length of lists of compartments to stratify and strata for them unequal")
         }
       if (length(compartment_strata) > 1) {
         self$stratify_compartments(
-          compartment_types, compartment_strata, compartments_to_stratify)
+          compartment_types, compartment_strata, compartment_sets_to_stratify)
       }
-
+      
       # set remaining attributes      
       if(!(is.character(infectious_compartment))) 
         {stop("infectious compartment name is not character")}
@@ -99,7 +99,6 @@ EpiModel <- R6Class(
       if(!(is.numeric(universal_death_rate))) 
       {stop("universal death rate is not numeric")}
       self$universal_death_rate <- universal_death_rate
-      
       },
 
     # make initial conditions sum to a certain value    
@@ -116,17 +115,17 @@ EpiModel <- R6Class(
         
     # stratify a specific compartment or sequence of compartments
     stratify_compartments = function(
-      compartment_types, compartment_strata, compartment_sets_to_stratify) {
+      compartment_types, compartment_strata, stratification_types) {
       
-      for (s in seq(length(compartment_sets_to_stratify))) {
+      for (s in seq(length(stratification_types))) {
         
         # determine compartments for stratification, depending on whether
         # a list or the string "all" has been passed
-        if (compartment_sets_to_stratify[s] == "all") {
-          compartments_to_stratify <- self$compartment_types
+        if (stratification_types[s] == "all") {
+          stratification_compartments <- self$compartment_types
         }
-        else if (typeof(self$compartments_to_stratify[s]) == "list") {
-          compartments_to_stratify <- compartment_sets_to_stratify[[s]]
+        else {
+          stratification_compartments <- stratification_types[[s]]
         }
         
         # loop over the compartment types
@@ -135,7 +134,7 @@ EpiModel <- R6Class(
           # determine whether the compartment's stem (first argument to grepl)
           # is in the vector of compartment types (second argument to grepl)
           if (grepl(find_compartment_stem(compartment),
-                    paste(compartments_to_stratify, collapse="_"))) {
+                    paste(stratification_compartments, collapse="_"))) {
 
             # remove the unstratified compartment and append the additional ones
             self$stratify_compartment(compartment, compartment_strata[[s]])
