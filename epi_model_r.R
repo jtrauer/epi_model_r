@@ -51,7 +51,8 @@ EpiModel <- R6Class(
       self$compartments <- compartment_types
       
       self$initial_conditions <- initial_conditions
-      self$parameters["potatoes"] <- 1
+      # self$initial_conditions["potatoes"] <- 1
+      # print(self$initial_conditions)
       
       # stratification-related checks
       if (!(is.list(compartment_strata) || is.null(compartment_strata))) 
@@ -127,14 +128,15 @@ EpiModel <- R6Class(
               self$initial_conditions[[compartment]] / length(strata)
           }
           
+          
+          
           print(self$initial_conditions[[compartment]])
           print("hello")
-          print(typeof(self$initial_conditions))
           print(self$initial_conditions)
-          
-          self$intial_conditions["potatoes"] <- 1
-          
-          print("goodbye")
+
+          self$initial_conditions["potatoes"] <- 1
+          # 
+          # print("goodbye")
         }
       }
     },
@@ -148,31 +150,31 @@ EpiModel <- R6Class(
     },
 
     # initialise compartments to zero values
-    initialise_compartments = function() {
-      self$initial_conditions <- numeric(length(self$compartments))
-      self$initial_conditions <- setNames(self$initial_conditions, self$compartments)
-    },
-        
+    # initialise_compartments = function() {
+    #   self$initial_conditions <- numeric(length(self$compartments))
+    #   self$initial_conditions <- setNames(self$initial_conditions, self$compartments)
+    # },
+    #     
     # populate compartments with a starting value
-    set_compartment_start_value = function(compartment_name, value) {
-      if(!(compartment_name %in% names(self$initial_conditions))) {
-        stop("starting compartment name not found in compartment list")
-      }
-      if(!(is.numeric(value))) {
-        stop("requested starting compartment value is not numeric")
-      }
-      if(value < 0) {
-        stop("requested starting compartment value is negative")
-      }
-      self$initial_conditions[compartment_name] <- value
-      self$initial_conditions
-    },
-    
-    # make initial condition values up to starting total (default being 1)
-    make_initial_conditions_to_total = function(total=1, starting_name="susceptible") {
-      self$initial_conditions <- self$set_compartment_start_value(
-        starting_name, total - sum(self$initial_conditions))
-    },
+    # set_compartment_start_value = function(compartment_name, value) {
+    #   if(!(compartment_name %in% names(self$initial_conditions))) {
+    #     stop("starting compartment name not found in compartment list")
+    #   }
+    #   if(!(is.numeric(value))) {
+    #     stop("requested starting compartment value is not numeric")
+    #   }
+    #   if(value < 0) {
+    #     stop("requested starting compartment value is negative")
+    #   }
+    #   self$initial_conditions[compartment_name] <- value
+    #   self$initial_conditions
+    # },
+    # 
+    # # make initial condition values up to starting total (default being 1)
+    # make_initial_conditions_to_total = function(total=1, starting_name="susceptible") {
+    #   self$initial_conditions <- self$set_compartment_start_value(
+    #     starting_name, total - sum(self$initial_conditions))
+    # },
     
     # define functions to add flows to model
     add_flow = function(flow_type, flow_name, from_compartment, to_compartment) {
