@@ -39,15 +39,19 @@ EpiModel <- R6Class(
     compartments_to_stratify = list(),
     
     # initialise basic model characteristics from inputs and check appropriately requested
-    initialize = function(parameters, compartment_types, times, infectious_compartment="infectious", 
-                          universal_death_rate=0, birth_approach = "no_births",
-                          compartment_strata=NULL, compartments_to_stratify=list()) {
+    initialize = function(parameters, compartment_types, times, initial_conditions,
+                          infectious_compartment="infectious", universal_death_rate=0,
+                          birth_approach = "no_births", compartment_strata=NULL, 
+                          compartments_to_stratify=list()) {
       if(!(is.numeric(parameters))) {stop("parameter values are not numeric")}
       self$parameters <- parameters
 
       if(!(is.character(compartment_types))) {stop("compartment names are not character")}
       self$compartment_types <- compartment_types
       self$compartments <- compartment_types
+      
+      self$initial_conditions <- initial_conditions
+      self$parameters["potatoes"] <- 1
       
       # stratification-related checks
       if (!(is.list(compartment_strata) || is.null(compartment_strata))) 
@@ -62,14 +66,13 @@ EpiModel <- R6Class(
       if (length(compartment_strata) > 1) {
         self$stratify_compartments()
       }
-      
+
       if(!(is.character(infectious_compartment))) {
         stop("infectious compartment name is not character")
       }
       self$infectious_compartment <- infectious_compartment
       if(!(is.numeric(times))) {stop("time values are not numeric")}
       self$times <- times
-      self$initialise_compartments()
       if(!(is.numeric(universal_death_rate))) {stop("universal death rate is not numeric")}
       self$universal_death_rate <- universal_death_rate
       
@@ -111,13 +114,28 @@ EpiModel <- R6Class(
     find_compartment_stem = function(compartment) {
       str_split(compartment, fixed("_"))[[1]][[1]]
     },
-  
 
     # stratify a single compartment using the two methods below  
     stratify_compartment = function(compartment, strata) {
       self$remove_compartment(compartment)
       for (stratum in strata) {
         self$add_compartment(paste(compartment, stratum, sep = "_"))
+        
+        if (compartment %in% names(self$initial_conditions)) {
+          for (stratum in strata) {
+            self$initial_conditions[paste(compartment, stratum, sep = "_")] <-
+              self$initial_conditions[[compartment]] / length(strata)
+          }
+          
+          print(self$initial_conditions[[compartment]])
+          print("hello")
+          print(typeof(self$initial_conditions))
+          print(self$initial_conditions)
+          
+          self$intial_conditions["potatoes"] <- 1
+          
+          print("goodbye")
+        }
       }
     },
     
