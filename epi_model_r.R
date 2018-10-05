@@ -57,12 +57,11 @@ EpiModel <- R6Class(
       self$compartment_types <- compartment_types
       self$compartments <- compartment_types
       self$initial_compartment_values <- initial_compartment_values
-
+      
       if (initial_conditions_sum_to_one) {
-        self$initial_compartment_values["susceptible"] <- 
-          1 - Reduce("+", self$initial_compartment_values)
+        self$sum_initial_compartments_to_total("susceptible", 1)
       }
-
+      
       # stratification-related checks
       if (!(is.list(compartment_strata) || is.null(compartment_strata))) 
         {stop("compartment_strata not list")}
@@ -160,13 +159,13 @@ EpiModel <- R6Class(
           self$initial_compartment_values[compartment]
       }
     },
-    
-    # # make initial condition values up to starting total (default being 1)
-    # make_initial_conditions_to_total = function(total=1, starting_name="susceptible") {
-    #   self$initial_conditions <- self$set_compartment_start_value(
-    #     starting_name, total - sum(self$initial_conditions))
-    # },
-    
+
+    # make initial conditions sum to a certain value    
+    sum_initial_compartments_to_total = function(compartment, total) {
+      self$initial_compartment_values[compartment] <- 
+        total - Reduce("+", self$initial_compartment_values)
+    },
+
     # define functions to add flows to model
     add_flow = function(flow_type, flow_name, from_compartment, to_compartment) {
       if(!(flow_name %in% names(self$parameters))) {
