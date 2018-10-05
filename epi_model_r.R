@@ -16,6 +16,11 @@ increment_vector_element <- function(vector, number, increment) {
   vector
 }
 
+# find the stem of the compartment name as the text leading up to the first occurrence of _
+find_compartment_stem = function(compartment) {
+  str_split(compartment, fixed("_"))[[1]][[1]]
+}
+
 # objects
 
 # main epidemiological model object
@@ -24,7 +29,8 @@ EpiModel <- R6Class(
   public = list(
     compartment_types = list(),
     compartments = list(),
-    initial_conditions = list(),
+    initial_compartment_values = list(),
+    initial_conditions = c(),
     flows = list(),
     infectious_compartment = NULL,
     parameters = list(),
@@ -39,7 +45,7 @@ EpiModel <- R6Class(
     compartments_to_stratify = list(),
     
     # initialise basic model characteristics from inputs and check appropriately requested
-    initialize = function(parameters, compartment_types, times, initial_conditions,
+    initialize = function(parameters, compartment_types, times, initial_compartment_values,
                           infectious_compartment="infectious", universal_death_rate=0,
                           birth_approach = "no_births", compartment_strata=NULL, 
                           compartments_to_stratify=list()) {
@@ -49,11 +55,8 @@ EpiModel <- R6Class(
       if(!(is.character(compartment_types))) {stop("compartment names are not character")}
       self$compartment_types <- compartment_types
       self$compartments <- compartment_types
-      
-      self$initial_conditions <- initial_conditions
-      # self$initial_conditions["potatoes"] <- 1
-      # print(self$initial_conditions)
-      
+      self$initial_compartment_values <- initial_compartment_values
+
       # stratification-related checks
       if (!(is.list(compartment_strata) || is.null(compartment_strata))) 
         {stop("compartment_strata not list")}
@@ -67,6 +70,9 @@ EpiModel <- R6Class(
       if (length(compartment_strata) > 1) {
         self$stratify_compartments()
       }
+
+      self$initialise_compartments_to_zero()
+      self$set_compartment_start_values()
 
       if(!(is.character(infectious_compartment))) {
         stop("infectious compartment name is not character")
@@ -101,7 +107,7 @@ EpiModel <- R6Class(
           
           # determine whether the compartment's stem (first argument to grepl)
           # is in the vector of compartment types (second argument to grepl)
-          if (grepl(self$find_compartment_stem(compartment),
+          if (grepl(find_compartment_stem(compartment),
                     paste(compartments_to_stratify, collapse="_"))) {
 
             # remove the unstratified compartment and append the additional ones
@@ -111,32 +117,18 @@ EpiModel <- R6Class(
       }
     },
     
-    # find the stem of the compartment name as the text leading up to the first occurrence of _
-    find_compartment_stem = function(compartment) {
-      str_split(compartment, fixed("_"))[[1]][[1]]
-    },
-
     # stratify a single compartment using the two methods below  
     stratify_compartment = function(compartment, strata) {
       self$remove_compartment(compartment)
       for (stratum in strata) {
         self$add_compartment(paste(compartment, stratum, sep = "_"))
         
-        if (compartment %in% names(self$initial_conditions)) {
+        if (compartment %in% names(self$initial_compartment_values)) {
           for (stratum in strata) {
-            self$initial_conditions[paste(compartment, stratum, sep = "_")] <-
-              self$initial_conditions[[compartment]] / length(strata)
+            self$initial_compartment_values[paste(compartment, stratum, sep = "_")] <-
+              self$initial_compartment_values[[compartment]] / length(strata)
           }
-          
-          
-          
-          print(self$initial_conditions[[compartment]])
-          print("hello")
-          print(self$initial_conditions)
-
-          self$initial_conditions["potatoes"] <- 1
-          # 
-          # print("goodbye")
+          self$initial_compartment_values[compartment] <- NULL
         }
       }
     },
@@ -150,26 +142,19 @@ EpiModel <- R6Class(
     },
 
     # initialise compartments to zero values
-    # initialise_compartments = function() {
-    #   self$initial_conditions <- numeric(length(self$compartments))
-    #   self$initial_conditions <- setNames(self$initial_conditions, self$compartments)
-    # },
-    #     
-    # populate compartments with a starting value
-    # set_compartment_start_value = function(compartment_name, value) {
-    #   if(!(compartment_name %in% names(self$initial_conditions))) {
-    #     stop("starting compartment name not found in compartment list")
-    #   }
-    #   if(!(is.numeric(value))) {
-    #     stop("requested starting compartment value is not numeric")
-    #   }
-    #   if(value < 0) {
-    #     stop("requested starting compartment value is negative")
-    #   }
-    #   self$initial_conditions[compartment_name] <- value
-    #   self$initial_conditions
-    # },
-    # 
+    initialise_compartments_to_zero = function() {
+      self$initial_conditions <- numeric(length(self$compartments))
+      self$initial_conditions <- setNames(self$initial_conditions, self$compartments)
+    },
+
+    # populate compartments with their starting values
+    set_compartment_start_values = function() {
+      for (compartment in names(self$initial_compartment_values)) {
+        self$initial_conditions[compartment] <- 
+          self$initial_compartment_values[compartment]
+      }
+    },
+    
     # # make initial condition values up to starting total (default being 1)
     # make_initial_conditions_to_total = function(total=1, starting_name="susceptible") {
     #   self$initial_conditions <- self$set_compartment_start_value(
