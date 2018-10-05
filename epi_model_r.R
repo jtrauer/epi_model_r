@@ -31,6 +31,7 @@ EpiModel <- R6Class(
     compartments = list(),
     initial_compartment_values = list(),
     initial_conditions = c(),
+    initial_conditions_sum_to_one = TRUE,
     flows = list(),
     infectious_compartment = NULL,
     parameters = list(),
@@ -46,9 +47,9 @@ EpiModel <- R6Class(
     
     # initialise basic model characteristics from inputs and check appropriately requested
     initialize = function(parameters, compartment_types, times, initial_compartment_values,
-                          infectious_compartment="infectious", universal_death_rate=0,
-                          birth_approach = "no_births", compartment_strata=NULL, 
-                          compartments_to_stratify=list()) {
+                          initial_conditions_sum_to_one = TRUE, infectious_compartment="infectious",
+                          universal_death_rate=0, birth_approach = "no_births",
+                          compartment_strata=NULL,compartments_to_stratify=list()) {
       if(!(is.numeric(parameters))) {stop("parameter values are not numeric")}
       self$parameters <- parameters
 
@@ -56,6 +57,11 @@ EpiModel <- R6Class(
       self$compartment_types <- compartment_types
       self$compartments <- compartment_types
       self$initial_compartment_values <- initial_compartment_values
+
+      if (initial_conditions_sum_to_one) {
+        self$initial_compartment_values["susceptible"] <- 
+          1 - Reduce("+", self$initial_compartment_values)
+      }
 
       # stratification-related checks
       if (!(is.list(compartment_strata) || is.null(compartment_strata))) 
