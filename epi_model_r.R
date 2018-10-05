@@ -50,14 +50,18 @@ EpiModel <- R6Class(
       self$compartments <- compartment_types
       
       # stratification-related checks
-      if(!(is.list(compartment_strata))) {stop("compartment_strata not list")}
-      if(!(is.list(compartments_to_stratify))) {stop("compartments_to_stratify not list")}
+      if (!(is.list(compartment_strata) || is.null(compartment_strata))) 
+        {stop("compartment_strata not list")}
+      if (!(is.list(compartments_to_stratify)) || is.null(compartments_to_stratify)) 
+        {stop("compartments_to_stratify not list")}
       if (length(compartment_strata) != length(compartments_to_stratify)) {
         stop("length of lists of compartments to stratify and strata for them unequal")
       }
       self$compartment_strata <- compartment_strata
       self$compartments_to_stratify <- compartments_to_stratify
-      self$stratify_compartments()
+      if (length(compartment_strata) > 1) {
+        self$stratify_compartments()
+      }
       
       if(!(is.character(infectious_compartment))) {
         stop("infectious compartment name is not character")
