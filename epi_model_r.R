@@ -5,7 +5,7 @@ library(stringr)
 
 # this file contains the main model builder function, that is intended to be agnostic
 # to the type and complexity of model that the user wants to build
-# all instructions on what the characteristics of the model are are separated out to a
+# all instructions for what the characteristics of the model are are separated out to a
 # file that calls/sources this one
 
 # static functions
@@ -50,12 +50,14 @@ EpiModel <- R6Class(
                           infectious_compartment="infectious", universal_death_rate=0, 
                           birth_approach = "no_births", compartment_strata=NULL, 
                           compartments_to_stratify=list()) {
-      if (!(is.numeric(parameters))) 
-        {stop("parameter values are not numeric")}
+      if (!(is.numeric(parameters))) {
+        stop("parameter values are not numeric")
+        }
       self$parameters <- parameters
 
-      if (!(is.character(compartment_types)))
-        {stop("compartment types are not character")}
+      if (!(is.character(compartment_types))) {
+        stop("compartment types are not character")
+        }
       self$compartment_types <- compartment_types
 
       # set initial conditions
@@ -82,23 +84,22 @@ EpiModel <- R6Class(
         self$stratify_compartments(
           compartment_types, compartment_strata, compartments_to_stratify)
       }
-      
-      print(self$compartments)
-      
+
+      # set remaining attributes      
       if(!(is.character(infectious_compartment))) 
         {stop("infectious compartment name is not character")}
       self$infectious_compartment <- infectious_compartment
       if(!(is.numeric(times))) {stop("time values are not numeric")}
       self$times <- times
-      if(!(is.numeric(universal_death_rate))) 
-        {stop("universal death rate is not numeric")}
-      self$universal_death_rate <- universal_death_rate
-      
       available_birth_approaches <- 
         c("add_crude_birth_rate", "replace_deaths", "no_births")
       if(!(birth_approach %in% available_birth_approaches)) 
         {stop("requested birth approach not available")}
       self$birth_approach <- birth_approach
+      if(!(is.numeric(universal_death_rate))) 
+      {stop("universal death rate is not numeric")}
+      self$universal_death_rate <- universal_death_rate
+      
       },
 
     # make initial conditions sum to a certain value    
