@@ -52,16 +52,16 @@ EpiModel <- R6Class(
                           birth_approach = "no_births", compartment_strata=NULL, 
                           compartment_sets_to_stratify=list()) {
       if (!(is.numeric(parameters))) {
-        stop("parameter values are not numeric")
+        stop("one or more parameter values are not numeric")
         }
       self$parameters <- parameters
 
       if (!(is.character(compartment_types))) {
-        stop("compartment types are not character")
+        stop("one or more compartment types are not character")
         }
       self$compartment_types <- compartment_types
 
-      # set initial conditions
+      # set unstratified initial conditions
       self$compartments <- list()
       for (compartment in compartment_types) {
         if (compartment %in% names(initial_conditions)) {
@@ -73,11 +73,11 @@ EpiModel <- R6Class(
         self$sum_initial_compartments_to_total("susceptible", 1)
       }
       
-      # add flows
+      # add unstratified flows
       self$fixed_flows <- 
         data.frame(parameter=character(), from=character(), to=character())
       self$infection_flows <- 
-        data.frame(parameter=character(), from=character(), infectious=character())
+        data.frame(parameter=character(), from=character(), to=character())
       self$add_flows(flows)
 
       # stratification
@@ -92,6 +92,9 @@ EpiModel <- R6Class(
         self$stratify_compartments(
           compartment_types, compartment_strata, compartment_sets_to_stratify)
       }
+      
+      print(names(self$compartments))
+      print(self$infection_flows)
 
       # set remaining attributes      
       if(!(is.character(infectious_compartment))) 
@@ -271,17 +274,19 @@ EpiModel <- R6Class(
     apply_infection_flow = function(ode_equations, compartment_values) {
       for (f in 1: nrow(self$infection_flows)) {
         flow <- self$infection_flows[f,]
-        infectious_compartment <- 
-          match(self$infectious_compartment, names(self$compartments))
-        from_compartment <- match(flow$from, names(self$compartments))
-        net_flow <- self$parameters[flow$parameter] *
-          compartment_values[from_compartment] * compartment_values[infectious_compartment]
-        ode_equations <-
-          increment_vector_element(ode_equations, from_compartment, -net_flow)
-        ode_equations <-
-          increment_vector_element(ode_equations,
-                                   match(flow$to, names(self$compartments)),
-                                   net_flow)
+        if (!is.na(flow[1])) {
+          infectious_compartment <- 
+            match(self$infectious_compartment, names(self$compartments))
+          from_compartment <- match(flow$from, names(self$compartments))
+          net_flow <- self$parameters[flow$parameter] *
+            compartment_values[from_compartment] * compartment_values[infectious_compartment]
+          ode_equations <-
+            increment_vector_element(ode_equations, from_compartment, -net_flow)
+          ode_equations <-
+            increment_vector_element(ode_equations,
+                                     match(flow$to, names(self$compartments)),
+                                     net_flow)
+        }
       }
       ode_equations
     },
@@ -291,15 +296,17 @@ EpiModel <- R6Class(
       function(ode_equations, compartment_values) {
         for (f in as.numeric(row.names(self$fixed_flows))) {
           flow <- self$fixed_flows[f,]
-          from_compartment <- match(flow$from, names(self$compartments))
-          net_flow <- self$parameters[as.character(flow$parameter)] *
-            compartment_values[from_compartment]
-          ode_equations <-
-            increment_vector_element(ode_equations, from_compartment, -net_flow)
-          ode_equations <-
-            increment_vector_element(ode_equations,
-                                     match(flow$to, names(self$compartments)),
-                                     net_flow)
+          if (!is.na(flow[1])) {
+            from_compartment <- match(flow$from, names(self$compartments))
+            net_flow <- self$parameters[as.character(flow$parameter)] *
+              compartment_values[from_compartment]
+            ode_equations <-
+              increment_vector_element(ode_equations, from_compartment, -net_flow)
+            ode_equations <-
+              increment_vector_element(ode_equations,
+                                       match(flow$to, names(self$compartments)),
+                                       net_flow)
+          }
         }
         ode_equations
       },
