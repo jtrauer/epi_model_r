@@ -32,7 +32,8 @@ EpiModel <- R6Class(
     compartments = list(),
     initial_conditions = list(),
     initial_conditions_sum_to_one = TRUE,
-    flows = list(),
+    fixed_flows = data.frame(),
+    infection_flows = data.frame(),
     infectious_compartment = NULL,
     outputs = NULL,
     times = NULL,
@@ -45,7 +46,7 @@ EpiModel <- R6Class(
     compartment_sets_to_stratify = list(),
     
     # initialise basic model characteristics from inputs and check appropriately requested
-    initialize = function(parameters, compartment_types, times, initial_conditions,
+    initialize = function(parameters, compartment_types, times, initial_conditions, flows,
                           initial_conditions_sum_to_one = TRUE,
                           infectious_compartment="infectious", universal_death_rate=0, 
                           birth_approach = "no_births", compartment_strata=NULL, 
@@ -72,6 +73,15 @@ EpiModel <- R6Class(
         self$sum_initial_compartments_to_total("susceptible", 1)
       }
       
+      # add flows
+      self$fixed_flows <- 
+        data.frame(parameter=character(), from=character(), to=character())
+      self$infection_flows <- 
+        data.frame(parameter=character(), from=character(), infectious=character())
+      self$add_flows(flows)
+      print(self$fixed_flows)
+      print(self$infection_flows)
+
       # stratification
       if (!(is.list(compartment_strata) || is.null(compartment_strata))) 
         {stop("compartment_strata not list")}
@@ -154,23 +164,33 @@ EpiModel <- R6Class(
       self$compartments[compartment] <- NULL
     },
 
-    # define functions to add flows to model
-    add_flow = function(flow_type, flow_name, from_compartment, to_compartment) {
-      if(!(flow_name %in% names(self$parameters))) {
-        stop("flow name not found in parameter list")
-      }
-      if(!(from_compartment %in% names(self$compartments))) {
-        stop("from compartment name not found in compartment list")
-      }
-      if(!(to_compartment %in% names(self$compartments))) {
-        stop("to compartment name not found in compartment list")
-      }
-      self$flows[[flow_type]] <- rbind(self$flows[[flow_type]],
-                                       data.frame(flow_name=flow_name,
-                                                  from_compartment=from_compartment,
-                                                  to_compartment=to_compartment)
-      )
-    },
+    # add all flows to create data frames from input lists
+    add_flows = function(flows) {
+      for (flow in seq(length(flows))) {
+        working_flow <- flows[flow][[1]]
+        if(!(working_flow[2] %in% names(self$parameters))) {
+          stop("flow parameter not found in parameter list")
+          }
+        if(!(working_flow[3] %in% self$compartment_types)) {
+          stop("from compartment name not found in compartment types")
+          }
+        if(!(working_flow[4] %in% self$compartment_types)) {
+          stop("to compartment name not found in compartment types")
+          }
+        if (working_flow[1] == "fixed_flows") {
+          self$fixed_flows <- 
+            rbind(self$fixed_flows, data.frame(parameter=working_flow[2],
+                                               from=working_flow[3],
+                                               to=working_flow[4]))
+          }
+        else if (working_flow[1] == "infection_flows") {
+          self$infection_flows <-
+            rbind(self$infecion_flows, data.frame(parameter=working_flow[2],
+                                                  from=working_flow[3],
+                                                  infectious=working_flow[4]))
+          }
+        }
+    }, 
     
     # apply the infection flow to odes
     apply_infection_flow = function(ode_equations, compartment_values) {
