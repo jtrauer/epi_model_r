@@ -17,7 +17,7 @@ increment_vector_element <- function(vector, number, increment) {
 }
 
 # find the stem of the compartment name as the text leading up to the first occurrence of _
-find_compartment_stem = function(compartment) {
+find_stem = function(compartment) {
   str_split(compartment, fixed("_"))[[1]][[1]]
 }
 
@@ -79,8 +79,6 @@ EpiModel <- R6Class(
       self$infection_flows <- 
         data.frame(parameter=character(), from=character(), infectious=character())
       self$add_flows(flows)
-      print(self$fixed_flows)
-      print(self$infection_flows)
 
       # stratification
       if (!(is.list(compartment_strata) || is.null(compartment_strata))) 
@@ -90,11 +88,13 @@ EpiModel <- R6Class(
       if (length(compartment_strata) != length(compartment_sets_to_stratify)) {
         stop("length of lists of compartments to stratify and strata for them unequal")
         }
-      if (length(compartment_strata) > 1) {
+      if (length(compartment_strata) >= 1) {
         self$stratify_compartments(
           compartment_types, compartment_strata, compartment_sets_to_stratify)
       }
       
+      print(self$fixed_flows)
+
       # set remaining attributes      
       if(!(is.character(infectious_compartment))) 
         {stop("infectious compartment name is not character")}
@@ -126,40 +126,77 @@ EpiModel <- R6Class(
     # stratify a specific compartment or sequence of compartments
     stratify_compartments = function(
       compartment_types, compartment_strata, stratification_types) {
-      
       for (s in seq(length(stratification_types))) {
         
         # determine compartments for stratification, depending on whether
         # a list or the string "all" has been passed
         if (stratification_types[s] == "all") {
-          stratification_compartments <- self$compartment_types
-        }
+          compartments_to_stratify <- self$compartment_types
+          }
         else {
-          stratification_compartments <- stratification_types[[s]]
-        }
+          compartments_to_stratify <- stratification_types[[s]]
+          }
         
         # loop over the compartment types
         for (compartment in names(self$compartments)) {
           
           # determine whether the compartment's stem (first argument to grepl)
           # is in the vector of compartment types (second argument to grepl)
-          if (grepl(find_compartment_stem(compartment),
-                    paste(stratification_compartments, collapse="_"))) {
+          if (grepl(find_stem(compartment),
+                    paste(compartments_to_stratify, collapse="_"))) {
 
-            # remove the unstratified compartment and append the additional ones
+            # append the additional compartment and remove the original one
             self$stratify_compartment(compartment, compartment_strata[[s]])
           }
+          }
+          
+        for (flow in as.numeric(row.names(self$fixed_flows))) {
+          
+          # both from and to compartments being stratified
+          if (find_stem(self$fixed_flows[flow, 2]) %in% compartments_to_stratify 
+              && find_stem(self$fixed_flows[flow, 3]) %in% compartments_to_stratify) {
+            for (stratum in compartment_strata[[s]]) {
+              self$fixed_flows <-
+                rbind(self$fixed_flows,
+                      data.frame(parameter=self$fixed_flows[flow, 1],
+                                 from=paste(self$fixed_flows[flow, 2], stratum, sep="_"),
+                                 to=paste(self$fixed_flows[flow, 3], stratum, sep="_")))
+            }
+            self$fixed_flows[flow,] <- NA
+          }
+          
+          # from compartment being stratified but not to compartment
+          else if (find_stem(self$fixed_flows[flow, 2]) %in% compartments_to_stratify) {
+            for (stratum in compartment_strata[[s]]) {
+              self$fixed_flows <-
+                rbind(self$fixed_flows,
+                      data.frame(parameter=self$fixed_flows[flow, 1],
+                                 from=paste(self$fixed_flows[flow, 2], stratum, sep="_"),
+                                 to=self$fixed_flows[flow, 3]))
+            }
+            self$fixed_flows[flow,] <- NA
+          }
+          
+          # to compartment being stratified but not from compartment
+          else if (find_stem(self$fixed_flows[flow, 3]) %in% compartments_to_stratify) {
+            for (stratum in compartment_strata[[s]]) {
+              self$fixed_flows <-
+                rbind(self$fixed_flows,
+                      data.frame(parameter=self$fixed_flows[flow, 1],
+                                 from=self$fixed_flows[flow, 2],
+                                 to=paste(self$fixed_flows[flow, 3], stratum, sep="_")))
+            }
+            self$fixed_flows[flow,] <- NA
+          }
         }
-      }
-    },
+        }
+      },
     
     # stratify a single compartment using the two methods below  
     stratify_compartment = function(compartment, strata) {
       for (stratum in strata) {
-        for (stratum in strata) {
-          self$compartments[paste(compartment, stratum, sep = "_")] <-
-            self$compartments[[compartment]] / length(strata)
-        }
+        self$compartments[paste(compartment, stratum, sep = "_")] <-
+          self$compartments[[compartment]] / length(strata)
       }
       self$compartments[compartment] <- NULL
     },
@@ -194,7 +231,7 @@ EpiModel <- R6Class(
     
     # apply the infection flow to odes
     apply_infection_flow = function(ode_equations, compartment_values) {
-      for (f in 1: nrow(self$flows$infection_flows)) {
+      for (f in 1: nrow(self$infection_flows)) {
         flow <- self$flows$infection_flows[f,]
         infectious_compartment <- 
           match(self$infectious_compartment, names(self$compartments))
@@ -214,7 +251,7 @@ EpiModel <- R6Class(
     # add a fixed flow to odes
     apply_fixed_flow =
       function(ode_equations, compartment_values) {
-        for (f in 1: nrow(self$flows$fixed_flows)) {
+        for (f in as.numeric(row.names(self$fixed_flows))) {
           flow <- self$flows$fixed_flows[f,]
           from_compartment <- match(flow$from_compartment, names(self$compartments))
           net_flow <- self$parameters[as.character(flow$flow_name)] *
