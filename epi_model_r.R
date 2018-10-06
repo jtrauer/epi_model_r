@@ -92,9 +92,6 @@ EpiModel <- R6Class(
         self$stratify_compartments(
           compartment_types, compartment_strata, compartment_sets_to_stratify)
       }
-      
-      print(names(self$compartments))
-      print(self$infection_flows)
 
       # set remaining attributes      
       if(!(is.character(infectious_compartment))) 
