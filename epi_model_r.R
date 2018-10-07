@@ -157,7 +157,7 @@ EpiModel <- R6Class(
                                  implement=TRUE,
                                  type="fixed"))
             }
-            self$flows[flow, 4] <- FALSE
+            self$flows$implement[flow] <- FALSE
           }
           
           # from compartment being stratified but not to compartment
@@ -171,7 +171,7 @@ EpiModel <- R6Class(
                                  implement=TRUE,
                                  type="fixed"))
             }
-            self$flows[flow, 4] <- FALSE
+            self$flows$implement[flow] <- FALSE
           }
           
           # to compartment being stratified but not from compartment
@@ -185,7 +185,7 @@ EpiModel <- R6Class(
                                  implement=TRUE,
                                  type="fixed"))
             }
-            self$flows[flow, 4] <- FALSE
+            self$flows$implement[flow] <- FALSE
           }
         }
         
@@ -279,11 +279,17 @@ EpiModel <- R6Class(
           }
         else if (working_flow[1] == "infection_flows") {
           self$infection_flows <-
-            rbind(self$infecion_flows, data.frame(parameter=working_flow[2],
+            rbind(self$infection_flows, data.frame(parameter=working_flow[2],
                                                   from=working_flow[3],
                                                   to=working_flow[4],
                                                   implement=TRUE,
                                                   type="infection"))
+          self$flows <-
+            rbind(self$flows, data.frame(parameter=working_flow[2],
+                                         from=working_flow[3],
+                                         to=working_flow[4],
+                                         implement=TRUE,
+                                         type="infection"))
           }
         }
     }, 
@@ -314,7 +320,8 @@ EpiModel <- R6Class(
       function(ode_equations, compartment_values) {
         for (f in as.numeric(row.names(self$flows))) {
           flow <- self$flows[f,]
-          if (flow[[4]]) {
+          
+          if (flow[[4]] && flow[[5]] == "fixed") {
             from_compartment <- match(flow$from, names(self$compartments))
             net_flow <- self$parameters[as.character(flow$parameter)] *
               compartment_values[from_compartment]
