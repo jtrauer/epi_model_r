@@ -75,7 +75,8 @@ EpiModel <- R6Class(
       
       # add unstratified flows
       self$fixed_flows <- 
-        data.frame(parameter=character(), from=character(), to=character())
+        data.frame(parameter=character(), from=character(), 
+                   to=character(), implement=logical())
       self$infection_flows <- 
         data.frame(parameter=character(), from=character(), to=character())
       self$add_flows(flows)
@@ -121,16 +122,6 @@ EpiModel <- R6Class(
         total - Reduce("+", self$compartments)
     },
 
-    # find compartments to stratify depending on whether vector or "all" passed
-    determine_compartments_to_stratify = function(requested_strata) {
-      if (requested_strata == "all") {
-        self$compartment_types
-      }
-      else {
-        requested_strata
-      }
-    },
-     
     # stratify a specific compartment or sequence of compartments
     stratify_compartments = function(
       compartment_types, compartment_strata, stratification_types) {
@@ -161,9 +152,10 @@ EpiModel <- R6Class(
                 rbind(self$fixed_flows,
                       data.frame(parameter=self$fixed_flows[flow, 1],
                                  from=paste(self$fixed_flows[flow, 2], stratum, sep="_"),
-                                 to=paste(self$fixed_flows[flow, 3], stratum, sep="_")))
+                                 to=paste(self$fixed_flows[flow, 3], stratum, sep="_"),
+                                 implement=TRUE))
             }
-            self$fixed_flows[flow,] <- NA
+            self$fixed_flows[flow, implement] <- FALSE
           }
           
           # from compartment being stratified but not to compartment
@@ -173,9 +165,10 @@ EpiModel <- R6Class(
                 rbind(self$fixed_flows,
                       data.frame(parameter=self$fixed_flows[flow, 1],
                                  from=paste(self$fixed_flows[flow, 2], stratum, sep="_"),
-                                 to=self$fixed_flows[flow, 3]))
+                                 to=self$fixed_flows[flow, 3],
+                                 implement=TRUE))
             }
-            self$fixed_flows[flow,] <- NA
+            self$fixed_flows[flow, implement] <- FALSE
           }
           
           # to compartment being stratified but not from compartment
@@ -185,7 +178,8 @@ EpiModel <- R6Class(
                 rbind(self$fixed_flows,
                       data.frame(parameter=self$fixed_flows[flow, 1],
                                  from=self$fixed_flows[flow, 2],
-                                 to=paste(self$fixed_flows[flow, 3], stratum, sep="_")))
+                                 to=paste(self$fixed_flows[flow, 3], stratum, sep="_"),
+                                 implement=TRUE))
             }
             self$fixed_flows[flow,] <- NA
           }
@@ -201,7 +195,8 @@ EpiModel <- R6Class(
                 rbind(self$infection_flows,
                       data.frame(parameter=self$infection_flows[flow, 1],
                                  from=paste(self$infection_flows[flow, 2], stratum, sep="_"),
-                                 to=paste(self$infection_flows[flow, 3], stratum, sep="_")))
+                                 to=paste(self$infection_flows[flow, 3], stratum, sep="_"),
+                                 implement=TRUE))
             }
             self$infection_flows[flow,] <- NA
           }
@@ -213,7 +208,8 @@ EpiModel <- R6Class(
                 rbind(self$infection_flows,
                       data.frame(parameter=self$infection_flows[flow, 1],
                                  from=paste(self$infection_flows[flow, 2], stratum, sep="_"),
-                                 to=self$infection_flows[flow, 3]))
+                                 to=self$infection_flows[flow, 3],
+                                 implement=TRUE))
             }
             self$infection_flows[flow,] <- NA
           }
@@ -225,7 +221,8 @@ EpiModel <- R6Class(
                 rbind(self$infection_flows,
                       data.frame(parameter=self$infection_flows[flow, 1],
                                  from=self$infection_flows[flow, 2],
-                                 to=paste(self$infection_flows[flow, 3], stratum, sep="_")))
+                                 to=paste(self$infection_flows[flow, 3], stratum, sep="_"),
+                                 implement=TRUE))
             }
             self$infection_flows[flow,] <- NA
           }
@@ -233,6 +230,16 @@ EpiModel <- R6Class(
         }
       },
     
+    # find compartments to stratify depending on whether vector or "all" passed
+    determine_compartments_to_stratify = function(requested_strata) {
+      if (requested_strata == "all") {
+        self$compartment_types
+      }
+      else {
+        requested_strata
+      }
+    },
+        
     # stratify a single compartment using the two methods below  
     stratify_compartment = function(compartment, strata) {
       for (stratum in strata) {
@@ -259,13 +266,15 @@ EpiModel <- R6Class(
           self$fixed_flows <- 
             rbind(self$fixed_flows, data.frame(parameter=working_flow[2],
                                                from=working_flow[3],
-                                               to=working_flow[4]))
+                                               to=working_flow[4],
+                                               implement=TRUE))
           }
         else if (working_flow[1] == "infection_flows") {
           self$infection_flows <-
             rbind(self$infecion_flows, data.frame(parameter=working_flow[2],
                                                   from=working_flow[3],
-                                                  to=working_flow[4]))
+                                                  to=working_flow[4],
+                                                  implement=TRUE))
           }
         }
     }, 
