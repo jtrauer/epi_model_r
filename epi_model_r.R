@@ -155,7 +155,7 @@ EpiModel <- R6Class(
                                  to=paste(self$fixed_flows[flow, 3], stratum, sep="_"),
                                  implement=TRUE))
             }
-            self$fixed_flows[flow, implement] <- FALSE
+            self$fixed_flows[flow, 4] <- FALSE
           }
           
           # from compartment being stratified but not to compartment
@@ -168,7 +168,7 @@ EpiModel <- R6Class(
                                  to=self$fixed_flows[flow, 3],
                                  implement=TRUE))
             }
-            self$fixed_flows[flow, implement] <- FALSE
+            self$fixed_flows[flow, 4] <- FALSE
           }
           
           # to compartment being stratified but not from compartment
@@ -181,7 +181,7 @@ EpiModel <- R6Class(
                                  to=paste(self$fixed_flows[flow, 3], stratum, sep="_"),
                                  implement=TRUE))
             }
-            self$fixed_flows[flow,] <- NA
+            self$fixed_flows[flow, 4] <- FALSE
           }
         }
         
@@ -208,8 +208,7 @@ EpiModel <- R6Class(
                 rbind(self$infection_flows,
                       data.frame(parameter=self$infection_flows[flow, 1],
                                  from=paste(self$infection_flows[flow, 2], stratum, sep="_"),
-                                 to=self$infection_flows[flow, 3],
-                                 implement=TRUE))
+                                 to=self$infection_flows[flow, 3]))
             }
             self$infection_flows[flow,] <- NA
           }
@@ -221,8 +220,7 @@ EpiModel <- R6Class(
                 rbind(self$infection_flows,
                       data.frame(parameter=self$infection_flows[flow, 1],
                                  from=self$infection_flows[flow, 2],
-                                 to=paste(self$infection_flows[flow, 3], stratum, sep="_"),
-                                 implement=TRUE))
+                                 to=paste(self$infection_flows[flow, 3], stratum, sep="_")))
             }
             self$infection_flows[flow,] <- NA
           }
@@ -273,8 +271,7 @@ EpiModel <- R6Class(
           self$infection_flows <-
             rbind(self$infecion_flows, data.frame(parameter=working_flow[2],
                                                   from=working_flow[3],
-                                                  to=working_flow[4],
-                                                  implement=TRUE))
+                                                  to=working_flow[4]))
           }
         }
     }, 
@@ -305,7 +302,7 @@ EpiModel <- R6Class(
       function(ode_equations, compartment_values) {
         for (f in as.numeric(row.names(self$fixed_flows))) {
           flow <- self$fixed_flows[f,]
-          if (!is.na(flow[1])) {
+          if (flow[[4]]) {
             from_compartment <- match(flow$from, names(self$compartments))
             net_flow <- self$parameters[as.character(flow$parameter)] *
               compartment_values[from_compartment]
