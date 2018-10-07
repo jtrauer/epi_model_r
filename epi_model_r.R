@@ -120,20 +120,23 @@ EpiModel <- R6Class(
       self$compartments[compartment] <- 
         total - Reduce("+", self$compartments)
     },
-        
+
+    # find compartments to stratify depending on whether vector or "all" passed
+    determine_compartments_to_stratify = function(requested_strata) {
+      if (requested_strata == "all") {
+        self$compartment_types
+      }
+      else {
+        requested_strata
+      }
+    },
+     
     # stratify a specific compartment or sequence of compartments
     stratify_compartments = function(
       compartment_types, compartment_strata, stratification_types) {
       for (s in seq(length(stratification_types))) {
-        
-        # determine compartments for stratification, depending on whether
-        # a list or the string "all" has been passed
-        if (stratification_types[s] == "all") {
-          compartments_to_stratify <- self$compartment_types
-          }
-        else {
-          compartments_to_stratify <- stratification_types[[s]]
-          }
+        compartments_to_stratify <- 
+          self$determine_compartments_to_stratify(stratification_types[[s]])
         
         # loop over the compartment types
         for (compartment in names(self$compartments)) {
