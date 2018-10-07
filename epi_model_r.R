@@ -317,11 +317,9 @@ EpiModel <- R6Class(
     },
     
     # add a fixed flow to odes
-    apply_fixed_flow =
-      function(ode_equations, compartment_values) {
+    apply_fixed_flow = function(ode_equations, compartment_values) {
         for (f in as.numeric(row.names(self$flows))) {
           flow <- self$flows[f,]
-          
           if (flow$implement && flow$type == "fixed") {
             from_compartment <- match(flow$from, names(self$compartments))
             net_flow <- self$parameters[as.character(flow$parameter)] *
