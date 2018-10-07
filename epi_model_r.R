@@ -284,6 +284,7 @@ EpiModel <- R6Class(
                                                   to=working_flow[4],
                                                   implement=TRUE,
                                                   type="infection"))
+          # shadowing code
           self$flows <-
             rbind(self$flows, data.frame(parameter=working_flow[2],
                                          from=working_flow[3],
@@ -298,7 +299,7 @@ EpiModel <- R6Class(
     apply_infection_flow = function(ode_equations, compartment_values) {
       for (f in 1: nrow(self$infection_flows)) {
         flow <- self$infection_flows[f,]
-        if (flow[[4]]) {
+        if (flow$implement) {
           infectious_compartment <- 
             match(self$infectious_compartment, names(self$compartments))
           from_compartment <- match(flow$from, names(self$compartments))
@@ -321,7 +322,7 @@ EpiModel <- R6Class(
         for (f in as.numeric(row.names(self$flows))) {
           flow <- self$flows[f,]
           
-          if (flow[[4]] && flow[[5]] == "fixed") {
+          if (flow$implement && flow$type == "fixed") {
             from_compartment <- match(flow$from, names(self$compartments))
             net_flow <- self$parameters[as.character(flow$parameter)] *
               compartment_values[from_compartment]
