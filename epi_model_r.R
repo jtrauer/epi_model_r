@@ -146,14 +146,14 @@ EpiModel <- R6Class(
         for (flow in as.numeric(row.names(self$flows))) {
           
           # both from and to compartments being stratified
-          if (find_stem(self$flows[flow, 2]) %in% compartments_to_stratify 
-              && find_stem(self$flows[flow, 3]) %in% compartments_to_stratify) {
+          if (find_stem(self$flows$from[flow]) %in% compartments_to_stratify 
+              && find_stem(self$flows$to[flow]) %in% compartments_to_stratify) {
             for (stratum in compartment_strata[[s]]) {
               self$flows <-
                 rbind(self$flows,
-                      data.frame(parameter=self$flows[flow, 1],
-                                 from=paste(self$flows[flow, 2], stratum, sep="_"),
-                                 to=paste(self$flows[flow, 3], stratum, sep="_"),
+                      data.frame(parameter=self$flows$parameter[flow],
+                                 from=paste(self$flows$from[flow], stratum, sep="_"),
+                                 to=paste(self$flows$to[flow], stratum, sep="_"),
                                  implement=TRUE,
                                  type="fixed"))
             }
@@ -161,13 +161,13 @@ EpiModel <- R6Class(
           }
           
           # from compartment being stratified but not to compartment
-          else if (find_stem(self$flows[flow, 2]) %in% compartments_to_stratify) {
+          else if (find_stem(self$flows$from[flow]) %in% compartments_to_stratify) {
             for (stratum in compartment_strata[[s]]) {
               self$flows <-
                 rbind(self$flows,
-                      data.frame(parameter=self$flows[flow, 1],
-                                 from=paste(self$flows[flow, 2], stratum, sep="_"),
-                                 to=self$flows[flow, 3],
+                      data.frame(parameter=self$flows$parameter[flow],
+                                 from=paste(self$flows$from[flow], stratum, sep="_"),
+                                 to=self$flows$to[flow],
                                  implement=TRUE,
                                  type="fixed"))
             }
@@ -175,13 +175,13 @@ EpiModel <- R6Class(
           }
           
           # to compartment being stratified but not from compartment
-          else if (find_stem(self$flows[flow, 3]) %in% compartments_to_stratify) {
+          else if (find_stem(self$flows$to[flow]) %in% compartments_to_stratify) {
             for (stratum in compartment_strata[[s]]) {
               self$flows <-
                 rbind(self$flows,
-                      data.frame(parameter=self$flows[flow, 1],
-                                 from=self$flows[flow, 2],
-                                 to=paste(self$flows[flow, 3], stratum, sep="_"),
+                      data.frame(parameter=self$flows$parameter[flow],
+                                 from=self$flows$from[flow],
+                                 to=paste(self$flows$to[flow], stratum, sep="_"),
                                  implement=TRUE,
                                  type="fixed"))
             }
@@ -192,14 +192,14 @@ EpiModel <- R6Class(
         for (flow in as.numeric(row.names(self$infection_flows))) {
           
           # both from and to compartments being stratified
-          if (find_stem(self$infection_flows[flow, 2]) %in% compartments_to_stratify 
-              && find_stem(self$infection_flows[flow, 3]) %in% compartments_to_stratify) {
+          if (find_stem(self$infection_flows$from[flow]) %in% compartments_to_stratify 
+              && find_stem(self$infection_flows$to[flow]) %in% compartments_to_stratify) {
             for (stratum in compartment_strata[[s]]) {
               self$infection_flows <-
                 rbind(self$infection_flows,
-                      data.frame(parameter=self$infection_flows[flow, 1],
-                                 from=paste(self$infection_flows[flow, 2], stratum, sep="_"),
-                                 to=paste(self$infection_flows[flow, 3], stratum, sep="_"),
+                      data.frame(parameter=self$infection_flows$parameter[flow],
+                                 from=paste(self$infection_flows$from[flow], stratum, sep="_"),
+                                 to=paste(self$infection_flows$to[flow], stratum, sep="_"),
                                  implement=TRUE,
                                  type="infection"))
             }
@@ -207,13 +207,13 @@ EpiModel <- R6Class(
           }
           
           # from compartment being stratified but not to compartment
-          else if (find_stem(self$infection_flows[flow, 2]) %in% compartments_to_stratify) {
+          else if (find_stem(self$infection_flows$from[flow]) %in% compartments_to_stratify) {
             for (stratum in compartment_strata[[s]]) {
               self$infection_flows <-
                 rbind(self$infection_flows,
-                      data.frame(parameter=self$infection_flows[flow, 1],
-                                 from=paste(self$infection_flows[flow, 2], stratum, sep="_"),
-                                 to=self$infection_flows[flow, 3],
+                      data.frame(parameter=self$infection_flows$parameter[flow],
+                                 from=paste(self$infection_flows$from[flow], stratum, sep="_"),
+                                 to=self$infection_flows$to[flow],
                                  implement=TRUE,
                                  type="infection"))
             }
@@ -221,13 +221,13 @@ EpiModel <- R6Class(
           }
           
           # to compartment being stratified but not from compartment
-          else if (find_stem(self$infection_flows[flow, 3]) %in% compartments_to_stratify) {
+          else if (find_stem(self$infection_flows$to[flow]) %in% compartments_to_stratify) {
             for (stratum in compartment_strata[[s]]) {
               self$infection_flows <-
                 rbind(self$infection_flows,
-                      data.frame(parameter=self$infection_flows[flow, 1],
-                                 from=self$infection_flows[flow, 2],
-                                 to=paste(self$infection_flows[flow, 3], stratum, sep="_"),
+                      data.frame(parameter=self$infection_flows$parameter[flow],
+                                 from=self$infection_flows$from[flow],
+                                 to=paste(self$infection_flows$to[flow], stratum, sep="_"),
                                  implement=TRUE,
                                  type="infection"))
             }
