@@ -203,7 +203,7 @@ EpiModel <- R6Class(
                                  implement=TRUE,
                                  type="infection"))
             }
-            self$infection_flows[flow, 4] <- FALSE
+            self$infection_flows$implement[flow] <- FALSE
           }
           
           # from compartment being stratified but not to compartment
@@ -217,7 +217,7 @@ EpiModel <- R6Class(
                                  implement=TRUE,
                                  type="infection"))
             }
-            self$infection_flows[flow, 4] <- FALSE
+            self$infection_flows$implement[flow] <- FALSE
           }
           
           # to compartment being stratified but not from compartment
@@ -231,7 +231,7 @@ EpiModel <- R6Class(
                                  implement=TRUE,
                                  type="infection"))
             }
-            self$infection_flows[flow, 4] <- FALSE
+            self$infection_flows$implement[flow] <- FALSE
           }
         }
         }
