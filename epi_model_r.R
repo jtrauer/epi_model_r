@@ -76,10 +76,10 @@ EpiModel <- R6Class(
       # add unstratified flows
       self$fixed_flows <- 
         data.frame(parameter=character(), from=character(), 
-                   to=character(), implement=logical())
+                   to=character(), implement=logical(), type=character())
       self$infection_flows <- 
         data.frame(parameter=character(), from=character(), 
-                   to=character(), implement=logical())
+                   to=character(), implement=logical(), type=character())
       self$add_flows(flows)
 
       # stratification
@@ -154,7 +154,8 @@ EpiModel <- R6Class(
                       data.frame(parameter=self$fixed_flows[flow, 1],
                                  from=paste(self$fixed_flows[flow, 2], stratum, sep="_"),
                                  to=paste(self$fixed_flows[flow, 3], stratum, sep="_"),
-                                 implement=TRUE))
+                                 implement=TRUE,
+                                 type="fixed"))
             }
             self$fixed_flows[flow, 4] <- FALSE
           }
@@ -167,7 +168,8 @@ EpiModel <- R6Class(
                       data.frame(parameter=self$fixed_flows[flow, 1],
                                  from=paste(self$fixed_flows[flow, 2], stratum, sep="_"),
                                  to=self$fixed_flows[flow, 3],
-                                 implement=TRUE))
+                                 implement=TRUE,
+                                 type="fixed"))
             }
             self$fixed_flows[flow, 4] <- FALSE
           }
@@ -180,7 +182,8 @@ EpiModel <- R6Class(
                       data.frame(parameter=self$fixed_flows[flow, 1],
                                  from=self$fixed_flows[flow, 2],
                                  to=paste(self$fixed_flows[flow, 3], stratum, sep="_"),
-                                 implement=TRUE))
+                                 implement=TRUE,
+                                 type="fixed"))
             }
             self$fixed_flows[flow, 4] <- FALSE
           }
@@ -197,7 +200,8 @@ EpiModel <- R6Class(
                       data.frame(parameter=self$infection_flows[flow, 1],
                                  from=paste(self$infection_flows[flow, 2], stratum, sep="_"),
                                  to=paste(self$infection_flows[flow, 3], stratum, sep="_"),
-                                 implement=TRUE))
+                                 implement=TRUE,
+                                 type="infection"))
             }
             self$infection_flows[flow, 4] <- FALSE
           }
@@ -210,7 +214,8 @@ EpiModel <- R6Class(
                       data.frame(parameter=self$infection_flows[flow, 1],
                                  from=paste(self$infection_flows[flow, 2], stratum, sep="_"),
                                  to=self$infection_flows[flow, 3],
-                                 implement=TRUE))
+                                 implement=TRUE,
+                                 type="infection"))
             }
             self$infection_flows[flow, 4] <- FALSE
           }
@@ -223,7 +228,8 @@ EpiModel <- R6Class(
                       data.frame(parameter=self$infection_flows[flow, 1],
                                  from=self$infection_flows[flow, 2],
                                  to=paste(self$infection_flows[flow, 3], stratum, sep="_"),
-                                 implement=TRUE))
+                                 implement=TRUE,
+                                 type="infection"))
             }
             self$infection_flows[flow, 4] <- FALSE
           }
@@ -268,14 +274,16 @@ EpiModel <- R6Class(
             rbind(self$fixed_flows, data.frame(parameter=working_flow[2],
                                                from=working_flow[3],
                                                to=working_flow[4],
-                                               implement=TRUE))
+                                               implement=TRUE,
+                                               type="fixed"))
           }
         else if (working_flow[1] == "infection_flows") {
           self$infection_flows <-
             rbind(self$infecion_flows, data.frame(parameter=working_flow[2],
                                                   from=working_flow[3],
                                                   to=working_flow[4],
-                                                  implement=TRUE))
+                                                  implement=TRUE,
+                                                  type="infection"))
           }
         }
     }, 
