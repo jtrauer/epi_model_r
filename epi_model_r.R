@@ -119,11 +119,12 @@ EpiModel <- R6Class(
     # stratify a specific compartment or sequence of compartments
     stratify_model = function(compartment_strata, stratification_types) {
 
+      # loop over requested stratifications
       for (s in seq(length(stratification_types))) {
         compartments_to_stratify <- 
           self$determine_compartments_to_stratify(stratification_types[[s]])
         
-        # loop over the compartment types
+        # stratify each compartment that needs stratification
         for (compartment in names(self$compartments)) {
           
           # determine whether the compartment's stem (first argument to grepl)
@@ -136,6 +137,7 @@ EpiModel <- R6Class(
           }
         }
         
+        # stratify flows depending on whether inflow, outflow or both need replication
         for (flow in 1:nrow(self$all_flows)) {
           
           # both from and to compartments being stratified
@@ -151,7 +153,7 @@ EpiModel <- R6Class(
                                  implement=TRUE,
                                  type="fixed"))
             }
-            self$all_flows$implement[flow] <- FALSE
+            self$remove_flow(flow)
           }
           
           # from compartment being stratified but not to compartment
@@ -166,7 +168,7 @@ EpiModel <- R6Class(
                                  implement=TRUE,
                                  type="fixed"))
             }
-            self$all_flows$implement[flow] <- FALSE
+            self$remove_flow(flow)
           }
           
           # to compartment being stratified but not from compartment
@@ -181,10 +183,15 @@ EpiModel <- R6Class(
                                  implement=TRUE,
                                  type="fixed"))
             }
-            self$all_flows$implement[flow] <- FALSE
+            self$remove_flow(flow)
           }
         }
         }
+      },
+    
+    # remove flow
+    remove_flow = function(flow) {
+      self$all_flows$implement[flow] <- FALSE
       },
     
     # find compartments to stratify depending on whether vector or "all" passed
