@@ -151,7 +151,7 @@ EpiModel <- R6Class(
                                  from=paste(self$all_flows$from[flow], stratum, sep="_"),
                                  to=paste(self$all_flows$to[flow], stratum, sep="_"),
                                  implement=TRUE,
-                                 type="fixed"))
+                                 type=self$all_flows$type[flow]))
             }
             self$remove_flow(flow)
           }
@@ -166,7 +166,7 @@ EpiModel <- R6Class(
                                  from=paste(self$all_flows$from[flow], stratum, sep="_"),
                                  to=self$all_flows$to[flow],
                                  implement=TRUE,
-                                 type="fixed"))
+                                 type=self$all_flows$type[flow]))
             }
             self$remove_flow(flow)
           }
@@ -181,7 +181,7 @@ EpiModel <- R6Class(
                                  from=self$all_flows$from[flow],
                                  to=paste(self$all_flows$to[flow], stratum, sep="_"),
                                  implement=TRUE,
-                                 type="fixed"))
+                                 type=self$all_flows$type[flow]))
             }
             self$remove_flow(flow)
           }
