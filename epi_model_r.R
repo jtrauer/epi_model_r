@@ -85,12 +85,9 @@ EpiModel <- R6Class(
         stop("length of lists of compartments to stratify and strata for them unequal")
       }
       if (length(compartment_strata) >= 1) {
-        self$stratify_compartments(compartment_strata, compartment_types_to_stratify)
+        self$stratify_model(compartment_strata, compartment_types_to_stratify)
       }
       
-      print(self$all_flows)
-      
-
       # set remaining attributes      
       if(!(is.character(infectious_compartment))) 
         {stop("infectious compartment name is not character")}
@@ -120,7 +117,7 @@ EpiModel <- R6Class(
     },
 
     # stratify a specific compartment or sequence of compartments
-    stratify_compartments = function(compartment_strata, stratification_types) {
+    stratify_model = function(compartment_strata, stratification_types) {
 
       for (s in seq(length(stratification_types))) {
         compartments_to_stratify <- 
