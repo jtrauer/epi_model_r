@@ -14,3 +14,4 @@ sir_model <- EpiModel$new(c(beta=400, recovery=365/13),
                           compartment_types_to_stratify=list(c("recovered")))
 sir_model$run_model()
 plot(sir_model$outputs$time, sir_model$outputs$infectious)
+

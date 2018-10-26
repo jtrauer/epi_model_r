@@ -74,7 +74,7 @@ EpiModel <- R6Class(
       }
       
       # add unstratified flows
-      self$add_flows(flows)
+      self$implement_flows(flows)
 
       # stratification
       if (!(is.list(compartment_strata) || is.null(compartment_strata))) 
@@ -143,51 +143,47 @@ EpiModel <- R6Class(
           # both from and to compartments being stratified
           if (find_stem(self$all_flows$from[flow]) %in% compartments_to_stratify &
               find_stem(self$all_flows$to[flow]) %in% compartments_to_stratify) {
-            
-            for (stratum in compartment_strata[[s]]) {
-              self$all_flows <-
-                rbind(self$all_flows,
-                      data.frame(parameter=self$all_flows$parameter[flow],
-                                 from=paste(self$all_flows$from[flow], stratum, sep="_"),
-                                 to=paste(self$all_flows$to[flow], stratum, sep="_"),
-                                 implement=TRUE,
-                                 type=self$all_flows$type[flow]))
-            }
+            self$add_stratified_flows(flow, compartment_strata, s, TRUE, TRUE)            
             self$remove_flow(flow)
           }
           
           # from compartment being stratified but not to compartment
           else if (find_stem(self$all_flows$from[flow]) %in% compartments_to_stratify) {
-            
-            for (stratum in compartment_strata[[s]]) {
-              self$all_flows <-
-                rbind(self$all_flows,
-                      data.frame(parameter=self$all_flows$parameter[flow],
-                                 from=paste(self$all_flows$from[flow], stratum, sep="_"),
-                                 to=self$all_flows$to[flow],
-                                 implement=TRUE,
-                                 type=self$all_flows$type[flow]))
-            }
+            self$add_stratified_flows(flow, compartment_strata, s, TRUE, FALSE)            
             self$remove_flow(flow)
           }
           
           # to compartment being stratified but not from compartment
           else if (find_stem(self$all_flows$to[flow]) %in% compartments_to_stratify) {
-            
-            for (stratum in compartment_strata[[s]]) {
-              self$all_flows <-
-                rbind(self$all_flows,
-                      data.frame(parameter=self$all_flows$parameter[flow],
-                                 from=self$all_flows$from[flow],
-                                 to=paste(self$all_flows$to[flow], stratum, sep="_"),
-                                 implement=TRUE,
-                                 type=self$all_flows$type[flow]))
-            }
+            self$add_stratified_flows(flow, compartment_strata, s, FALSE, TRUE)            
             self$remove_flow(flow)
           }
         }
         }
       },
+    
+    # add additional stratified flow to flow data frame
+    add_stratified_flows = function(flow, compartment_strata, s, stratify_from, stratify_to) {
+      for (stratum in compartment_strata[[s]]) {
+        parameter <- self$all_flows$parameter[flow]
+        if (stratify_from) {
+          from_compartment <- paste(self$all_flows$from[flow], stratum, sep="_")
+        }
+        else {
+          from_compartment <- self$all_flows$from[flow]
+        }
+        if (stratify_to) {
+          to_compartment <- paste(self$all_flows$to[flow], stratum, sep="_")
+        }
+        else {
+          to_compartment <- self$all_flows$to[flow]
+        }
+        self$all_flows <- rbind(self$all_flows,
+                                data.frame(parameter=parameter,
+                                           from=from_compartment, to=to_compartment,
+                                           implement=TRUE, type=self$all_flows$type[flow]))
+      }
+    },
     
     # remove flow
     remove_flow = function(flow) {
@@ -214,7 +210,7 @@ EpiModel <- R6Class(
     },
 
     # add all flows to create data frames from input lists
-    add_flows = function(flows) {
+    implement_flows = function(flows) {
       for (flow in seq(length(flows))) {
         working_flow <- flows[flow][[1]]
         if(!(working_flow[2] %in% names(self$parameters))) {
@@ -229,18 +225,18 @@ EpiModel <- R6Class(
         if (working_flow[1] == "fixed_flows") {
           self$all_flows <- 
             rbind(self$all_flows, data.frame(parameter=working_flow[2],
-                                               from=working_flow[3],
-                                               to=working_flow[4],
-                                               implement=TRUE,
-                                               type="fixed"))
+                                             from=working_flow[3],
+                                             to=working_flow[4],
+                                             implement=TRUE,
+                                             type="fixed"))
         }
         else if (working_flow[1] == "infection_flows") {
           self$all_flows <-
             rbind(self$all_flows, data.frame(parameter=working_flow[2],
-                                                  from=working_flow[3],
-                                                  to=working_flow[4],
-                                                  implement=TRUE,
-                                                  type="infection"))
+                                             from=working_flow[3],
+                                             to=working_flow[4],
+                                             implement=TRUE,
+                                             type="infection"))
           }
         }
     }, 
