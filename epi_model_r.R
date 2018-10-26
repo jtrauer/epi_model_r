@@ -32,8 +32,7 @@ EpiModel <- R6Class(
     compartments = list(),
     initial_conditions = list(),
     initial_conditions_sum_to_one = TRUE,
-    fixed_flows = data.frame(),
-    infection_flows = data.frame(),
+    all_flows = data.frame(),
     infectious_compartment = NULL,
     outputs = NULL,
     times = NULL,
@@ -74,12 +73,6 @@ EpiModel <- R6Class(
       }
       
       # add unstratified flows
-      self$fixed_flows <- 
-        data.frame(parameter=character(), from=character(), 
-                   to=character(), implement=logical(), type=character())
-      self$infection_flows <- 
-        data.frame(parameter=character(), from=character(), 
-                   to=character(), implement=logical(), type=character())
       self$add_flows(flows)
 
       # stratification
@@ -270,16 +263,16 @@ EpiModel <- R6Class(
           stop("to compartment name not found in compartment types")
           }
         if (working_flow[1] == "fixed_flows") {
-          self$fixed_flows <- 
-            rbind(self$fixed_flows, data.frame(parameter=working_flow[2],
+          self$all_flows <- 
+            rbind(self$all_flows, data.frame(parameter=working_flow[2],
                                                from=working_flow[3],
                                                to=working_flow[4],
                                                implement=TRUE,
                                                type="fixed"))
-          }
+        }
         else if (working_flow[1] == "infection_flows") {
-          self$infection_flows <-
-            rbind(self$infecion_flows, data.frame(parameter=working_flow[2],
+          self$all_flows <-
+            rbind(self$all_flows, data.frame(parameter=working_flow[2],
                                                   from=working_flow[3],
                                                   to=working_flow[4],
                                                   implement=TRUE,
@@ -290,13 +283,14 @@ EpiModel <- R6Class(
     
     # apply the infection flow to odes
     apply_infection_flow = function(ode_equations, compartment_values) {
-      for (f in 1: nrow(self$infection_flows)) {
-        flow <- self$infection_flows[f,]
-        if (flow[[4]]) {
+      for (f in 1: nrow(self$all_flows)) {
+        flow <- self$all_flows[f,]
+        if (flow[[4]] && flow[[5]] == "infection") {
+
           infectious_compartment <- 
             match(self$infectious_compartment, names(self$compartments))
           from_compartment <- match(flow$from, names(self$compartments))
-          net_flow <- self$parameters[flow$parameter] *
+          net_flow <- self$parameters[as.character(flow$parameter)] *
             compartment_values[from_compartment] * compartment_values[infectious_compartment]
           ode_equations <-
             increment_vector_element(ode_equations, from_compartment, -net_flow)
@@ -312,9 +306,9 @@ EpiModel <- R6Class(
     # add a fixed flow to odes
     apply_fixed_flow =
       function(ode_equations, compartment_values) {
-        for (f in as.numeric(row.names(self$fixed_flows))) {
-          flow <- self$fixed_flows[f,]
-          if (flow[[4]]) {
+        for (f in as.numeric(row.names(self$all_flows))) {
+          flow <- self$all_flows[f,]
+          if (flow[[4]] && flow[[5]] == "fixed") {
             from_compartment <- match(flow$from, names(self$compartments))
             net_flow <- self$parameters[as.character(flow$parameter)] *
               compartment_values[from_compartment]
