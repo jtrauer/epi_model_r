@@ -32,7 +32,7 @@ EpiModel <- R6Class(
     compartments = list(),
     initial_conditions = list(),
     initial_conditions_sum_to_one = TRUE,
-    all_flows = data.frame(),
+    flows = data.frame(),
     infectious_compartment = NULL,
     outputs = NULL,
     times = NULL,
@@ -138,23 +138,23 @@ EpiModel <- R6Class(
         }
         
         # stratify flows depending on whether inflow, outflow or both need replication
-        for (flow in 1:nrow(self$all_flows)) {
+        for (flow in 1:nrow(self$flows)) {
           
           # both from and to compartments being stratified
-          if (find_stem(self$all_flows$from[flow]) %in% compartments_to_stratify &
-              find_stem(self$all_flows$to[flow]) %in% compartments_to_stratify) {
+          if (find_stem(self$flows$from[flow]) %in% compartments_to_stratify &
+              find_stem(self$flows$to[flow]) %in% compartments_to_stratify) {
             self$add_stratified_flows(flow, compartment_strata, s, TRUE, TRUE)            
             self$remove_flow(flow)
           }
           
           # from compartment being stratified but not to compartment
-          else if (find_stem(self$all_flows$from[flow]) %in% compartments_to_stratify) {
+          else if (find_stem(self$flows$from[flow]) %in% compartments_to_stratify) {
             self$add_stratified_flows(flow, compartment_strata, s, TRUE, FALSE)            
             self$remove_flow(flow)
           }
           
           # to compartment being stratified but not from compartment
-          else if (find_stem(self$all_flows$to[flow]) %in% compartments_to_stratify) {
+          else if (find_stem(self$flows$to[flow]) %in% compartments_to_stratify) {
             self$add_stratified_flows(flow, compartment_strata, s, FALSE, TRUE)            
             self$remove_flow(flow)
           }
@@ -165,29 +165,29 @@ EpiModel <- R6Class(
     # add additional stratified flow to flow data frame
     add_stratified_flows = function(flow, compartment_strata, s, stratify_from, stratify_to) {
       for (stratum in compartment_strata[[s]]) {
-        parameter <- self$all_flows$parameter[flow]
+        parameter <- self$flows$parameter[flow]
         if (stratify_from) {
-          from_compartment <- paste(self$all_flows$from[flow], stratum, sep="_")
+          from_compartment <- paste(self$flows$from[flow], stratum, sep="_")
         }
         else {
-          from_compartment <- self$all_flows$from[flow]
+          from_compartment <- self$flows$from[flow]
         }
         if (stratify_to) {
-          to_compartment <- paste(self$all_flows$to[flow], stratum, sep="_")
+          to_compartment <- paste(self$flows$to[flow], stratum, sep="_")
         }
         else {
-          to_compartment <- self$all_flows$to[flow]
+          to_compartment <- self$flows$to[flow]
         }
-        self$all_flows <- rbind(self$all_flows,
+        self$flows <- rbind(self$flows,
                                 data.frame(parameter=parameter,
                                            from=from_compartment, to=to_compartment,
-                                           implement=TRUE, type=self$all_flows$type[flow]))
+                                           implement=TRUE, type=self$flows$type[flow]))
       }
     },
     
     # remove flow
     remove_flow = function(flow) {
-      self$all_flows$implement[flow] <- FALSE
+      self$flows$implement[flow] <- FALSE
       },
     
     # find compartments to stratify depending on whether vector or "all" passed
@@ -223,16 +223,16 @@ EpiModel <- R6Class(
           stop("to compartment name not found in compartment types")
           }
         if (working_flow[1] == "fixed_flows") {
-          self$all_flows <- 
-            rbind(self$all_flows, data.frame(parameter=working_flow[2],
+          self$flows <- 
+            rbind(self$flows, data.frame(parameter=working_flow[2],
                                              from=working_flow[3],
                                              to=working_flow[4],
                                              implement=TRUE,
                                              type="fixed"))
         }
         else if (working_flow[1] == "infection_flows") {
-          self$all_flows <-
-            rbind(self$all_flows, data.frame(parameter=working_flow[2],
+          self$flows <-
+            rbind(self$flows, data.frame(parameter=working_flow[2],
                                              from=working_flow[3],
                                              to=working_flow[4],
                                              implement=TRUE,
@@ -243,8 +243,8 @@ EpiModel <- R6Class(
     
     # apply the infection flow to odes
     apply_infection_flow = function(ode_equations, compartment_values) {
-      for (f in 1: nrow(self$all_flows)) {
-        flow <- self$all_flows[f,]
+      for (f in 1: nrow(self$flows)) {
+        flow <- self$flows[f,]
         if (flow[[4]] & flow[[5]] == "infection") {
 
           infectious_compartment <- 
@@ -266,8 +266,8 @@ EpiModel <- R6Class(
     # add a fixed flow to odes
     apply_fixed_flow =
       function(ode_equations, compartment_values) {
-        for (f in as.numeric(row.names(self$all_flows))) {
-          flow <- self$all_flows[f,]
+        for (f in as.numeric(row.names(self$flows))) {
+          flow <- self$flows[f,]
           if (flow[[4]] & flow[[5]] == "fixed") {
             from_compartment <- match(flow$from, names(self$compartments))
             net_flow <- self$parameters[as.character(flow$parameter)] *
