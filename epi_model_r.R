@@ -72,7 +72,22 @@ EpiModel <- R6Class(
       if (initial_conditions_sum_to_one) {
         self$sum_initial_compartments_to_total("susceptible", 1)
       }
-      
+
+      # set remaining attributes
+      if (!(is.character(infectious_compartment))) 
+      {stop("infectious compartment name is not character")}
+      self$infectious_compartment <- infectious_compartment
+      if (!(is.numeric(times))) {stop("time values are not numeric")}
+      self$times <- times
+      available_birth_approaches <- 
+        c("add_crude_birth_rate", "replace_deaths", "no_births")
+      if (!(birth_approach %in% available_birth_approaches)) 
+      {stop("requested birth approach not available")}
+      self$birth_approach <- birth_approach
+      if (!(is.numeric(universal_death_rate))) 
+      {stop("universal death rate is not numeric")}
+      self$universal_death_rate <- universal_death_rate
+            
       # add unstratified flows
       self$implement_flows(flows)
 
@@ -87,21 +102,6 @@ EpiModel <- R6Class(
       if (length(compartment_strata) >= 1) {
         self$stratify_model(compartment_strata, compartment_types_to_stratify)
       }
-      
-      # set remaining attributes      
-      if(!(is.character(infectious_compartment))) 
-        {stop("infectious compartment name is not character")}
-      self$infectious_compartment <- infectious_compartment
-      if(!(is.numeric(times))) {stop("time values are not numeric")}
-      self$times <- times
-      available_birth_approaches <- 
-        c("add_crude_birth_rate", "replace_deaths", "no_births")
-      if(!(birth_approach %in% available_birth_approaches)) 
-        {stop("requested birth approach not available")}
-      self$birth_approach <- birth_approach
-      if(!(is.numeric(universal_death_rate))) 
-      {stop("universal death rate is not numeric")}
-      self$universal_death_rate <- universal_death_rate
       },
 
     # make initial conditions sum to a certain value    
