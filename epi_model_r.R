@@ -130,8 +130,24 @@ EpiModel <- R6Class(
       self$compartment_values[compartment] <- 
         total - Reduce("+", self$compartment_values)
     },
-
-    # stratify a specific compartment or sequence of compartments
+    
+    # master stratification function
+    implement_stratification = function(compartment_strata, compartment_types_to_stratify) {
+      if (!(is.list(compartment_strata) || is.null(compartment_strata))) {
+        stop("compartment_strata not list")
+      }
+      if (!(is.list(compartment_types_to_stratify)) || is.null(compartment_types_to_stratify)) {
+        stop("compartment_types_to_stratify not list")
+      }
+      if (length(compartment_strata) != length(compartment_types_to_stratify)) {
+        stop("length of lists of compartments to stratify and strata for them unequal")
+      }
+      if (length(compartment_strata) >= 1) {
+        self$stratify_model(compartment_strata, compartment_types_to_stratify)
+      }
+    },
+    
+    # stratify a specific compartment or sequence of compartments and related flows
     stratify_model = function(compartment_strata, stratification_types) {
 
       # loop over requested stratifications
@@ -175,6 +191,15 @@ EpiModel <- R6Class(
         }
       }
     },
+    
+    # stratify a single compartment using the two methods below  
+    stratify_compartment = function(compartment, strata_names) {
+      for (stratum in strata_names) {
+        self$compartment_values[paste(compartment, stratum, sep = "_")] <-
+          self$compartment_values[[compartment]] / length(strata_names)
+      }
+      self$compartment_values[compartment] <- NULL
+    },
 
     # stratify flows depending on whether inflow, outflow or both need replication
     stratify_flows = function(
@@ -206,7 +231,6 @@ EpiModel <- R6Class(
     # add additional stratified flow to flow data frame
     add_stratified_flows = function(flow, strata_names, stratify_from, stratify_to) {
       for (stratum in strata_names) {
-        parameter <- self$flows$parameter[flow]
         if (stratify_from) {
           from_compartment <- paste(self$flows$from[flow], stratum, sep="_")
         }
@@ -220,7 +244,7 @@ EpiModel <- R6Class(
           to_compartment <- self$flows$to[flow]
         }
         self$flows <- rbind(self$flows,
-                                data.frame(parameter=parameter,
+                                data.frame(parameter=self$flows$parameter[flow],
                                            from=from_compartment, to=to_compartment,
                                            implement=TRUE, type=self$flows$type[flow]))
       }
@@ -230,31 +254,6 @@ EpiModel <- R6Class(
     remove_flow = function(flow) {
       self$flows$implement[flow] <- FALSE
       },
-
-    # master stratification function
-    implement_stratification = function(compartment_strata, compartment_types_to_stratify) {
-      if (!(is.list(compartment_strata) || is.null(compartment_strata))) {
-        stop("compartment_strata not list")
-        }
-      if (!(is.list(compartment_types_to_stratify)) || is.null(compartment_types_to_stratify)) {
-        stop("compartment_types_to_stratify not list")
-        }
-      if (length(compartment_strata) != length(compartment_types_to_stratify)) {
-        stop("length of lists of compartments to stratify and strata for them unequal")
-        }
-      if (length(compartment_strata) >= 1) {
-        self$stratify_model(compartment_strata, compartment_types_to_stratify)
-      }
-    },
-    
-    # stratify a single compartment using the two methods below  
-    stratify_compartment = function(compartment, strata) {
-      for (stratum in strata) {
-        self$compartment_values[paste(compartment, stratum, sep = "_")] <-
-          self$compartment_values[[compartment]] / length(strata)
-      }
-      self$compartment_values[compartment] <- NULL
-    },
 
     # add all flows to create data frames from input lists
     implement_flows = function(flows) {
