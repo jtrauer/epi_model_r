@@ -29,7 +29,7 @@ EpiModel <- R6Class(
   public = list(
     parameters = list(),
     compartment_types = list(),
-    compartments = list(),
+    compartment_values = list(),
     initial_conditions = list(),
     initial_conditions_sum_to_one = TRUE,
     flows = data.frame(),
@@ -62,12 +62,12 @@ EpiModel <- R6Class(
       self$compartment_types <- compartment_types
 
       # set unstratified initial conditions
-      self$compartments <- list()
+      self$compartment_values <- list()
       for (compartment in compartment_types) {
         if (compartment %in% names(initial_conditions)) {
-          self$compartments[compartment] <- initial_conditions[compartment]
+          self$compartment_values[compartment] <- initial_conditions[compartment]
         }
-        else {self$compartments[compartment] <- 0}
+        else {self$compartment_values[compartment] <- 0}
       }
       if (initial_conditions_sum_to_one) {
         self$sum_initial_compartments_to_total("susceptible", 1)
@@ -106,14 +106,14 @@ EpiModel <- R6Class(
 
     # make initial conditions sum to a certain value    
     sum_initial_compartments_to_total = function(compartment, total) {
-      if (!(compartment %in% names(self$compartments))) {
+      if (!(compartment %in% names(self$compartment_values))) {
         stop("starting compartment to populate with initial values not found")
       }
-      else if (Reduce("+", self$compartments) > total) {
+      else if (Reduce("+", self$compartment_values) > total) {
         stop("requested total value for starting compartments less greater than requested total")
       }
-      self$compartments[compartment] <- 
-        total - Reduce("+", self$compartments)
+      self$compartment_values[compartment] <- 
+        total - Reduce("+", self$compartment_values)
     },
 
     # stratify a specific compartment or sequence of compartments
@@ -202,7 +202,7 @@ EpiModel <- R6Class(
       compartment_strata, compartments_to_stratify, s) {
       
       # stratify each compartment that needs stratification
-      for (compartment in names(self$compartments)) {
+      for (compartment in names(self$compartment_values)) {
         
         # determine whether the compartment's stem (first argument to grepl)
         # is in the vector of compartment type names (second argument)
@@ -218,10 +218,10 @@ EpiModel <- R6Class(
     # stratify a single compartment using the two methods below  
     stratify_compartment = function(compartment, strata) {
       for (stratum in strata) {
-        self$compartments[paste(compartment, stratum, sep = "_")] <-
-          self$compartments[[compartment]] / length(strata)
+        self$compartment_values[paste(compartment, stratum, sep = "_")] <-
+          self$compartment_values[[compartment]] / length(strata)
       }
-      self$compartments[compartment] <- NULL
+      self$compartment_values[compartment] <- NULL
     },
 
     # add all flows to create data frames from input lists
@@ -263,15 +263,15 @@ EpiModel <- R6Class(
         if (flow[[4]] & flow[[5]] == "infection") {
 
           infectious_compartment <- 
-            match(self$infectious_compartment, names(self$compartments))
-          from_compartment <- match(flow$from, names(self$compartments))
+            match(self$infectious_compartment, names(self$compartment_values))
+          from_compartment <- match(flow$from, names(self$compartment_values))
           net_flow <- self$parameters[as.character(flow$parameter)] *
             compartment_values[from_compartment] * compartment_values[infectious_compartment]
           ode_equations <-
             increment_vector_element(ode_equations, from_compartment, -net_flow)
           ode_equations <-
             increment_vector_element(ode_equations,
-                                     match(flow$to, names(self$compartments)),
+                                     match(flow$to, names(self$compartment_values)),
                                      net_flow)
         }
       }
@@ -284,14 +284,14 @@ EpiModel <- R6Class(
         for (f in as.numeric(row.names(self$flows))) {
           flow <- self$flows[f,]
           if (flow[[4]] & flow[[5]] == "fixed") {
-            from_compartment <- match(flow$from, names(self$compartments))
+            from_compartment <- match(flow$from, names(self$compartment_values))
             net_flow <- self$parameters[as.character(flow$parameter)] *
               compartment_values[from_compartment]
             ode_equations <-
               increment_vector_element(ode_equations, from_compartment, -net_flow)
             ode_equations <-
               increment_vector_element(ode_equations,
-                                       match(flow$to, names(self$compartments)),
+                                       match(flow$to, names(self$compartment_values)),
                                        net_flow)
           }
         }
@@ -315,7 +315,7 @@ EpiModel <- R6Class(
     # apply a population-wide death rate to all compartments
     apply_birth_rate =
       function(ode_equations, compartment_values){
-        entry_compartment <- match(self$entry_compartment, names(self$compartments))
+        entry_compartment <- match(self$entry_compartment, names(self$compartment_values))
         if (self$birth_approach == "add_crude_birth_rate") {
           ode_equations[entry_compartment] <- 
             ode_equations[entry_compartment] + sum(compartment_values) * self$crude_birth_rate
@@ -332,7 +332,7 @@ EpiModel <- R6Class(
         epi_model_function <- function(time, compartment_values, parameters) {
             
             # initialise to zero for each compartment
-            ode_equations <- rep(0, length(self$compartments))
+            ode_equations <- rep(0, length(self$compartment_values))
             
             # apply flows
             ode_equations <- self$apply_fixed_flow(ode_equations, compartment_values)
@@ -347,7 +347,7 @@ EpiModel <- R6Class(
     # integrate model odes  
     run_model = function () {
       self$outputs <- as.data.frame(ode(
-        func=self$make_model_function(), y=unlist(self$compartments), times=self$times)
+        func=self$make_model_function(), y=unlist(self$compartment_values), times=self$times)
       )  
     }
   )
