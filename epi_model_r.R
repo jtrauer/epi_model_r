@@ -51,17 +51,65 @@ EpiModel <- R6Class(
                           birth_approach = "no_births", compartment_strata=NULL, 
                           compartment_types_to_stratify=list()) {
       
-      # check parameter and compartment inputs
+      # run basic checks and set attributes to input arguments
+      self$check_and_set_attributes(
+        parameters, compartment_types, infectious_compartment, times, 
+        available_birth_approaches, birth_approach, universal_death_rate)
+      
+      # set initial conditions and implement flows (without stratification)
+      self$set_initial_conditions(
+        compartment_types, initial_conditions, initial_conditions_sum_to_one)
+      if (initial_conditions_sum_to_one) {
+        self$sum_initial_compartments_to_total("susceptible", 1)
+      }
+      self$implement_flows(flows)
+
+      # stratify
+      self$implement_stratification(compartment_strata, compartment_types_to_stratify)
+
+    },
+
+    # set basic attributes of model
+    check_and_set_attributes = function(
+      parameters, compartment_types, infectious_compartment, times, 
+      available_birth_approaches, birth_approach, universal_death_rate) {
       if (!(is.numeric(parameters))) {
         stop("one or more parameter values are not numeric")
-        }
+      }
+      
       self$parameters <- parameters
       if (!(is.character(compartment_types))) {
         stop("one or more compartment types are not character")
-        }
+      }
+      
       self$compartment_types <- compartment_types
-
-      # set unstratified initial conditions
+      if (!(is.character(infectious_compartment))) {
+        stop("infectious compartment name is not character")
+      }
+      
+      self$infectious_compartment <- infectious_compartment
+      if (!(is.numeric(times))) {
+        stop("time values are not numeric")
+      }
+      
+      self$times <- times
+      
+      available_birth_approaches <- 
+        c("add_crude_birth_rate", "replace_deaths", "no_births")
+      if (!(birth_approach %in% available_birth_approaches)) {
+        stop("requested birth approach not available")
+      }
+      self$birth_approach <- birth_approach
+      
+      if (!(is.numeric(universal_death_rate))) {
+        stop("universal death rate is not numeric")
+      }
+      self$universal_death_rate <- universal_death_rate
+    },
+    
+    # set starting values to requested value or zero if no value requested
+    set_initial_conditions = function(
+      compartment_types, initial_conditions, initial_conditions_sum_to_one) {
       self$compartment_values <- list()
       for (compartment in compartment_types) {
         if (compartment %in% names(initial_conditions)) {
@@ -69,41 +117,8 @@ EpiModel <- R6Class(
         }
         else {self$compartment_values[compartment] <- 0}
       }
-      if (initial_conditions_sum_to_one) {
-        self$sum_initial_compartments_to_total("susceptible", 1)
-      }
-
-      # set remaining attributes
-      if (!(is.character(infectious_compartment))) 
-      {stop("infectious compartment name is not character")}
-      self$infectious_compartment <- infectious_compartment
-      if (!(is.numeric(times))) {stop("time values are not numeric")}
-      self$times <- times
-      available_birth_approaches <- 
-        c("add_crude_birth_rate", "replace_deaths", "no_births")
-      if (!(birth_approach %in% available_birth_approaches)) 
-      {stop("requested birth approach not available")}
-      self$birth_approach <- birth_approach
-      if (!(is.numeric(universal_death_rate))) 
-      {stop("universal death rate is not numeric")}
-      self$universal_death_rate <- universal_death_rate
-            
-      # add unstratified flows
-      self$implement_flows(flows)
-
-      # stratification
-      if (!(is.list(compartment_strata) || is.null(compartment_strata))) 
-        {stop("compartment_strata not list")}
-      if (!(is.list(compartment_types_to_stratify)) || is.null(compartment_types_to_stratify)) 
-        {stop("compartment_types_to_stratify not list")}
-      if (length(compartment_strata) != length(compartment_types_to_stratify)) {
-        stop("length of lists of compartments to stratify and strata for them unequal")
-      }
-      if (length(compartment_strata) >= 1) {
-        self$stratify_model(compartment_strata, compartment_types_to_stratify)
-      }
-      },
-
+    },
+    
     # make initial conditions sum to a certain value    
     sum_initial_compartments_to_total = function(compartment, total) {
       if (!(compartment %in% names(self$compartment_values))) {
@@ -160,6 +175,22 @@ EpiModel <- R6Class(
       self$flows$implement[flow] <- FALSE
       },
 
+    # master stratification function
+    implement_stratification = function(compartment_strata, compartment_types_to_stratify) {
+      if (!(is.list(compartment_strata) || is.null(compartment_strata))) {
+        stop("compartment_strata not list")
+        }
+      if (!(is.list(compartment_types_to_stratify)) || is.null(compartment_types_to_stratify)) {
+        stop("compartment_types_to_stratify not list")
+        }
+      if (length(compartment_strata) != length(compartment_types_to_stratify)) {
+        stop("length of lists of compartments to stratify and strata for them unequal")
+        }
+      if (length(compartment_strata) >= 1) {
+        self$stratify_model(compartment_strata, compartment_types_to_stratify)
+      }
+    },
+    
     # stratify flows depending on whether inflow, outflow or both need replication
     stratify_flows = function(
       compartment_strata, compartments_to_stratify, s) {
@@ -300,7 +331,7 @@ EpiModel <- R6Class(
     
     # apply a population-wide death rate to all compartments
     apply_universal_death_flow =
-      function(ode_equations, compartment_values){
+      function(ode_equations, compartment_values) {
         self$variable_quantities$total_deaths <- 
           sum(compartment_values) * self$universal_death_rate
         if (!(self$universal_death_rate == 0)) {
@@ -314,7 +345,7 @@ EpiModel <- R6Class(
     
     # apply a population-wide death rate to all compartments
     apply_birth_rate =
-      function(ode_equations, compartment_values){
+      function(ode_equations, compartment_values) {
         entry_compartment <- match(self$entry_compartment, names(self$compartment_values))
         if (self$birth_approach == "add_crude_birth_rate") {
           ode_equations[entry_compartment] <- 
