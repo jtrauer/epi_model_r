@@ -66,7 +66,7 @@ EpiModel <- R6Class(
 
       # stratify
       self$implement_stratification(compartment_strata, compartment_types_to_stratify)
-
+      
     },
 
     # set basic attributes of model
@@ -136,20 +136,76 @@ EpiModel <- R6Class(
 
       # loop over requested stratifications
       for (s in seq(length(stratification_types))) {
-
+        
         compartments_to_stratify <- 
           self$determine_compartments_to_stratify(stratification_types[[s]])
-
-        self$stratify_compartments(compartment_strata, compartments_to_stratify, s)
+        strata_names <- compartment_strata[s]
         
-        self$stratify_flows(compartment_strata, compartments_to_stratify, s)
+        self$stratify_compartments(strata_names, compartments_to_stratify)
+        
+        self$stratify_flows(strata_names, compartments_to_stratify)
 
         }
       },
-  
+
+    # find compartments to stratify depending on whether vector or "all" passed
+    determine_compartments_to_stratify = function(requested_strata) {
+      if (requested_strata == "all") {
+        self$compartment_types
+      }
+      else {
+        requested_strata
+      }
+    },
+    
+    # work through compartment stratification
+    stratify_compartments = function(
+      strata_names, compartments_to_stratify) {
+      
+      # stratify each compartment that needs stratification
+      for (compartment in names(self$compartment_values)) {
+        
+        # determine whether the compartment's stem (first argument to grepl)
+        # is in the vector of compartment type names (second argument)
+        if (grepl(find_stem(compartment), 
+                  paste(compartments_to_stratify, collapse="_"))) {
+          
+          # append the additional compartment and remove the original one
+          self$stratify_compartment(compartment, strata_names)
+        }
+      }
+    },
+
+    # stratify flows depending on whether inflow, outflow or both need replication
+    stratify_flows = function(
+      strata_names, compartments_to_stratify) {
+      
+      for (flow in 1:nrow(self$flows)) {
+        
+        # both from and to compartments being stratified
+        if (find_stem(self$flows$from[flow]) %in% compartments_to_stratify &
+            find_stem(self$flows$to[flow]) %in% compartments_to_stratify) {
+          self$add_stratified_flows(flow, strata_names, TRUE, TRUE)            
+          self$remove_flow(flow)
+        }
+        
+        # from compartment being stratified but not to compartment
+        else if (find_stem(self$flows$from[flow]) %in% compartments_to_stratify) {
+          self$add_stratified_flows(flow, strata_names, TRUE, FALSE)            
+          self$remove_flow(flow)
+        }
+        
+        # to compartment being stratified but not from compartment
+        else if (find_stem(self$flows$to[flow]) %in% compartments_to_stratify) {
+          self$add_stratified_flows(flow, strata_names, FALSE, TRUE)            
+          self$remove_flow(flow)
+        }
+      }
+    },
+        
     # add additional stratified flow to flow data frame
-    add_stratified_flows = function(flow, compartment_strata, s, stratify_from, stratify_to) {
-      for (stratum in compartment_strata[[s]]) {
+    add_stratified_flows = function(flow, strata_names, stratify_from, stratify_to) {
+      for (stratum in strata_names) {
         parameter <- self$flows$parameter[flow]
         if (stratify_from) {
           from_compartment <- paste(self$flows$from[flow], stratum, sep="_")
@@ -191,61 +247,6 @@ EpiModel <- R6Class(
       }
     },
     
-    # stratify flows depending on whether inflow, outflow or both need replication
-    stratify_flows = function(
-      compartment_strata, compartments_to_stratify, s) {
-        
-      for (flow in 1:nrow(self$flows)) {
-        
-        # both from and to compartments being stratified
-        if (find_stem(self$flows$from[flow]) %in% compartments_to_stratify &
-            find_stem(self$flows$to[flow]) %in% compartments_to_stratify) {
-          self$add_stratified_flows(flow, compartment_strata, s, TRUE, TRUE)            
-          self$remove_flow(flow)
-        }
-        
-        # from compartment being stratified but not to compartment
-        else if (find_stem(self$flows$from[flow]) %in% compartments_to_stratify) {
-          self$add_stratified_flows(flow, compartment_strata, s, TRUE, FALSE)            
-          self$remove_flow(flow)
-        }
-        
-        # to compartment being stratified but not from compartment
-        else if (find_stem(self$flows$to[flow]) %in% compartments_to_stratify) {
-          self$add_stratified_flows(flow, compartment_strata, s, FALSE, TRUE)            
-          self$remove_flow(flow)
-        }
-      }
-    },
-        
-    # find compartments to stratify depending on whether vector or "all" passed
-    determine_compartments_to_stratify = function(requested_strata) {
-      if (requested_strata == "all") {
-        self$compartment_types
-      }
-      else {
-        requested_strata
-      }
-    },
-  
-    # work through compartment stratification
-    stratify_compartments = function(
-      compartment_strata, compartments_to_stratify, s) {
-      
-      # stratify each compartment that needs stratification
-      for (compartment in names(self$compartment_values)) {
-        
-        # determine whether the compartment's stem (first argument to grepl)
-        # is in the vector of compartment type names (second argument)
-        if (grepl(find_stem(compartment), 
-                  paste(compartments_to_stratify, collapse="_"))) {
-          
-          # append the additional compartment and remove the original one
-          self$stratify_compartment(compartment, compartment_strata[[s]])
-        }
-      }
-    },
-          
     # stratify a single compartment using the two methods below  
     stratify_compartment = function(compartment, strata) {
       for (stratum in strata) {
