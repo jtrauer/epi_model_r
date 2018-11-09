@@ -150,10 +150,10 @@ EpiModel <- R6Class(
         stratification_name, seq(n_strata), compartment_types_to_stratify)
       self$stratify_flows(stratification_name, seq(n_strata), compartment_types_to_stratify)
       
-      print("starting compartment values:")
-      print(self$compartment_values)
-      
-      print("list of flows:")
+      # describe stratified model
+      writeLines("compartment names:")
+      print(names(self$compartment_values))
+      writeLines("\nall flows:")
       print(self$flows)
       
     },
