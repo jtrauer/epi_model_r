@@ -165,8 +165,7 @@ EpiModel <- R6Class(
       # stratify each compartment that needs stratification
       for (compartment in names(self$compartment_values)) {
         
-        # determine whether the compartment's stem (first argument to grepl)
-        # is in the vector of compartment type names (second argument)
+        # is the compartment's stem in the compartments types to stratify
         if (sub("~.*", "", compartment) %in% compartments_to_stratify) {
           
           # append the additional compartment and remove the original one
