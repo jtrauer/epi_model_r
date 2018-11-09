@@ -47,6 +47,7 @@ EpiModel <- R6Class(
     entry_compartment = "susceptible",
     birth_approach = "no_births",
     variable_quantities = list(),
+    starting_population = 1,
 
     # initialise basic model characteristics from inputs and check appropriately requested
     initialize = function(parameters, compartment_types, times, initial_conditions, flows,
@@ -63,7 +64,7 @@ EpiModel <- R6Class(
       self$set_initial_conditions(
         compartment_types, initial_conditions, initial_conditions_sum_to_one)
       if (initial_conditions_sum_to_one) {
-        self$sum_initial_compartments_to_total("susceptible", 1)
+        self$sum_initial_compartments_to_total("susceptible", self$starting_population)
       }
       self$implement_flows(flows)
 
