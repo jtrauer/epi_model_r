@@ -156,6 +156,8 @@ EpiModel <- R6Class(
       print(names(self$compartment_values))
       writeLines("\nall flows:")
       print(self$flows)
+      writeLines("\nparameters:")
+      print(self$parameters)
       
     },
     
