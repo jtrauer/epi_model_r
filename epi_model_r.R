@@ -67,8 +67,6 @@ EpiModel <- R6Class(
       # stratify
       self$implement_stratification(compartment_strata, compartment_types_to_stratify)
       
-      print(self$compartment_values)
-      
     },
 
     # set basic attributes of model
