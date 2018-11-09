@@ -211,6 +211,12 @@ EpiModel <- R6Class(
         
     # add additional stratified flow to flow data frame
     add_stratified_flows = function(flow, stratification_name, strata_names, stratify_from, stratify_to) {
+      
+      ##### remaining task here is to work through stratifying the parameters
+      ##### I think I may need to split the conditionals to be specific about what to do in each of the
+      ##### four (or at least three) cases and then define new parameter values using 
+      ##### create_stratified_compartment_name
+      
       for (stratum in strata_names) {
         if (stratify_from) {
           from_compartment <- create_stratified_compartment_name(
