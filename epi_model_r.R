@@ -67,6 +67,8 @@ EpiModel <- R6Class(
       # stratify
       self$implement_stratification(compartment_strata, compartment_types_to_stratify)
       
+      print(self$compartment_values)
+      
     },
 
     # set basic attributes of model
@@ -155,7 +157,7 @@ EpiModel <- R6Class(
         
         compartments_to_stratify <- 
           self$determine_compartments_to_stratify(stratification_types[[s]])
-        strata_names <- compartment_strata[s]
+        strata_names <- compartment_strata[[s]]
         
         self$stratify_compartments(strata_names, compartments_to_stratify)
         
