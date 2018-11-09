@@ -21,6 +21,12 @@ find_stem = function(compartment) {
   str_split(compartment, fixed("_"))[[1]][[1]]
 }
 
+
+# function to generate a standardised stratified compartment name
+create_stratified_compartment_name = function(compartment_name, stratification_name, stratum_name) {
+  paste(compartment_name, "~", stratification_name, "_", stratum_name, sep = "")
+}
+
 # objects
 
 # main epidemiological model object
@@ -41,15 +47,12 @@ EpiModel <- R6Class(
     entry_compartment = "susceptible",
     birth_approach = "no_births",
     variable_quantities = list(),
-    compartment_strata = vector(),
-    compartment_types_to_stratify = list(),
-    
+
     # initialise basic model characteristics from inputs and check appropriately requested
     initialize = function(parameters, compartment_types, times, initial_conditions, flows,
                           initial_conditions_sum_to_one = TRUE,
                           infectious_compartment="infectious", universal_death_rate=0, 
-                          birth_approach = "no_births", compartment_strata=NULL, 
-                          compartment_types_to_stratify=list()) {
+                          birth_approach = "no_births") {
       
       # run basic checks and set attributes to input arguments
       self$check_and_set_attributes(
@@ -64,9 +67,6 @@ EpiModel <- R6Class(
       }
       self$implement_flows(flows)
 
-      # stratify
-      self$implement_stratification(compartment_strata, compartment_types_to_stratify)
-      
     },
 
     # set basic attributes of model
@@ -132,113 +132,94 @@ EpiModel <- R6Class(
     },
     
     # master stratification function
-    implement_stratification = function(compartment_strata, compartment_types_to_stratify) {
-      if (!(is.list(compartment_strata) || is.null(compartment_strata))) {
-        stop("compartment_strata not list")
+    implement_stratification = function(
+      stratification_name, n_strata, compartment_types_to_stratify) {
+      
+      # if single element vector of "all" passed, use all the compartment types in the model
+      if (length(compartment_types_to_stratify) == 1 & compartment_types_to_stratify[1] == "all") {
+        compartment_types_to_stratify <- self$compartment_types
       }
-      if (!(is.list(compartment_types_to_stratify)) || is.null(compartment_types_to_stratify)) {
-        stop("compartment_types_to_stratify not list")
+      
+      # otherwise check all the requested compartments are available and allow model run to proceed
+      else if (length(setdiff(compartment_types_to_stratify, self$compartment_types)) != 0) {
+        warning("stratification failed, requested compartment for stratification not available")
+        return()
       }
-      if (length(compartment_strata) != length(compartment_types_to_stratify)) {
-        stop("length of lists of compartments to stratify and strata for them unequal")
-      }
-      if (length(compartment_strata) >= 1) {
-        self$stratify_model(compartment_strata, compartment_types_to_stratify)
-      }
-    },
-    
-    # stratify a specific compartment or sequence of compartments and related flows
-    stratify_model = function(compartment_strata, stratification_types) {
 
-      # loop over requested stratifications
-      for (s in seq(length(stratification_types))) {
-        
-        compartments_to_stratify <- 
-          self$determine_compartments_to_stratify(stratification_types[[s]])
-        strata_names <- compartment_strata[[s]]
-        
-        self$stratify_compartments(strata_names, compartments_to_stratify)
-        
-        self$stratify_flows(strata_names, compartments_to_stratify)
-
-        }
-      },
-
-    # find compartments to stratify depending on whether vector or "all" passed
-    determine_compartments_to_stratify = function(requested_strata) {
-      if (requested_strata == "all") {
-        self$compartment_types
-      }
-      else {
-        requested_strata
-      }
+      self$stratify_compartments(
+        stratification_name, seq(n_strata), compartment_types_to_stratify)
+      self$stratify_flows(stratification_name, seq(n_strata), compartment_types_to_stratify)
+      
+      print("starting compartment values:")
+      print(self$compartment_values)
+      
+      print("list of flows:")
+      print(self$flows)
+      
     },
     
     # work through compartment stratification
     stratify_compartments = function(
-      strata_names, compartments_to_stratify) {
+      stratification_name, strata_names, compartments_to_stratify) {
       
       # stratify each compartment that needs stratification
       for (compartment in names(self$compartment_values)) {
         
         # determine whether the compartment's stem (first argument to grepl)
         # is in the vector of compartment type names (second argument)
-        if (grepl(find_stem(compartment), 
-                  paste(compartments_to_stratify, collapse="_"))) {
+        if (sub("~.*", "", compartment) %in% compartments_to_stratify) {
           
           # append the additional compartment and remove the original one
-          self$stratify_compartment(compartment, strata_names)
+          for (stratum in strata_names) {
+            self$compartment_values[create_stratified_compartment_name(
+              compartment, stratification_name, stratum)] <-
+              self$compartment_values[[compartment]] / length(strata_names)
+          }
+          self$compartment_values[compartment] <- NULL        
         }
       }
-    },
-    
-    # stratify a single compartment using the two methods below  
-    stratify_compartment = function(compartment, strata_names) {
-      for (stratum in strata_names) {
-        self$compartment_values[paste(compartment, stratum, sep = "_")] <-
-          self$compartment_values[[compartment]] / length(strata_names)
-      }
-      self$compartment_values[compartment] <- NULL
     },
 
     # stratify flows depending on whether inflow, outflow or both need replication
     stratify_flows = function(
-      strata_names, compartments_to_stratify) {
+      stratification_name, strata_names, compartments_to_stratify) {
       
       for (flow in 1:nrow(self$flows)) {
         
         # both from and to compartments being stratified
         if (find_stem(self$flows$from[flow]) %in% compartments_to_stratify &
             find_stem(self$flows$to[flow]) %in% compartments_to_stratify) {
-          self$add_stratified_flows(flow, strata_names, TRUE, TRUE)            
+          self$add_stratified_flows(flow, stratification_name, strata_names, TRUE, TRUE)            
           self$remove_flow(flow)
         }
         
         # from compartment being stratified but not to compartment
         else if (find_stem(self$flows$from[flow]) %in% compartments_to_stratify) {
-          self$add_stratified_flows(flow, strata_names, TRUE, FALSE)            
+          self$add_stratified_flows(flow, stratification_name, strata_names, TRUE, FALSE)            
           self$remove_flow(flow)
         }
         
         # to compartment being stratified but not from compartment
         else if (find_stem(self$flows$to[flow]) %in% compartments_to_stratify) {
-          self$add_stratified_flows(flow, strata_names, FALSE, TRUE)            
+          self$add_stratified_flows(flow, stratification_name, strata_names, FALSE, TRUE)            
           self$remove_flow(flow)
         }
       }
     },
         
     # add additional stratified flow to flow data frame
-    add_stratified_flows = function(flow, strata_names, stratify_from, stratify_to) {
+    add_stratified_flows = function(flow, stratification_name, strata_names, stratify_from, stratify_to) {
       for (stratum in strata_names) {
         if (stratify_from) {
-          from_compartment <- paste(self$flows$from[flow], stratum, sep="_")
+          from_compartment <- create_stratified_compartment_name(
+            self$flows$from[flow], stratification_name, stratum)
         }
         else {
           from_compartment <- self$flows$from[flow]
         }
         if (stratify_to) {
-          to_compartment <- paste(self$flows$to[flow], stratum, sep="_")
+          to_compartment <- create_stratified_compartment_name(
+            self$flows$to[flow], stratification_name, stratum)
         }
         else {
           to_compartment <- self$flows$to[flow]
