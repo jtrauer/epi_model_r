@@ -18,7 +18,7 @@ increment_vector_element <- function(vector, number, increment) {
 
 # find the stem of the compartment name as the text leading up to the first occurrence of _
 find_stem = function(compartment) {
-  str_split(compartment, fixed("_"))[[1]][[1]]
+  str_split(compartment, fixed("~"))[[1]][[1]]
 }
 
 
@@ -136,8 +136,8 @@ EpiModel <- R6Class(
     implement_stratification = function(
       stratification_name, n_strata, compartment_types_to_stratify, proportions=c()) {
       
-      # if single element vector of "all" passed, use all the compartment types in the model
-      if (length(compartment_types_to_stratify) == 1 & compartment_types_to_stratify[1] == "all") {
+      # if vector of length zero passed, use stratify the compartment types in the model
+      if (length(compartment_types_to_stratify) == 0) {
         compartment_types_to_stratify <- self$compartment_types
       }
       
@@ -151,6 +151,10 @@ EpiModel <- R6Class(
       self$stratify_compartments(
         stratification_name, seq(n_strata), compartment_types_to_stratify, proportions)
       self$stratify_flows(stratification_name, seq(n_strata), compartment_types_to_stratify)
+      
+      print(self$compartment_values)
+      
+      
     },
 
     # work through compartment stratification
@@ -167,6 +171,8 @@ EpiModel <- R6Class(
           if (length(proportions) == 0) {
             proportions <- rep(1 / length(strata_names), times=length(strata_names))
           }
+          
+          # otherwise check and tidy the input as to how to split the requested proportions
           else if (!length(proportions) == length(strata_names)) {
             stop("requested split of starting proportions not equal to number of strata")
           }
@@ -191,53 +197,86 @@ EpiModel <- R6Class(
       stratification_name, strata_names, compartments_to_stratify) {
       
       for (flow in 1:nrow(self$flows)) {
-        
+
         # both from and to compartments being stratified
         if (find_stem(self$flows$from[flow]) %in% compartments_to_stratify &
-            find_stem(self$flows$to[flow]) %in% compartments_to_stratify) {
-          self$add_stratified_flows(flow, stratification_name, strata_names, TRUE, TRUE)            
+            find_stem(self$flows$to[flow]) %in% compartments_to_stratify &
+            self$flows$implement[flow]) {
+          self$add_stratified_flows(flow, stratification_name, strata_names, TRUE, TRUE)
           self$remove_flow(flow)
-        }
+          }
         
         # from compartment being stratified but not to compartment
-        else if (find_stem(self$flows$from[flow]) %in% compartments_to_stratify) {
+        else if (find_stem(self$flows$from[flow]) %in% compartments_to_stratify &
+                 self$flows$implement[flow]) {
           self$add_stratified_flows(flow, stratification_name, strata_names, TRUE, FALSE)            
           self$remove_flow(flow)
-        }
+          }
         
         # to compartment being stratified but not from compartment
-        else if (find_stem(self$flows$to[flow]) %in% compartments_to_stratify) {
+        else if (find_stem(self$flows$to[flow]) %in% compartments_to_stratify &
+                 self$flows$implement[flow]) {
           self$add_stratified_flows(flow, stratification_name, strata_names, FALSE, TRUE)            
           self$remove_flow(flow)
-        }
+          }
       }
     },
         
     # add additional stratified flow to flow data frame
     add_stratified_flows = function(flow, stratification_name, strata_names, stratify_from, stratify_to) {
       
-      ##### remaining task here is to work through stratifying the parameters
-      ##### I think I may need to split the conditionals to be specific about what to do in each of the
-      ##### four (or at least three) cases and then define new parameter values using 
-      ##### create_stratified_compartment_name
-      
+      # loop over each stratum in the requested stratification structure
       for (stratum in strata_names) {
-        if (stratify_from) {
+        
+        # both from and to compartments stratified
+        if (stratify_from & stratify_to) {
           from_compartment <- create_stratified_compartment_name(
             self$flows$from[flow], stratification_name, stratum)
-        }
-        else {
-          from_compartment <- self$flows$from[flow]
-        }
-        if (stratify_to) {
           to_compartment <- create_stratified_compartment_name(
             self$flows$to[flow], stratification_name, stratum)
+          
+          # retain existing parameter
+          parameter_name <- self$flows$parameter[flow]
         }
-        else {
+        
+        # from compartment only stratified
+        else if (stratify_from & !stratify_to) {
+          from_compartment <- create_stratified_compartment_name(
+            self$flows$from[flow], stratification_name, stratum)
           to_compartment <- self$flows$to[flow]
+          
+          # split the parameter into equal parts
+          parameter_name <- create_stratified_compartment_name(
+            self$flows$parameter[flow], stratification_name, stratum)
+          self$parameters[parameter_name] <-
+            self$parameters[self$flows$parameter[flow]] / length(strata_names)          
         }
+        
+        # to compartment only stratified only
+        else if (!stratify_from & stratify_to) {
+          from_compartment <- self$flows$from[flow]
+          to_compartment <- create_stratified_compartment_name(
+            self$flows$to[flow], stratification_name, stratum)
+          
+          # split the parameter into equal parts
+          parameter_name <- create_stratified_compartment_name(
+            self$flows$parameter[flow], stratification_name, stratum)
+          self$parameters[parameter_name] <-
+            self$parameters[self$flows$parameter[flow]] / length(strata_names)
+        }
+        
+        # neither stratified
+        else if (!stratify_from & !stratify_to) {
+          from_compartment <- self$flows$from[flow]
+          to_compartment <- self$flows$to[flow]
+          
+          # retain existing parameter
+          parameter_name <- self$flows$parameter[flow]
+        }
+
+        # implement new flow
         self$flows <- rbind(self$flows,
-                                data.frame(parameter=self$flows$parameter[flow],
+                                data.frame(parameter=parameter_name,
                                            from=from_compartment, to=to_compartment,
                                            implement=TRUE, type=self$flows$type[flow]))
       }
@@ -263,19 +302,21 @@ EpiModel <- R6Class(
           }
         if (working_flow[1] == "fixed_flows") {
           self$flows <- 
-            rbind(self$flows, data.frame(parameter=working_flow[2],
-                                             from=working_flow[3],
-                                             to=working_flow[4],
-                                             implement=TRUE,
-                                             type="fixed"))
+            rbind(self$flows, data.frame(parameter=as.character(working_flow[2]),
+                                         from=working_flow[3],
+                                         to=working_flow[4],
+                                         implement=TRUE,
+                                         type="fixed",
+                                         stringsAsFactors=FALSE))
         }
         else if (working_flow[1] == "infection_flows") {
           self$flows <-
             rbind(self$flows, data.frame(parameter=working_flow[2],
-                                             from=working_flow[3],
-                                             to=working_flow[4],
-                                             implement=TRUE,
-                                             type="infection"))
+                                         from=working_flow[3],
+                                         to=working_flow[4],
+                                         implement=TRUE,
+                                         type="infection",
+                                         stringsAsFactors=FALSE))
           }
         }
     },
@@ -286,11 +327,16 @@ EpiModel <- R6Class(
         flow <- self$flows[f,]
         if (flow[[4]] & flow[[5]] == "infection") {
 
-          infectious_compartment <- 
-            match(self$infectious_compartment, names(self$compartment_values))
+          infectious_compartment <- 0
+          for (compartment in names(self$compartment_values)) {
+            if (find_stem(compartment) == self$infectious_compartment) {
+              infectious_compartment <- infectious_compartment + 
+                compartment_values[[match(compartment, names(self$compartment_values))]]
+              }
+          }
           from_compartment <- match(flow$from, names(self$compartment_values))
-          net_flow <- self$parameters[as.character(flow$parameter)] *
-            compartment_values[from_compartment] * compartment_values[infectious_compartment]
+          net_flow <- self$parameters[flow$parameter] *
+            compartment_values[from_compartment] * infectious_compartment
           ode_equations <-
             increment_vector_element(ode_equations, from_compartment, -net_flow)
           ode_equations <-
