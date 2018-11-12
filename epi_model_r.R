@@ -245,11 +245,8 @@ EpiModel <- R6Class(
             self$flows$from[flow], stratification_name, stratum)
           to_compartment <- self$flows$to[flow]
           
-          # split the parameter into equal parts
-          parameter_name <- create_stratified_compartment_name(
-            self$flows$parameter[flow], stratification_name, stratum)
-          self$parameters[parameter_name] <-
-            self$parameters[self$flows$parameter[flow]] / length(strata_names)          
+          # retain existing parameter
+          parameter_name <- self$flows$parameter[flow]
         }
         
         # to compartment only stratified only
