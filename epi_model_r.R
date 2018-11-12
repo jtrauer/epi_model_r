@@ -134,7 +134,7 @@ EpiModel <- R6Class(
     
     # master stratification function
     implement_stratification = function(
-      stratification_name, n_strata, compartment_types_to_stratify) {
+      stratification_name, n_strata, compartment_types_to_stratify, proportions=c()) {
       
       # if single element vector of "all" passed, use all the compartment types in the model
       if (length(compartment_types_to_stratify) == 1 & compartment_types_to_stratify[1] == "all") {
@@ -147,25 +147,15 @@ EpiModel <- R6Class(
         return()
       }
 
+      # stratify the compartments and then the flows
       self$stratify_compartments(
-        stratification_name, seq(n_strata), compartment_types_to_stratify)
+        stratification_name, seq(n_strata), compartment_types_to_stratify, proportions)
       self$stratify_flows(stratification_name, seq(n_strata), compartment_types_to_stratify)
     },
-  
-    # output some information about the model
-    report_model_structure = function() {
-      # describe stratified model
-      writeLines("compartment names:")
-      print(names(self$compartment_values))
-      writeLines("\nall flows:")
-      print(self$flows)
-      writeLines("\nparameters:")
-      print(self$parameters)
-    },
-    
+
     # work through compartment stratification
     stratify_compartments = function(
-      stratification_name, strata_names, compartments_to_stratify) {
+      stratification_name, strata_names, compartments_to_stratify, proportions) {
       
       # stratify each compartment that needs stratification
       for (compartment in names(self$compartment_values)) {
@@ -173,13 +163,25 @@ EpiModel <- R6Class(
         # is the compartment's stem in the compartments types to stratify
         if (sub("~.*", "", compartment) %in% compartments_to_stratify) {
           
+          # if no proportions provided, split evenly by default
+          if (length(proportions) == 0) {
+            proportions <- rep(1 / length(strata_names), times=length(strata_names))
+          }
+          else if (!length(proportions) == length(strata_names)) {
+            stop("requested split of starting proportions not equal to number of strata")
+          }
+          else if (!sum(proportions) == 1) {
+            warning("requested starting proportions do not sum to one, normalising")
+            proportions <- proportions / sum(proportions)
+          }
+          
           # append the additional compartment and remove the original one
           for (stratum in strata_names) {
             self$compartment_values[create_stratified_compartment_name(
               compartment, stratification_name, stratum)] <-
-              self$compartment_values[[compartment]] / length(strata_names)
+              self$compartment_values[[compartment]] * proportions[stratum]
           }
-          self$compartment_values[compartment] <- NULL        
+          self$compartment_values[compartment] <- NULL      
         }
       }
     },
@@ -276,7 +278,7 @@ EpiModel <- R6Class(
                                              type="infection"))
           }
         }
-    }, 
+    },
     
     # apply the infection flow to odes
     apply_infection_flow = function(ode_equations, compartment_values) {
@@ -371,6 +373,17 @@ EpiModel <- R6Class(
       self$outputs <- as.data.frame(ode(
         func=self$make_model_function(), y=unlist(self$compartment_values), times=self$times)
       )  
+    },
+    
+    # output some information about the model
+    report_model_structure = function() {
+      # describe stratified model
+      writeLines("compartment names:")
+      print(names(self$compartment_values))
+      writeLines("\nall flows:")
+      print(self$flows)
+      writeLines("\nparameters:")
+      print(self$parameters)
     }
   )
 )
