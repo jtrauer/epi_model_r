@@ -150,7 +150,10 @@ EpiModel <- R6Class(
       self$stratify_compartments(
         stratification_name, seq(n_strata), compartment_types_to_stratify)
       self$stratify_flows(stratification_name, seq(n_strata), compartment_types_to_stratify)
-      
+    },
+  
+    # output some information about the model
+    report_model_structure = function() {
       # describe stratified model
       writeLines("compartment names:")
       print(names(self$compartment_values))
@@ -158,7 +161,6 @@ EpiModel <- R6Class(
       print(self$flows)
       writeLines("\nparameters:")
       print(self$parameters)
-      
     },
     
     # work through compartment stratification
