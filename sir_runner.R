@@ -9,8 +9,12 @@ sir_model <- EpiModel$new(c(beta=400, recovery=365/13),
                           seq(from=0, to=60/365, by=1/365),
                           list("infectious"=0.001),
                           list(c("fixed_flows", "recovery", "infectious", "recovered"),
-                               c("infection_flows", "beta", "susceptible", "infectious")),
-                          compartment_strata=list(seq(2)),
-                          compartment_sets_to_stratify=list(c("recovered")))
+                               c("infection_flows", "beta", "susceptible", "infectious")))
+sir_model$implement_stratification("hiv", 2, c("susceptible"))
+sir_model$implement_stratification("risk", 2, c("recovered"))
+
+sir_model$report_model_structure()
+
 sir_model$run_model()
 plot(sir_model$outputs$time, sir_model$outputs$infectious)
+
