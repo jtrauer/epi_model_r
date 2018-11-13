@@ -322,7 +322,7 @@ EpiModel <- R6Class(
     apply_infection_flow = function(ode_equations, compartment_values) {
       for (f in 1: nrow(self$flows)) {
         flow <- self$flows[f,]
-        if (flow[[4]] & flow[[5]] == "infection") {
+        if (flow$implement & flow$type == "infection") {
           
           infectious_compartment <- 0
           for (compartment in names(self$compartment_values)) {
