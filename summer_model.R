@@ -49,7 +49,8 @@ EpiModel <- R6Class(
     birth_approach = "no_births",
     variable_quantities = list(),
     starting_population = 1,
-    
+    time_variants = list(),
+
     # initialise basic model characteristics from inputs and check appropriately requested
     initialize = function(parameters, compartment_types, times, initial_conditions, flows,
                           initial_conditions_sum_to_one = TRUE,
@@ -153,9 +154,6 @@ EpiModel <- R6Class(
       self$stratify_compartments(
         stratification_name, seq(n_strata), compartment_types_to_stratify, proportions)
       self$stratify_flows(stratification_name, seq(n_strata), compartment_types_to_stratify)
-      
-      print(self$compartment_values)
-      
       
     },
     
@@ -398,7 +396,13 @@ EpiModel <- R6Class(
     
     
     calculate_time_variants = function(time) {
-      
+      for (function_name in names(self$time_variants)) {
+        print(self$time_variants[[function_name]](time))
+      }
+    },
+    
+    add_time_variant = function(function_name, time_function) {
+      self$time_variants[[function_name]] <- time_function
     },
     
     # create derivative function
