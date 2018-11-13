@@ -394,9 +394,16 @@ EpiModel <- R6Class(
         ode_equations
       },
     
+    
+    calculate_time_variants = function(time) {
+      
+    },
+    
     # create derivative function
     make_model_function = function() {
       epi_model_function <- function(time, compartment_values, parameters) {
+        
+        self$calculate_time_variants(time)
         
         # initialise to zero for each compartment
         ode_equations <- rep(0, length(self$compartment_values))
