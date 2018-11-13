@@ -1,5 +1,5 @@
 
-source("epi_model_r.R")
+source("summer_model.r")
 
 # an example script to call the generic model builder file that constructs a compartmental model
 # from the instructions contained in this file
