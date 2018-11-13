@@ -350,7 +350,7 @@ EpiModel <- R6Class(
       function(ode_equations, compartment_values) {
         for (f in as.numeric(row.names(self$flows))) {
           flow <- self$flows[f,]
-          if (flow[[4]] & flow[[5]] == "fixed") {
+          if (flow$implement & flow$type == "fixed") {
             from_compartment <- match(flow$from, names(self$compartment_values))
             net_flow <- self$parameters[as.character(flow$parameter)] *
               compartment_values[from_compartment]
