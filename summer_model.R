@@ -27,6 +27,7 @@ create_stratified_compartment_name = function(compartment_name, stratification_n
   paste(compartment_name, "~", stratification_name, "_", stratum_name, sep = "")
 }
 
+
 # objects
 
 # main epidemiological model object
@@ -130,6 +131,7 @@ EpiModel <- R6Class(
       }
       self$compartment_values[compartment] <- 
         total - Reduce("+", self$compartment_values)
+      self$initial_conditions <- self$compartment_values
     },
     
     # master stratification function
@@ -434,6 +436,8 @@ EpiModel <- R6Class(
       print(self$flows)
       writeLines("\nparameters:")
       print(self$parameters)
+      writeLines("\ninitial conditions (unstratified):")
+      print(self$initial_conditions)
     }
   )
 )
