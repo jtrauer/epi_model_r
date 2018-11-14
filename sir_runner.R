@@ -27,5 +27,5 @@ sir_model$run_model()
 
 interpreter <- ModelInterpreter$new(sir_model)
 
-plot(sir_model$outputs$time, sir_model$outputs$infectious)
+plot(interpreter$times, sir_model$outputs$infectious)
 
