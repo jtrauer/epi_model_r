@@ -24,5 +24,8 @@ sir_model$implement_stratification("risk", 2, c("recovered"))
 sir_model$report_model_structure()
 
 sir_model$run_model()
+
+interpreter <- ModelInterpreter$new(sir_model)
+
 plot(sir_model$outputs$time, sir_model$outputs$infectious)
 

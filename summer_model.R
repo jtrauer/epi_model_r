@@ -445,3 +445,17 @@ EpiModel <- R6Class(
     }
   )
 )
+
+
+ModelInterpreter <- R6Class(
+  "Interpreter",
+  public = list(
+    model = NULL,
+    times = c(),
+    initialize = function(model) {
+      self$model <- model
+      self$times <- self$model$outputs$time
+      print(self$times)
+    })
+)
+
