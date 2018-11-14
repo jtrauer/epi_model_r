@@ -26,6 +26,5 @@ sir_model$report_model_structure()
 sir_model$run_model()
 
 interpreter <- ModelInterpreter$new(sir_model)
-
-plot(interpreter$times, sir_model$outputs$infectious)
+interpreter$plot_compartment("infectious")
 

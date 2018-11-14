@@ -452,10 +452,16 @@ ModelInterpreter <- R6Class(
   public = list(
     model = NULL,
     times = c(),
+    outputs = NULL,
     initialize = function(model) {
       self$model <- model
-      self$times <- self$model$outputs$time
-      print(self$times)
-    })
+      self$outputs <- self$model$outputs
+      self$times <- self$outputs$time
+      },
+    
+    plot_compartment = function(compartment) {
+      plot(self$times, self$outputs[[compartment]])
+      }
+    )
 )
 
