@@ -16,7 +16,7 @@ sir_model <- EpiModel$new(c(beta=400, recovery=365/13),
                           list("infectious"=0.001),
                           list(c("standard_flows", "recovery", "infectious", "recovered"),
                                c("infection_flows", "beta", "susceptible", "infectious")))
-# sir_model$implement_stratification("hiv", 2, c())
+sir_model$implement_stratification("hiv", 2, c())
 sir_model$implement_stratification("risk", 2, c("recovered"))
 
 sir_model$add_time_variant("recovery", create_arbitrary_time_variant_function)

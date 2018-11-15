@@ -24,7 +24,12 @@ find_stem = function(compartment) {
 
 # function to generate a standardised stratified compartment name
 create_stratified_compartment_name = function(compartment_name, stratification_name, stratum_name) {
-  paste(compartment_name, "~", stratification_name, "_", stratum_name, sep = "")
+  paste(compartment_name, create_stratum_name(stratification_name, stratum_name))
+}
+
+# create the tail of the name of the stratified compartment or parameter
+create_stratum_name = function(stratification_name, stratum_name) {
+  paste("~", stratification_name, "_", stratum_name, sep = "")
 }
 
 
@@ -51,6 +56,7 @@ EpiModel <- R6Class(
     starting_population = 1,
     time_variants = list(),
     parameter_multipliers = list(),
+    strata = list(),
 
     # initialise basic model characteristics from inputs and check appropriately requested
     initialize = function(parameters, compartment_types, times, initial_conditions, flows,
@@ -161,6 +167,12 @@ EpiModel <- R6Class(
     # work through compartment stratification
     stratify_compartments = function(
       stratification_name, strata_names, compartments_to_stratify, proportions) {
+      
+      # create list of vectors for the stratifications implemented
+      for (stratum in strata_names) {
+        self$strata[[stratification_name]] <- 
+          c(self$strata[[stratification_name]], create_stratum_name(stratification_name, stratum))
+      }
       
       # stratify each compartment that needs stratification
       for (compartment in names(self$compartment_values)) {
@@ -358,6 +370,7 @@ EpiModel <- R6Class(
             parameter_value <- self$find_parameter_value(parameter_name, time)
             # stem_value <- self$find_parameter_value(find_stem(parameter_name), time)
             
+
             net_flow <- parameter_value * compartment_values[from_compartment]
             ode_equations <-
               increment_vector_element(ode_equations, from_compartment, -net_flow)
