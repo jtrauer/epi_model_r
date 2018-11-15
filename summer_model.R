@@ -325,14 +325,24 @@ EpiModel <- R6Class(
                                          implement=TRUE,
                                          type="standard",
                                          stringsAsFactors=FALSE))
-        }
-        else if (working_flow[1] == "infection_flows") {
+          }
+        else if (working_flow[1] == "infection_density") {
           self$flows <-
             rbind(self$flows, data.frame(parameter=working_flow[2],
                                          from=working_flow[3],
                                          to=working_flow[4],
                                          implement=TRUE,
-                                         type="infection",
+                                         type="infection_density",
+                                         stringsAsFactors=FALSE))
+          self$tracked_quantities["infectious_population"] <- 0
+        }
+        else if (working_flow[1] == "infection_frequency") {
+          self$flows <-
+            rbind(self$flows, data.frame(parameter=working_flow[2],
+                                         from=working_flow[3],
+                                         to=working_flow[4],
+                                         implement=TRUE,
+                                         type="infection_frequency",
                                          stringsAsFactors=FALSE))
           self$tracked_quantities["infectious_population"] <- 0
           self$tracked_quantities["total_population"] <- 0
@@ -365,11 +375,16 @@ EpiModel <- R6Class(
             }
             parameter_value <- stem_value * multiplier
   
-            if (flow$type == "infection") {
-              infectious_population = self$tracked_quantities$infectious_population
+            if (flow$type == "infection_density") {
+              infectious_population <- self$tracked_quantities$infectious_population
+            }
+            else if (flow$type == "infection_frequency") {
+              infectious_population <- 
+                self$tracked_quantities$infectious_population /
+                self$tracked_quantities$total_population
             }
             else {
-              infectious_population = 1
+              infectious_population <- 1
             }
             
             ode_equations <- self$apply_transition_flow_to_odes(
