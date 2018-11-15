@@ -345,15 +345,24 @@ EpiModel <- R6Class(
       ode_equations
     },
     
-    # add a fixed flow to odes
-    apply_fixed_flow =
-      function(ode_equations, compartment_values) {
+    # add a standard flow to odes
+    apply_standard_flow =
+      function(ode_equations, compartment_values, time) {
         for (f in as.numeric(row.names(self$flows))) {
           flow <- self$flows[f,]
           if (flow$implement & flow$type == "fixed") {
             from_compartment <- match(flow$from, names(self$compartment_values))
-            net_flow <- self$parameters[as.character(flow$parameter)] *
-              compartment_values[from_compartment]
+            
+            parameter_name <- as.character(flow$parameter)
+            
+            if (parameter_name %in% names(self$time_variants)) {
+              parameter_value <- self$time_variants[[parameter_name]](time)
+            }
+            else {
+              parameter_value <- self$parameters[parameter_name]
+            }
+            
+            net_flow <- parameter_value * compartment_values[from_compartment]
             ode_equations <-
               increment_vector_element(ode_equations, from_compartment, -net_flow)
             ode_equations <-
@@ -395,12 +404,6 @@ EpiModel <- R6Class(
       },
     
     
-    calculate_time_variants = function(time) {
-      for (function_name in names(self$time_variants)) {
-        print(self$time_variants[[function_name]](time))
-      }
-    },
-    
     add_time_variant = function(function_name, time_function) {
       self$time_variants[[function_name]] <- time_function
     },
@@ -409,13 +412,12 @@ EpiModel <- R6Class(
     make_model_function = function() {
       epi_model_function <- function(time, compartment_values, parameters) {
         
-        self$calculate_time_variants(time)
-        
+
         # initialise to zero for each compartment
         ode_equations <- rep(0, length(self$compartment_values))
         
         # apply flows
-        ode_equations <- self$apply_fixed_flow(ode_equations, compartment_values)
+        ode_equations <- self$apply_standard_flow(ode_equations, compartment_values, time)
         ode_equations <- self$apply_infection_flow(ode_equations, compartment_values)
         ode_equations <- 
           self$apply_universal_death_flow(ode_equations, compartment_values)
