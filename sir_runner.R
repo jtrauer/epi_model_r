@@ -14,7 +14,7 @@ sir_model <- EpiModel$new(c(beta=400, recovery=365/13),
                           c("susceptible", "infectious", "recovered"),
                           seq(from=0, to=60/365, by=1/365),
                           list("infectious"=0.001),
-                          list(c("fixed_flows", "recovery", "infectious", "recovered"),
+                          list(c("standard_flows", "recovery", "infectious", "recovered"),
                                c("infection_flows", "beta", "susceptible", "infectious")))
 # sir_model$implement_stratification("hiv", 2, c())
 # sir_model$implement_stratification("risk", 2, c("recovered"))

@@ -297,13 +297,13 @@ EpiModel <- R6Class(
         if(!(working_flow[4] %in% self$compartment_types)) {
           stop("to compartment name not found in compartment types")
         }
-        if (working_flow[1] == "fixed_flows") {
+        if (working_flow[1] == "standard_flows") {
           self$flows <- 
             rbind(self$flows, data.frame(parameter=as.character(working_flow[2]),
                                          from=working_flow[3],
                                          to=working_flow[4],
                                          implement=TRUE,
-                                         type="fixed",
+                                         type="standard",
                                          stringsAsFactors=FALSE))
         }
         else if (working_flow[1] == "infection_flows") {
@@ -350,7 +350,7 @@ EpiModel <- R6Class(
       function(ode_equations, compartment_values, time) {
         for (f in as.numeric(row.names(self$flows))) {
           flow <- self$flows[f,]
-          if (flow$implement & flow$type == "fixed") {
+          if (flow$implement & flow$type == "standard") {
             from_compartment <- match(flow$from, names(self$compartment_values))
             
             parameter_name <- as.character(flow$parameter)
