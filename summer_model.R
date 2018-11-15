@@ -334,6 +334,7 @@ EpiModel <- R6Class(
                                          implement=TRUE,
                                          type="infection",
                                          stringsAsFactors=FALSE))
+          self$tracked_quantities["infectious_population"] <- 0
         }
       }
     },
@@ -362,35 +363,24 @@ EpiModel <- R6Class(
           }
           parameter_value <- stem_value * multiplier
 
-          self$tracked_quantities$infectious_compartment <- 0
-          for (compartment in names(self$compartment_values)) {
-            if (find_stem(compartment) == self$infectious_compartment) {
-              self$tracked_quantities$infectious_compartment <- 
-                self$tracked_quantities$infectious_compartment + 
-                compartment_values[[match(compartment, names(self$compartment_values))]]
-            }
-          }
-
           if (flow$implement & flow$type == "infection") {
-          infectious_compartment = self$tracked_quantities$infectious_compartment
+            infectious_population = self$tracked_quantities$infectious_population
           }
           else {
-            infectious_compartment = 1
+            infectious_population = 1
           }
-            
           ode_equations <- self$apply_transition_flow_to_odes(
-            ode_equations, flow, net_flow, compartment_values,
-            infectious_compartment)
+            ode_equations, flow, net_flow, compartment_values, infectious_population)
         }
         ode_equations
       },
     
-    #
+    # general code to apply a transition flow to the odes, once calculatd
     apply_transition_flow_to_odes = function(
-      ode_equations, flow, net_flow, compartment_values, infectious_compartment=1) {
+      ode_equations, flow, net_flow, compartment_values, infectious_population=1) {
       from_compartment <- match(flow$from, names(self$compartment_values))
       net_flow <- self$parameters[flow$parameter] *
-        compartment_values[from_compartment] * infectious_compartment
+        compartment_values[from_compartment] * infectious_population
       ode_equations <-
         increment_vector_element(ode_equations, from_compartment, -net_flow)
       ode_equations <-
@@ -438,15 +428,34 @@ EpiModel <- R6Class(
         ode_equations
       },
     
-    
+    #
     add_time_variant = function(function_name, time_function) {
       self$time_variants[[function_name]] <- time_function
+    },
+    
+    # 
+    update_tracked_quantities = function(compartment_values) {
+      
+      for (quantity in names(self$tracked_quantities)) {
+        if (quantity == "infectious_population") {
+          self$tracked_quantities$infectious_population <- 0
+          for (compartment in names(self$compartment_values)) {
+            if (find_stem(compartment) == self$infectious_compartment) {
+              self$tracked_quantities$infectious_population <- 
+                self$tracked_quantities$infectious_population + 
+                compartment_values[[match(compartment, names(self$compartment_values))]]
+            }
+          }
+        }
+      }
     },
     
     # create derivative function
     make_model_function = function() {
       epi_model_function <- function(time, compartment_values, parameters) {
 
+        self$update_tracked_quantities(compartment_values)
+        
         # initialise to zero for each compartment
         ode_equations <- rep(0, length(self$compartment_values))
         
