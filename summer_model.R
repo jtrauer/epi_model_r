@@ -48,7 +48,7 @@ EpiModel <- R6Class(
     infectious_compartment = NULL,
     outputs = NULL,
     times = NULL,
-    crude_birth_rate = 20 / 1e3,
+    crude_birth_rate = 0,
     universal_death_rate = 0,
     entry_compartment = "susceptible",
     birth_approach = "no_births",
@@ -335,6 +335,7 @@ EpiModel <- R6Class(
                                          type="infection",
                                          stringsAsFactors=FALSE))
           self$tracked_quantities["infectious_population"] <- 0
+          self$tracked_quantities["total_population"] <- 0
         }
       }
     },
@@ -344,33 +345,36 @@ EpiModel <- R6Class(
       function(ode_equations, compartment_values, time) {
         for (f in as.numeric(row.names(self$flows))) {
           flow <- self$flows[f,]
-
-          parameter_name <- as.character(flow$parameter)
-          parameter_value <- self$find_parameter_value(parameter_name, time)
-          stem_value <- self$find_parameter_value(find_stem(parameter_name), time)
           
-          multiplier <- 1
-          for (stratification in names(self$strata)) {
-            for (stratum in seq(self$strata[[stratification]])) {
-              stratum_name <- self$strata[[stratification]][[stratum]]                
-              multiplier_name <- 
-                paste(find_stem(parameter_name), stratum_name, sep="")
-              if (stratum_name %in% parameter_name & 
-                  multiplier_name %in% names(self$multipliers)) {
-                multiplier <- multiplier * self$multipliers[[multiplier_name]]
+          if (flow$implement) {
+            parameter_name <- as.character(flow$parameter)
+            parameter_value <- self$find_parameter_value(parameter_name, time)
+            stem_value <- self$find_parameter_value(find_stem(parameter_name), time)
+            
+            multiplier <- 1
+            for (stratification in names(self$strata)) {
+              for (stratum in seq(self$strata[[stratification]])) {
+                stratum_name <- self$strata[[stratification]][[stratum]]                
+                multiplier_name <- 
+                  paste(find_stem(parameter_name), stratum_name, sep="")
+                if (stratum_name %in% parameter_name & 
+                    multiplier_name %in% names(self$multipliers)) {
+                  multiplier <- multiplier * self$multipliers[[multiplier_name]]
+                }
               }
             }
+            parameter_value <- stem_value * multiplier
+  
+            if (flow$type == "infection") {
+              infectious_population = self$tracked_quantities$infectious_population
+            }
+            else {
+              infectious_population = 1
+            }
+            
+            ode_equations <- self$apply_transition_flow_to_odes(
+              ode_equations, flow, net_flow, compartment_values, infectious_population)
           }
-          parameter_value <- stem_value * multiplier
-
-          if (flow$implement & flow$type == "infection") {
-            infectious_population = self$tracked_quantities$infectious_population
-          }
-          else {
-            infectious_population = 1
-          }
-          ode_equations <- self$apply_transition_flow_to_odes(
-            ode_equations, flow, net_flow, compartment_values, infectious_population)
         }
         ode_equations
       },
@@ -447,6 +451,9 @@ EpiModel <- R6Class(
             }
           }
         }
+        else if (quantity == "total_population") {
+          self$tracked_quantities$total_population <- sum(compartment_values)
+        }
       }
     },
     
@@ -455,7 +462,7 @@ EpiModel <- R6Class(
       epi_model_function <- function(time, compartment_values, parameters) {
 
         self$update_tracked_quantities(compartment_values)
-        
+
         # initialise to zero for each compartment
         ode_equations <- rep(0, length(self$compartment_values))
         
