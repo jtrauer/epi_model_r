@@ -317,33 +317,16 @@ EpiModel <- R6Class(
         if(!(working_flow[4] %in% self$compartment_types)) {
           stop("to compartment name not found in compartment types")
         }
-        if (working_flow[1] == "standard_flows") {
-          self$flows <- 
-            rbind(self$flows, data.frame(parameter=as.character(working_flow[2]),
-                                         from=working_flow[3],
-                                         to=working_flow[4],
-                                         implement=TRUE,
-                                         type="standard",
-                                         stringsAsFactors=FALSE))
-          }
-        else if (working_flow[1] == "infection_density") {
-          self$flows <-
-            rbind(self$flows, data.frame(parameter=working_flow[2],
-                                         from=working_flow[3],
-                                         to=working_flow[4],
-                                         implement=TRUE,
-                                         type="infection_density",
-                                         stringsAsFactors=FALSE))
+        self$flows <- rbind(self$flows, data.frame(type=working_flow[1],
+                                                   parameter=as.character(working_flow[2]),
+                                                   from=working_flow[3],
+                                                   to=working_flow[4],
+                                                   implement=TRUE,
+                                                   stringsAsFactors=FALSE))
+        if (working_flow[1] == "infection_density") {
           self$tracked_quantities["infectious_population"] <- 0
         }
         else if (working_flow[1] == "infection_frequency") {
-          self$flows <-
-            rbind(self$flows, data.frame(parameter=working_flow[2],
-                                         from=working_flow[3],
-                                         to=working_flow[4],
-                                         implement=TRUE,
-                                         type="infection_frequency",
-                                         stringsAsFactors=FALSE))
           self$tracked_quantities["infectious_population"] <- 0
           self$tracked_quantities["total_population"] <- 0
         }
