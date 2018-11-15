@@ -24,7 +24,7 @@ find_stem = function(compartment) {
 
 # function to generate a standardised stratified compartment name
 create_stratified_compartment_name = function(compartment_name, stratification_name, stratum_name) {
-  paste(compartment_name, create_stratum_name(stratification_name, stratum_name))
+  paste(compartment_name, create_stratum_name(stratification_name, stratum_name), sep = "")
 }
 
 # create the tail of the name of the stratified compartment or parameter
