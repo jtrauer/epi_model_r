@@ -453,14 +453,34 @@ ModelInterpreter <- R6Class(
     model = NULL,
     times = c(),
     outputs = NULL,
+    compartment_types = list(),
+    compartment_totals = data.frame(),
     initialize = function(model) {
       self$model <- model
       self$outputs <- self$model$outputs
       self$times <- self$outputs$time
+      self$compartment_types <- self$model$compartment_types
+      self$find_compartment_totals()
       },
     
+    # sum all the compartment values of one type
+    find_compartment_totals = function() {
+      self$compartment_totals <- 
+        data.frame(matrix(NA, nrow=length(self$times), ncol=0))
+      for (compartment_type in self$compartment_types) {
+        self$compartment_totals[[compartment_type]] <- 0
+        for (compartment in names(self$outputs)) {
+          if (find_stem(compartment) == compartment_type) {
+            self$compartment_totals[[compartment_type]] <-
+              self$compartment_totals[[compartment_type]] + self$outputs[[compartment]]
+          }
+        }
+        }
+      },
+    
+    # simple method to plot the size of a compartment
     plot_compartment = function(compartment) {
-      plot(self$times, self$outputs[[compartment]])
+      plot(self$times, self$compartment_totals[[compartment]])
       }
     )
 )
