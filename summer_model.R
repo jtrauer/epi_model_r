@@ -57,6 +57,7 @@ EpiModel <- R6Class(
     time_variants = list(),
     parameter_multipliers = list(),
     strata = list(),
+    multipliers = list(),
 
     # initialise basic model characteristics from inputs and check appropriately requested
     initialize = function(parameters, compartment_types, times, initial_conditions, flows,
@@ -271,6 +272,11 @@ EpiModel <- R6Class(
           # split the parameter into equal parts
           parameter_name <- create_stratified_compartment_name(
             self$flows$parameter[flow], stratification_name, stratum)
+          
+          self$multipliers[[parameter_name]] <- 1 / length(strata_names)
+          
+          # print(parameter_name)
+          
           self$parameters[parameter_name] <-
             self$parameters[self$flows$parameter[flow]] / length(strata_names)
         }
@@ -368,8 +374,22 @@ EpiModel <- R6Class(
             
             parameter_name <- as.character(flow$parameter)
             parameter_value <- self$find_parameter_value(parameter_name, time)
-            # stem_value <- self$find_parameter_value(find_stem(parameter_name), time)
+            stem_value <- self$find_parameter_value(find_stem(parameter_name), time)
             
+            multiplier <- 1
+            for (stratification in names(self$strata)) {
+              for (stratum in seq(self$strata[[stratification]])) {
+                stratum_name <- self$strata[[stratification]][[stratum]]                
+                multiplier_name <- 
+                  paste(find_stem(parameter_name), stratum_name, sep="")
+                if (stratum_name %in% parameter_name & 
+                    multiplier_name %in% names(self$multipliers)) {
+                  multiplier <- multiplier * self$multipliers[[multiplier_name]]
+                }
+              }
+            }
+
+            parameter_value <- stem_value * multiplier
 
             net_flow <- parameter_value * compartment_values[from_compartment]
             ode_equations <-
