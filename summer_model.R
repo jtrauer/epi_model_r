@@ -55,6 +55,7 @@ EpiModel <- R6Class(
     variable_quantities = list(),
     starting_population = 1,
     time_variants = list(),
+    tracked_quantities = list(),
     parameter_multipliers = list(),
     strata = list(),
     multipliers = list(),
@@ -361,19 +362,22 @@ EpiModel <- R6Class(
           }
           parameter_value <- stem_value * multiplier
 
-          if (flow$implement & flow$type == "infection") {
-            infectious_compartment <- 0
-            for (compartment in names(self$compartment_values)) {
-              if (find_stem(compartment) == self$infectious_compartment) {
-                infectious_compartment <- infectious_compartment + 
-                  compartment_values[[match(compartment, names(self$compartment_values))]]
-              }
+          self$tracked_quantities$infectious_compartment <- 0
+          for (compartment in names(self$compartment_values)) {
+            if (find_stem(compartment) == self$infectious_compartment) {
+              self$tracked_quantities$infectious_compartment <- 
+                self$tracked_quantities$infectious_compartment + 
+                compartment_values[[match(compartment, names(self$compartment_values))]]
             }
           }
-          else {
-            infectious_compartment <- 1
+
+          if (flow$implement & flow$type == "infection") {
+          infectious_compartment = self$tracked_quantities$infectious_compartment
           }
-          
+          else {
+            infectious_compartment = 1
+          }
+            
           ode_equations <- self$apply_transition_flow_to_odes(
             ode_equations, flow, net_flow, compartment_values,
             infectious_compartment)
@@ -383,8 +387,7 @@ EpiModel <- R6Class(
     
     #
     apply_transition_flow_to_odes = function(
-      ode_equations, flow, net_flow, 
-      compartment_values, infectious_compartment=1) {
+      ode_equations, flow, net_flow, compartment_values, infectious_compartment=1) {
       from_compartment <- match(flow$from, names(self$compartment_values))
       net_flow <- self$parameters[flow$parameter] *
         compartment_values[from_compartment] * infectious_compartment
