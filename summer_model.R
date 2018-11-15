@@ -50,6 +50,7 @@ EpiModel <- R6Class(
     variable_quantities = list(),
     starting_population = 1,
     time_variants = list(),
+    parameter_multipliers = list(),
 
     # initialise basic model characteristics from inputs and check appropriately requested
     initialize = function(parameters, compartment_types, times, initial_conditions, flows,
@@ -354,13 +355,8 @@ EpiModel <- R6Class(
             from_compartment <- match(flow$from, names(self$compartment_values))
             
             parameter_name <- as.character(flow$parameter)
-            
-            if (parameter_name %in% names(self$time_variants)) {
-              parameter_value <- self$time_variants[[parameter_name]](time)
-            }
-            else {
-              parameter_value <- self$parameters[parameter_name]
-            }
+            parameter_value <- self$find_parameter_value(parameter_name, time)
+            # stem_value <- self$find_parameter_value(find_stem(parameter_name), time)
             
             net_flow <- parameter_value * compartment_values[from_compartment]
             ode_equations <-
@@ -373,6 +369,16 @@ EpiModel <- R6Class(
         }
         ode_equations
       },
+    
+    # find the value of a parameter either from time-variant or from constant values
+    find_parameter_value = function(parameter_name, time) {
+      if (parameter_name %in% names(self$time_variants)) {
+        self$time_variants[[parameter_name]](time)
+      }
+      else {
+        self$parameters[parameter_name]
+      }
+    },
     
     # apply a population-wide death rate to all compartments
     apply_universal_death_flow =
