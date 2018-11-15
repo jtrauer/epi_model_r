@@ -337,71 +337,63 @@ EpiModel <- R6Class(
       }
     },
     
-    # apply the infection flow to odes
-    apply_infection_flow = function(ode_equations, compartment_values) {
-      for (f in 1: nrow(self$flows)) {
-        flow <- self$flows[f,]
-        if (flow$implement & flow$type == "infection") {
-          
-          infectious_compartment <- 0
-          for (compartment in names(self$compartment_values)) {
-            if (find_stem(compartment) == self$infectious_compartment) {
-              infectious_compartment <- infectious_compartment + 
-                compartment_values[[match(compartment, names(self$compartment_values))]]
-            }
-          }
-          from_compartment <- match(flow$from, names(self$compartment_values))
-          net_flow <- self$parameters[flow$parameter] *
-            compartment_values[from_compartment] * infectious_compartment
-          ode_equations <-
-            increment_vector_element(ode_equations, from_compartment, -net_flow)
-          ode_equations <-
-            increment_vector_element(ode_equations,
-                                     match(flow$to, names(self$compartment_values)),
-                                     net_flow)
-        }
-      }
-      ode_equations
-    },
-    
-    # add a standard flow to odes
-    apply_standard_flow =
+    # add fixed or infection-related flow to odes
+    apply_transition_flows =
       function(ode_equations, compartment_values, time) {
         for (f in as.numeric(row.names(self$flows))) {
           flow <- self$flows[f,]
-          if (flow$implement & flow$type == "standard") {
-            from_compartment <- match(flow$from, names(self$compartment_values))
-            
-            parameter_name <- as.character(flow$parameter)
-            parameter_value <- self$find_parameter_value(parameter_name, time)
-            stem_value <- self$find_parameter_value(find_stem(parameter_name), time)
-            
-            multiplier <- 1
-            for (stratification in names(self$strata)) {
-              for (stratum in seq(self$strata[[stratification]])) {
-                stratum_name <- self$strata[[stratification]][[stratum]]                
-                multiplier_name <- 
-                  paste(find_stem(parameter_name), stratum_name, sep="")
-                if (stratum_name %in% parameter_name & 
-                    multiplier_name %in% names(self$multipliers)) {
-                  multiplier <- multiplier * self$multipliers[[multiplier_name]]
-                }
+
+          parameter_name <- as.character(flow$parameter)
+          parameter_value <- self$find_parameter_value(parameter_name, time)
+          stem_value <- self$find_parameter_value(find_stem(parameter_name), time)
+          
+          multiplier <- 1
+          for (stratification in names(self$strata)) {
+            for (stratum in seq(self$strata[[stratification]])) {
+              stratum_name <- self$strata[[stratification]][[stratum]]                
+              multiplier_name <- 
+                paste(find_stem(parameter_name), stratum_name, sep="")
+              if (stratum_name %in% parameter_name & 
+                  multiplier_name %in% names(self$multipliers)) {
+                multiplier <- multiplier * self$multipliers[[multiplier_name]]
               }
             }
-
-            parameter_value <- stem_value * multiplier
-
-            net_flow <- parameter_value * compartment_values[from_compartment]
-            ode_equations <-
-              increment_vector_element(ode_equations, from_compartment, -net_flow)
-            ode_equations <-
-              increment_vector_element(ode_equations,
-                                       match(flow$to, names(self$compartment_values)),
-                                       net_flow)
           }
+          parameter_value <- stem_value * multiplier
+
+          if (flow$implement & flow$type == "infection") {
+            infectious_compartment <- 0
+            for (compartment in names(self$compartment_values)) {
+              if (find_stem(compartment) == self$infectious_compartment) {
+                infectious_compartment <- infectious_compartment + 
+                  compartment_values[[match(compartment, names(self$compartment_values))]]
+              }
+            }
+          }
+          else {
+            infectious_compartment <- 1
+          }
+          
+          ode_equations <- self$apply_transition_flow_to_odes(
+            ode_equations, flow, net_flow, from_compartment, compartment_values,
+            infectious_compartment)
         }
         ode_equations
       },
+    
+    #
+    apply_transition_flow_to_odes = function(ode_equations, flow, net_flow, from_compartment,
+                                          compartment_values, infectious_compartment=1) {
+      from_compartment <- match(flow$from, names(self$compartment_values))
+      net_flow <- self$parameters[flow$parameter] *
+        compartment_values[from_compartment] * infectious_compartment
+      ode_equations <-
+        increment_vector_element(ode_equations, from_compartment, -net_flow)
+      ode_equations <-
+        increment_vector_element(ode_equations,
+                                 match(flow$to, names(self$compartment_values)),
+                                 net_flow)
+    },
     
     # find the value of a parameter either from time-variant or from constant values
     find_parameter_value = function(parameter_name, time) {
@@ -450,14 +442,12 @@ EpiModel <- R6Class(
     # create derivative function
     make_model_function = function() {
       epi_model_function <- function(time, compartment_values, parameters) {
-        
 
         # initialise to zero for each compartment
         ode_equations <- rep(0, length(self$compartment_values))
         
         # apply flows
-        ode_equations <- self$apply_standard_flow(ode_equations, compartment_values, time)
-        ode_equations <- self$apply_infection_flow(ode_equations, compartment_values)
+        ode_equations <- self$apply_transition_flows(ode_equations, compartment_values, time)
         ode_equations <- 
           self$apply_universal_death_flow(ode_equations, compartment_values)
         ode_equations <- self$apply_birth_rate(ode_equations, compartment_values)
