@@ -375,15 +375,16 @@ EpiModel <- R6Class(
           }
           
           ode_equations <- self$apply_transition_flow_to_odes(
-            ode_equations, flow, net_flow, from_compartment, compartment_values,
+            ode_equations, flow, net_flow, compartment_values,
             infectious_compartment)
         }
         ode_equations
       },
     
     #
-    apply_transition_flow_to_odes = function(ode_equations, flow, net_flow, from_compartment,
-                                          compartment_values, infectious_compartment=1) {
+    apply_transition_flow_to_odes = function(
+      ode_equations, flow, net_flow, 
+      compartment_values, infectious_compartment=1) {
       from_compartment <- match(flow$from, names(self$compartment_values))
       net_flow <- self$parameters[flow$parameter] *
         compartment_values[from_compartment] * infectious_compartment
