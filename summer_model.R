@@ -137,6 +137,7 @@ EpiModel <- R6Class(
     # update quantities that emerge during model running (not pre-defined functions of time)
     update_tracked_quantities = function(compartment_values) {
       
+      # for each listed quantity in the quantities requested for tracking
       for (quantity in names(self$tracked_quantities)) {
         if (quantity == "infectious_population") {
           self$tracked_quantities$infectious_population <- 0
@@ -358,11 +359,11 @@ EpiModel <- R6Class(
                                                    to=working_flow[4],
                                                    implement=TRUE,
                                                    stringsAsFactors=FALSE))
-        if (working_flow[1] == "infection_density") {
+        
+        if (grepl("infection", working_flow[1])) {
           self$tracked_quantities["infectious_population"] <- 0
         }
-        else if (working_flow[1] == "infection_frequency") {
-          self$tracked_quantities["infectious_population"] <- 0
+        if (working_flow[1] == "infection_frequency") {
           self$tracked_quantities["total_population"] <- 0
         }
       }
