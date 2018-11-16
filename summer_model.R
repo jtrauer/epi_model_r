@@ -406,26 +406,19 @@ EpiModel <- R6Class(
               infectious_population <- 1
             }
             
-            ode_equations <- self$apply_transition_flow_to_odes(
-              ode_equations, flow, net_flow, compartment_values, infectious_population)
+            from_compartment <- match(flow$from, names(self$compartment_values))
+            net_flow <- self$parameters[flow$parameter] *
+              compartment_values[from_compartment] * infectious_population
+            ode_equations <-
+              increment_vector_element(ode_equations, from_compartment, -net_flow)
+            ode_equations <-
+              increment_vector_element(ode_equations,
+                                       match(flow$to, names(self$compartment_values)),
+                                       net_flow)
           }
         }
         ode_equations
       },
-    
-    # general code to apply a transition flow to the odes, once calculatd
-    apply_transition_flow_to_odes = function(
-      ode_equations, flow, net_flow, compartment_values, infectious_population=1) {
-      from_compartment <- match(flow$from, names(self$compartment_values))
-      net_flow <- self$parameters[flow$parameter] *
-        compartment_values[from_compartment] * infectious_population
-      ode_equations <-
-        increment_vector_element(ode_equations, from_compartment, -net_flow)
-      ode_equations <-
-        increment_vector_element(ode_equations,
-                                 match(flow$to, names(self$compartment_values)),
-                                 net_flow)
-    },
 
     # apply a population-wide death rate to all compartments
     apply_universal_death_flow =
@@ -460,6 +453,7 @@ EpiModel <- R6Class(
     make_model_function = function() {
       epi_model_function <- function(time, compartment_values, parameters) {
 
+        # update all the emergent model quantities needed for integration
         self$update_tracked_quantities(compartment_values)
 
         # initialise to zero for each compartment
