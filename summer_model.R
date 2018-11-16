@@ -119,6 +119,41 @@ EpiModel <- R6Class(
       self$universal_death_rate <- universal_death_rate
     },
     
+    # find the value of a parameter either from time-variant or from constant values
+    find_parameter_value = function(parameter_name, time) {
+      if (parameter_name %in% names(self$time_variants)) {
+        self$time_variants[[parameter_name]](time)
+      }
+      else {
+        self$parameters[parameter_name]
+      }
+    },
+    
+    # add a time-variant function
+    add_time_variant = function(function_name, time_function) {
+      self$time_variants[[function_name]] <- time_function
+    },
+    
+    # update quantities that emerge during model running (not pre-defined functions of time)
+    update_tracked_quantities = function(compartment_values) {
+      
+      for (quantity in names(self$tracked_quantities)) {
+        if (quantity == "infectious_population") {
+          self$tracked_quantities$infectious_population <- 0
+          for (compartment in names(self$compartment_values)) {
+            if (find_stem(compartment) == self$infectious_compartment) {
+              self$tracked_quantities$infectious_population <- 
+                self$tracked_quantities$infectious_population + 
+                compartment_values[[match(compartment, names(self$compartment_values))]]
+            }
+          }
+        }
+        else if (quantity == "total_population") {
+          self$tracked_quantities$total_population <- sum(compartment_values)
+        }
+      }
+    },
+    
     # set starting values to requested value or zero if no value requested
     set_initial_conditions = function(
       compartment_types, initial_conditions, initial_conditions_sum_to_one) {
@@ -390,17 +425,7 @@ EpiModel <- R6Class(
                                  match(flow$to, names(self$compartment_values)),
                                  net_flow)
     },
-    
-    # find the value of a parameter either from time-variant or from constant values
-    find_parameter_value = function(parameter_name, time) {
-      if (parameter_name %in% names(self$time_variants)) {
-        self$time_variants[[parameter_name]](time)
-      }
-      else {
-        self$parameters[parameter_name]
-      }
-    },
-    
+
     # apply a population-wide death rate to all compartments
     apply_universal_death_flow =
       function(ode_equations, compartment_values) {
@@ -429,32 +454,7 @@ EpiModel <- R6Class(
         }
         ode_equations
       },
-    
-    #
-    add_time_variant = function(function_name, time_function) {
-      self$time_variants[[function_name]] <- time_function
-    },
-    
-    # 
-    update_tracked_quantities = function(compartment_values) {
-      
-      for (quantity in names(self$tracked_quantities)) {
-        if (quantity == "infectious_population") {
-          self$tracked_quantities$infectious_population <- 0
-          for (compartment in names(self$compartment_values)) {
-            if (find_stem(compartment) == self$infectious_compartment) {
-              self$tracked_quantities$infectious_population <- 
-                self$tracked_quantities$infectious_population + 
-                compartment_values[[match(compartment, names(self$compartment_values))]]
-            }
-          }
-        }
-        else if (quantity == "total_population") {
-          self$tracked_quantities$total_population <- sum(compartment_values)
-        }
-      }
-    },
-    
+
     # create derivative function
     make_model_function = function() {
       epi_model_function <- function(time, compartment_values, parameters) {
