@@ -116,6 +116,12 @@ EpiModel <- R6Class(
       if (!(is.numeric(universal_death_rate))) {
         stop("universal death rate is not numeric")
       }
+      else if (universal_death_rate < 0) {
+        stop("universal death rate is negative")
+      }
+      else if (universal_death_rate > 0) {
+        self$tracked_quantities$total_deaths <- 0
+      }
       self$universal_death_rate <- universal_death_rate
     },
     
@@ -151,6 +157,10 @@ EpiModel <- R6Class(
         }
         else if (quantity == "total_population") {
           self$tracked_quantities$total_population <- sum(compartment_values)
+        }
+        else if (quantity == "total_deaths") {
+          self$variable_quantities$total_deaths <- 
+            sum(compartment_values) * self$universal_death_rate
         }
       }
     },
@@ -424,8 +434,6 @@ EpiModel <- R6Class(
     apply_universal_death_flow =
       function(ode_equations, compartment_values) {
         if (!self$universal_death_rate == 0) {
-          self$variable_quantities$total_deaths <- 
-            sum(compartment_values) * self$universal_death_rate
           for (c in 1: length(ode_equations)) {
             ode_equations[c] <- ode_equations[c] - 
               compartment_values[c] * self$universal_death_rate
@@ -433,7 +441,7 @@ EpiModel <- R6Class(
         }
         ode_equations
       },
-    
+
     # apply a population-wide death rate to all compartments
     apply_birth_rate =
       function(ode_equations, compartment_values) {
