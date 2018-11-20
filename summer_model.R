@@ -423,9 +423,9 @@ EpiModel <- R6Class(
     # apply a population-wide death rate to all compartments
     apply_universal_death_flow =
       function(ode_equations, compartment_values) {
-        self$variable_quantities$total_deaths <- 
-          sum(compartment_values) * self$universal_death_rate
-        if (!(self$universal_death_rate == 0)) {
+        if (!self$universal_death_rate == 0) {
+          self$variable_quantities$total_deaths <- 
+            sum(compartment_values) * self$universal_death_rate
           for (c in 1: length(ode_equations)) {
             ode_equations[c] <- ode_equations[c] - 
               compartment_values[c] * self$universal_death_rate
