@@ -88,8 +88,6 @@ EpiModel <- R6Class(
         stop("one or more compartment types are not character")
       }
       
-      # self$parameters <- c(self$parameters, c(universal_death_rate=0))
-      
       self$compartment_types <- compartment_types
       if (!is.character(infectious_compartment)) {
         stop("infectious compartment name is not character")
@@ -109,16 +107,19 @@ EpiModel <- R6Class(
       }
       self$birth_approach <- birth_approach
       
-      if (!is.numeric(universal_death_rate)) {
+      if (!"universal_death_rate" %in% names(self$parameters)) {
+        self$parameters <- c(self$parameters, c(universal_death_rate=0))
+      }
+      
+      if (!is.numeric(self$parameters["universal_death_rate"])) {
         stop("universal death rate is not numeric")
       }
-      else if (universal_death_rate < 0) {
+      else if (self$parameters["universal_death_rate"] < 0) {
         stop("universal death rate is negative")
       }
-      else if (universal_death_rate > 0) {
+      else if (self$parameters["universal_death_rate"] > 0) {
         self$tracked_quantities$total_deaths <- 0
       }
-      self$universal_death_rate <- universal_death_rate
     },
     
     # find the value of a parameter either from time-variant or from constant values
@@ -156,7 +157,7 @@ EpiModel <- R6Class(
         }
         else if (quantity == "total_deaths") {
           self$variable_quantities$total_deaths <- 
-            sum(compartment_values) * self$universal_death_rate
+            sum(compartment_values) * self$parameters[universal_death_rate]
         }
       }
     },
@@ -437,10 +438,10 @@ EpiModel <- R6Class(
     
     # apply a population-wide death rate to all compartments
     apply_universal_death_flow = function(ode_equations, compartment_values,time) {
-        if (!self$universal_death_rate == 0) {
+        if (!self$parameters["universal_death_rate"] == 0) {
           for (compartment in 1: length(ode_equations)) {
             ode_equations <- self$increment_compartment(
-              ode_equations, compartment, -compartment_values[compartment] * self$universal_death_rate)
+              ode_equations, compartment, -compartment_values[compartment] * self$parameters["universal_death_rate"])
           }
         }
         ode_equations
