@@ -404,18 +404,8 @@ EpiModel <- R6Class(
             }
             parameter_value <- stem_value * multiplier
   
-            if (flow$type == "infection_density") {
-              infectious_population <- self$tracked_quantities$infectious_population
-            }
-            else if (flow$type == "infection_frequency") {
-              infectious_population <- 
-                self$tracked_quantities$infectious_population /
-                self$tracked_quantities$total_population
-            }
-            else {
-              infectious_population <- 1
-            }
-            
+            infectious_population <- self$find_infectious_multiplier(flow$type)
+
             from_compartment <- match(flow$from, names(self$compartment_values))
             net_flow <- self$parameters[flow$parameter] *
               compartment_values[from_compartment] * infectious_population
@@ -428,6 +418,21 @@ EpiModel <- R6Class(
         ode_equations
       },
 
+    # find the multiplier to account for the infectious population in dynamic flows
+    find_infectious_multiplier = function(flow_type) {
+      if (flow_type == "infection_density") {
+        infectious_population <- self$tracked_quantities$infectious_population
+      }
+      else if (flow_type == "infection_frequency") {
+        infectious_population <- 
+          self$tracked_quantities$infectious_population /
+          self$tracked_quantities$total_population
+      }
+      else {
+        infectious_population <- 1
+      }
+    },
+    
     # apply a population-wide death rate to all compartments
     apply_universal_death_flow = function(ode_equations, compartment_values,time) {
         if (!self$universal_death_rate == 0) {
