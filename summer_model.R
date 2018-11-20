@@ -10,12 +10,6 @@ library(stringr)
 
 # static functions
 
-# increment a numbered element of a vector
-increment_vector_element <- function(vector, number, increment) {
-  vector[number] <- vector[number] + increment
-  vector
-}
-
 # find the stem of the compartment name as the text leading up to the first occurrence of _
 find_stem = function(compartment) {
   str_split(compartment, fixed("~"))[[1]][[1]]
@@ -379,6 +373,12 @@ EpiModel <- R6Class(
       }
     },
     
+    # general method to increment the odes by a value specified as an argument
+    increment_compartment = function(ode_equations, compartment_number, increment) {
+      ode_equations[compartment_number] <- ode_equations[compartment_number] + increment
+      ode_equations
+    },
+    
     # add fixed or infection-related flow to odes
     apply_transition_flows =
       function(ode_equations, compartment_values, time) {
@@ -419,40 +419,36 @@ EpiModel <- R6Class(
             from_compartment <- match(flow$from, names(self$compartment_values))
             net_flow <- self$parameters[flow$parameter] *
               compartment_values[from_compartment] * infectious_population
-            ode_equations <-
-              increment_vector_element(ode_equations, from_compartment, -net_flow)
-            ode_equations <-
-              increment_vector_element(ode_equations,
-                                       match(flow$to, names(self$compartment_values)),
-                                       net_flow)
+            ode_equations <- self$increment_compartment(
+              ode_equations, from_compartment, -net_flow)
+            ode_equations <- self$increment_compartment(
+              ode_equations, match(flow$to, names(self$compartment_values)), net_flow)
           }
         }
         ode_equations
       },
 
     # apply a population-wide death rate to all compartments
-    apply_universal_death_flow =
-      function(ode_equations, compartment_values) {
+    apply_universal_death_flow = function(ode_equations, compartment_values,time) {
         if (!self$universal_death_rate == 0) {
-          for (c in 1: length(ode_equations)) {
-            ode_equations[c] <- ode_equations[c] - 
-              compartment_values[c] * self$universal_death_rate
+          for (compartment in 1: length(ode_equations)) {
+            ode_equations <- self$increment_compartment(
+              ode_equations, compartment, -compartment_values[compartment] * self$universal_death_rate)
           }
         }
         ode_equations
       },
 
     # apply a population-wide death rate to all compartments
-    apply_birth_rate =
-      function(ode_equations, compartment_values) {
+    apply_birth_rate = function(ode_equations, compartment_values, time) {
         entry_compartment <- match(self$entry_compartment, names(self$compartment_values))
         if (self$birth_approach == "add_crude_birth_rate") {
-          ode_equations[entry_compartment] <- 
-            ode_equations[entry_compartment] + sum(compartment_values) * self$crude_birth_rate
+          ode_equations <- self$increment_compartment(
+            ode_equations, entry_compartment, sum(compartment_values) * self$crude_birth_rate)
         }
         else if (self$birth_approach == "replace_deaths") {
-          ode_equations[entry_compartment] <- 
-            ode_equations[entry_compartment] + self$variable_quantities$total_deaths
+          ode_equations <- self$increment_compartment(
+            ode_equations, entry_compartment, self$variable_quantities$total_deaths)
         }
         ode_equations
       },
@@ -464,16 +460,18 @@ EpiModel <- R6Class(
         # update all the emergent model quantities needed for integration
         self$update_tracked_quantities(compartment_values)
 
-        # initialise to zero for each compartment
-        ode_equations <- rep(0, length(self$compartment_values))
-        
         # apply flows
-        ode_equations <- self$apply_transition_flows(ode_equations, compartment_values, time)
-        ode_equations <- 
-          self$apply_universal_death_flow(ode_equations, compartment_values)
-        ode_equations <- self$apply_birth_rate(ode_equations, compartment_values)
-        list(ode_equations)
+        self$apply_all_flow_types_to_odes(
+          rep(0, length(self$compartment_values)), compartment_values, time)
       }
+    },
+    
+    # apply all flow times to a vector of zeros
+    apply_all_flow_types_to_odes = function(ode_equations, compartment_values, time) {
+      ode_equations <- self$apply_transition_flows(ode_equations, compartment_values, time)
+      ode_equations <- self$apply_universal_death_flow(ode_equations, compartment_values, time)
+      ode_equations <- self$apply_birth_rate(ode_equations, compartment_values, time)
+      list(ode_equations)
     },
     
     # integrate model odes  
