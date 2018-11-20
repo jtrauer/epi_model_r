@@ -107,7 +107,8 @@ EpiModel <- R6Class(
       }
       self$birth_approach <- birth_approach
       
-      if (!(is.numeric(universal_death_rate))) {
+      
+      if (!is.numeric(universal_death_rate)) {
         stop("universal death rate is not numeric")
       }
       else if (universal_death_rate < 0) {
