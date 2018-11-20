@@ -79,22 +79,22 @@ EpiModel <- R6Class(
     check_and_set_attributes = function(
       parameters, compartment_types, infectious_compartment, times, 
       available_birth_approaches, birth_approach, universal_death_rate) {
-      if (!(is.numeric(parameters))) {
+      if (!is.numeric(parameters)) {
         stop("one or more parameter values are not numeric")
       }
       
       self$parameters <- parameters
-      if (!(is.character(compartment_types))) {
+      if (!is.character(compartment_types)) {
         stop("one or more compartment types are not character")
       }
       
       self$compartment_types <- compartment_types
-      if (!(is.character(infectious_compartment))) {
+      if (!is.character(infectious_compartment)) {
         stop("infectious compartment name is not character")
       }
       
       self$infectious_compartment <- infectious_compartment
-      if (!(is.numeric(times))) {
+      if (!is.numeric(times)) {
         stop("time values are not numeric")
       }
       
@@ -102,11 +102,10 @@ EpiModel <- R6Class(
       
       available_birth_approaches <- 
         c("add_crude_birth_rate", "replace_deaths", "no_births")
-      if (!(birth_approach %in% available_birth_approaches)) {
+      if (!birth_approach %in% available_birth_approaches) {
         stop("requested birth approach not available")
       }
       self$birth_approach <- birth_approach
-      
       
       if (!is.numeric(universal_death_rate)) {
         stop("universal death rate is not numeric")
