@@ -33,8 +33,8 @@ create_stratum_name = function(stratification_name, stratum_name) {
 EpiModel <- R6Class(
   "EpiModel",
   public = list(
-    parameters = list(),
-    compartment_types = list(),
+    parameters = c(),
+    compartment_types = c(),
     compartment_values = list(),
     initial_conditions = list(),
     initial_conditions_sum_to_one = TRUE,
@@ -87,6 +87,8 @@ EpiModel <- R6Class(
       if (!is.character(compartment_types)) {
         stop("one or more compartment types are not character")
       }
+      
+      # self$parameters <- c(self$parameters, c(universal_death_rate=0))
       
       self$compartment_types <- compartment_types
       if (!is.character(infectious_compartment)) {
