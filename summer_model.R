@@ -548,3 +548,49 @@ ModelInterpreter <- R6Class(
     )
 )
 
+
+
+Create_unstratified_flowchart <- function(model) {
+  sorted_compartment_types_flowchart <- sort(model$compartment_types)
+  nodes <- paste(sorted_compartment_types_flowchart, collapse = '; ')
+  final <- ""
+  for (row in seq(nrow(model$unstratified_flows))) {
+    if (model$unstratified_flows$implement[[row]]) {
+      final <- paste(final, model$unstratified_flows$from[[row]], "->", model$unstratified_flows$to[[row]], ' ', sep = '')
+    }}
+  hello <- paste("digraph dot {
+                 
+                 graph [layout = dot,
+                 rankdir = LR] 
+                 # several 'node' statements
+                 node [shape = box,
+                 fontname = Helvetica] \n",
+                 nodes,
+                 "\n",
+                 final, '}')
+  grViz(str_replace_all(hello, "~", "_"))
+}
+
+
+Create_stratified_flowchart <- function(model) {
+  sorted_compartment_types_flowchart <- sort(names(model$compartment_values))
+  nodes <- paste(sorted_compartment_types_flowchart, collapse = '; ')
+  final <- ""
+  for (row in seq(nrow(model$flows))) {
+    if (model$flows$implement[[row]]) {
+      final <- paste(final, model$flows$from[[row]], "->", model$flows$to[[row]], ' ', sep = '')
+    }}
+  hello <- paste("digraph dot {
+                 
+                 graph [layout = dot,
+                 rankdir = LR] 
+                 # several 'node' statements
+                 node [shape = box,
+                 fontname = Helvetica] \n",
+                 nodes,
+                 "\n",
+                 final, '}')
+  grViz(str_replace_all(hello, "~", "_"))
+}
+
+
