@@ -1,48 +1,116 @@
-#Creates a flowchart. A stratified flowchart is presented unless otherwise specified
-create_flowchart <- function(model, type = 'stratified') {
-  #Pick type of input into the function, depending on whether the type of flowchart is 
-  if (type == 'stratified') {
-    input_nodes <- names(model$compartment_values)
-    type_of_flow <- model$flows
-  } 
-  else if (type == 'unstratified') {
-    input_nodes <- model$compartment_types
-    type_of_flow <- model$unstratified_flows
+  #Creates a flowchart. A stratified flowchart is presented unless otherwise specified
+  create_flowchart <- function(model, type = 'stratified') {
+    #Pick type of input into the function, depending on whether the type of flowchart is 
+    if (type == 'stratified') {
+      input_nodes <- names(model$compartment_values)
+      type_of_flow <- model$flows
+    } 
+    else if (type == 'unstratified') {
+      input_nodes <- model$compartment_types
+      type_of_flow <- model$unstratified_flows
+    }
+    else {
+      stop("Type needs to be either stratified or unstratified.")
+    }
+    #The inputs for the flowchart is ordered alphabetically
+    sorted_nodes <- sort(input_nodes)
+    #Inputs are collapsed into one string so it can be put into grViz
+    nodes <- paste(sorted_nodes, collapse = ' ')
+    #The pathways between nodes are set as empty
+    connection_between_nodes <- ""
+    #The pathway between nodes is populated from type_of_flow
+    for (row in seq(nrow(type_of_flow))) {
+      if (type_of_flow$implement[[row]]) {
+        connection_between_nodes <- paste(connection_between_nodes, type_of_flow$from[[row]], "->", type_of_flow$to[[row]], ' ', sep = '')
+      }}
+    #The string necessary for grViz is created here
+    input_for_grViz <- paste("digraph dot {
+                   graph [layout = dot,
+                   rankdir = LR] 
+                   node [shape = box,
+                   fontname = Helvetica, style = filled, color = red]
+                  ",
+                   nodes,
+                   connection_between_nodes, '}')
+    #~ are substituted for _ and input into the function
+    grViz(str_replace_all(input_for_grViz, "~", "_"))
   }
-  else {
-    stop("Type needs to be either stratified or unstratified.")
+
+  
+  
+  
+  #Creates a flowchart. A stratified flowchart is presented unless otherwise specified
+  create_flowchart <- function(model, type = 'stratified') {
+    #Pick type of input into the function, depending on whether the type of flowchart is 
+    if (type == 'stratified') {
+      input_nodes <- names(sir_model$compartment_values)
+      type_of_flow <- model$flows
+    } 
+    else if (type == 'unstratified') {
+      input_nodes <- model$compartment_types
+      type_of_flow <- model$unstratified_flows
+    }
+    else {
+      stop("Type needs to be either stratified or unstratified.")
+    }
+    #The inputs for the flowchart is ordered alphabetically
+    sorted_nodes <- sort(input_nodes)
+    #Inputs are collapsed into one string so it can be put into grViz
+    broken_down_nodes <- list()
+    for (stem_value in 1:length(model$compartment_types)) {
+      x_vector <- c()
+      for (stem_type in 1:length(sorted_nodes)) {
+        if (model$compartment_types[[stem_value]] == find_stem(sorted_nodes[[stem_type]])) {
+          x_vector <- c(x_vector, sorted_nodes[[stem_type]])
+        }
+      }
+      broken_down_nodes[[stem_value]] <- x_vector
+    }
+    settings <- ''
+    for (list_different_nodes in 1:length(broken_down_nodes)) {
+      nodes <- c()
+      nodes <- paste(broken_down_nodes[[list_different_nodes]], collapse = ' ')
+      settings <- paste(settings, 'node [shape = box,
+      fontname = Helvetica, style = filled, color =', 
+      c('BlanchedAlmond', 'Grey', 
+        'RosyBrown', 'LavenderBlush',
+        'Salmon', 'LightPink', 
+        'PaleGreen', 'Thistle', 
+        'Beige', 'PeachPuff', 
+        'MintCream', 'AquaMarine', 
+        'MistyRose', 'Tomato',
+        'Honeydew', 'LightCyan')[[sample(1:16, 1, 
+                                              replace = FALSE, 
+                                              prob = NULL)]],
+      ']', nodes)
+    }
+    #The pathways between nodes are set as empty
+    connection_between_nodes <- ""
+    #The pathway between nodes is populated from type_of_flow
+    for (row in seq(nrow(type_of_flow))) {
+      if (type_of_flow$implement[[row]]) {
+        connection_between_nodes <- paste(connection_between_nodes, type_of_flow$from[[row]], "->", type_of_flow$to[[row]], ' ', sep = '')
+      }}
+    #The string necessary for grViz is created here
+    input_for_grViz <- paste("digraph dot {
+                             graph [layout = dot,
+                             rankdir = LR]", 
+                             settings,
+                             connection_between_nodes, '}')
+    #~ are substituted for _ and input into the function
+    grViz(str_replace_all(input_for_grViz, "~", "_"))
   }
-  #The inputs for the flowchart is ordered alphabetically
-  sorted_compartment_types_flowchart <- sort(input_nodes)
-  #Inputs are collapsed into one string so it can be put into grViz
-  nodes <- paste(sorted_compartment_types_flowchart, collapse = '; ')
-  #The pathways between nodes are set as empty
-  connection_between_nodes <- ""
-  #The pathway between nodes is populated from type_of_flow
-  for (row in seq(nrow(type_of_flow))) {
-    if (type_of_flow$implement[[row]]) {
-      connection_between_nodes <- paste(connection_between_nodes, type_of_flow$from[[row]], "->", type_of_flow$to[[row]], ' ', sep = '')
-    }}
-  #The string necessary for grViz is created here
-  input_for_grViz <- paste("digraph dot {
-                 graph [layout = dot,
-                 rankdir = LR] 
-                 node [shape = box,
-                 fontname = Helvetica]",
-                 nodes,
-                 connection_between_nodes, '}')
-  #~ are substituted for _ and input into the function
-  grViz(str_replace_all(input_for_grViz, "~", "_"))
-}
-
-
-create_flowchart(sir_model)
+  
+  
+  
+  
+    
+  
+  create_flowchart(sir_model, type = 'unstratified')
 
 
 
 
-model$compartment_types, names(model$compartment_values)
-type_of_flow unstratified_flows, flows
 
 Create_unstratified_flowchart <- function(model) {
   sorted_compartment_types_flowchart <- sort(model$compartment_types)
@@ -75,7 +143,6 @@ Create_stratified_flowchart <- function(model) {
       final <- paste(final, model$flows$from[[row]], "->", model$flows$to[[row]], ' ', sep = '')
     }}
   hello <- paste("digraph dot {
-                 
                  graph [layout = dot,
                  rankdir = LR] 
                  # several 'node' statements
@@ -145,7 +212,7 @@ grViz(str_replace_all(hello, "~", "_"))
 
 
 stem_names_for_flowchart <- c()
-for (names in names(sir_model2$compartment_values)) {
+for (names in names(sir_model$compartment_values)) {
   stem_names_for_flowchart <- c(stem_names_for_flowchart, find_stem(names))
 }  
 sorted_compartment_types_flowchart <- sort(names(sir_model2$compartment_values))
