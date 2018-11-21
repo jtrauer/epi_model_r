@@ -43,7 +43,6 @@ EpiModel <- R6Class(
     outputs = NULL,
     times = NULL,
     crude_birth_rate = 0,
-    universal_death_rate = 0,
     entry_compartment = "susceptible",
     birth_approach = "no_births",
     variable_quantities = list(),
