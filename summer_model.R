@@ -1,4 +1,12 @@
 
+# SUMMER
+# Scalable
+# Universal
+# Mathematical
+# Model
+# for Epidemics
+# in R
+
 library(deSolve)
 library(R6)
 library(stringr)
@@ -14,7 +22,12 @@ library(DiagrammeR)
 
 # find the stem of the compartment name as the text leading up to the first occurrence of _
 find_stem = function(compartment) {
-  str_split(compartment, fixed("~"))[[1]][[1]]
+  str_split(compartment, fixed("~"))[[1]][1]
+}
+
+# find the trailing text for the stratum of the compartment
+find_stratum = function(compartment) {
+  stratum <- substr(compartment, gregexpr(pattern="~", compartment)[[1]][1], 100)
 }
 
 
@@ -110,7 +123,8 @@ EpiModel <- R6Class(
         self$parameters <- c(self$parameters, c(crude_birth_rate=0))
       }
       self$birth_approach <- birth_approach
-
+      self$parameters[["entry_fractions"]] <- 1
+      
       if (!"universal_death_rate" %in% names(self$parameters)) {
         self$parameters <- c(self$parameters, c(universal_death_rate=0))
       }
@@ -210,7 +224,6 @@ EpiModel <- R6Class(
       self$stratify_compartments(
         stratification_name, seq(n_strata), compartment_types_to_stratify, proportions)
       self$stratify_flows(stratification_name, seq(n_strata), compartment_types_to_stratify)
-      
     },
     
     # work through compartment stratification
@@ -226,8 +239,10 @@ EpiModel <- R6Class(
       # stratify each compartment that needs stratification
       for (compartment in names(self$compartment_values)) {
         
+        compartment_stem <- sub("~.*", "", compartment)
+        
         # is the compartment's stem in the compartments types to stratify
-        if (sub("~.*", "", compartment) %in% compartments_to_stratify) {
+        if (compartment_stem %in% compartments_to_stratify) {
           
           # if no proportions provided, split evenly by default
           if (length(proportions) == 0) {
@@ -245,11 +260,19 @@ EpiModel <- R6Class(
           
           # append the additional compartment and remove the original one
           for (stratum in strata_names) {
-            self$compartment_values[create_stratified_compartment_name(
-              compartment, stratification_name, stratum)] <-
+            stratified_compartment_name <- create_stratified_compartment_name(
+              compartment, stratification_name, stratum)
+            self$compartment_values[stratified_compartment_name] <-
               self$compartment_values[[compartment]] * proportions[stratum]
+
+            # split birth rate parameters between entry compartments
+            if (compartment_stem == self$entry_compartment) {
+              self$parameters[[gsub(compartment_stem, "entry_fractions", stratified_compartment_name)]] <- 
+                self$parameters[[gsub(compartment_stem, "entry_fractions", compartment)]] / 
+                length(strata_names)
+            }
           }
-          self$compartment_values[compartment] <- NULL      
+          self$compartment_values[compartment] <- NULL
         }
       }
     },
@@ -455,18 +478,31 @@ EpiModel <- R6Class(
 
     # apply a population-wide death rate to all compartments
     apply_birth_rate = function(ode_equations, compartment_values, time) {
-        entry_compartment <- match(self$entry_compartment, names(self$compartment_values))
-        if (self$birth_approach == "add_crude_birth_rate") {
+      
+      # work out the total births to apply dependent on the approach requested
+      if (self$birth_approach == "add_crude_birth_rate") {
+        total_births <- self$parameters[["crude_birth_rate"]] * sum(compartment_values)
+      }
+      else if (self$birth_approach == "replace_deaths") {
+        total_births <- self$variable_quantities$total_deaths
+      }
+      else {
+        total_births <- 0
+      }
+      
+      # split the total births across entry compartments
+      for (compartment in names(compartment_values)) {
+        if (find_stem(compartment) == self$entry_compartment) {
+          compartment_births <- 
+            self$parameters[[paste("entry_fractions", find_stratum(compartment), sep="")]] * 
+            total_births
           ode_equations <- self$increment_compartment(
-            ode_equations, entry_compartment, 
-            sum(compartment_values) * self$parameters["crude_birth_rate"])
+            ode_equations, match(compartment, names(self$compartment_values)),
+            compartment_births)
         }
-        else if (self$birth_approach == "replace_deaths") {
-          ode_equations <- self$increment_compartment(
-            ode_equations, entry_compartment, self$variable_quantities$total_deaths)
-        }
-        ode_equations
-      },
+      }
+      ode_equations
+    },
 
     # create derivative function
     make_model_function = function() {
