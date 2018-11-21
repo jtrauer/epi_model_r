@@ -83,7 +83,7 @@ EpiModel <- R6Class(
       self$set_initial_conditions(
         compartment_types, initial_conditions, initial_conditions_sum_to_one)
       if (initial_conditions_sum_to_one) {
-        self$sum_initial_compartments_to_total("susceptible", self$starting_population)
+        self$sum_initial_compartments_to_total(self$entry_compartment, self$starting_population)
       }
       self$implement_flows(flows)
       
