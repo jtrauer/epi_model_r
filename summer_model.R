@@ -1,4 +1,12 @@
 
+# SUMMER
+# Scalable
+# Universal
+# Mathematical
+# Model
+# for Epidemics
+# in R
+
 library(deSolve)
 library(R6)
 library(stringr)
@@ -12,7 +20,12 @@ library(stringr)
 
 # find the stem of the compartment name as the text leading up to the first occurrence of _
 find_stem = function(compartment) {
-  str_split(compartment, fixed("~"))[[1]][[1]]
+  str_split(compartment, fixed("~"))[[1]][1]
+}
+
+# find the trailing text for the stratum of the compartment
+find_stratum = function(compartment) {
+  str_split(compartment, fixed("~"))[[1]][2]
 }
 
 
@@ -224,8 +237,10 @@ EpiModel <- R6Class(
       # stratify each compartment that needs stratification
       for (compartment in names(self$compartment_values)) {
         
+        compartment_stem <- sub("~.*", "", compartment)
+        
         # is the compartment's stem in the compartments types to stratify
-        if (sub("~.*", "", compartment) %in% compartments_to_stratify) {
+        if (compartment_stem %in% compartments_to_stratify) {
           
           # if no proportions provided, split evenly by default
           if (length(proportions) == 0) {
@@ -241,14 +256,25 @@ EpiModel <- R6Class(
             proportions <- proportions / sum(proportions)
           }
           
+          
+          
           # append the additional compartment and remove the original one
           for (stratum in strata_names) {
-            self$compartment_values[create_stratified_compartment_name(
-              compartment, stratification_name, stratum)] <-
+            stratified_compartment_name <- create_stratified_compartment_name(
+              compartment, stratification_name, stratum)
+            
+            self$compartment_values[stratified_compartment_name] <-
               self$compartment_values[[compartment]] * proportions[stratum]
+
+            # split birth rate parameters between entry compartments
+            if (compartment_stem == self$entry_compartment) {
+              self$parameters[[gsub(compartment_stem, "crude_birth_rate", stratified_compartment_name)]] <- 
+                self$parameters[[gsub(compartment_stem, "crude_birth_rate", compartment)]] / 
+                length(strata_names)
+            }
           }
-          self$compartment_values[compartment] <- NULL      
-        }
+          self$compartment_values[compartment] <- NULL
+          }
       }
     },
     
