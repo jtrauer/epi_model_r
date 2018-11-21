@@ -42,7 +42,6 @@ EpiModel <- R6Class(
     infectious_compartment = NULL,
     outputs = NULL,
     times = NULL,
-    crude_birth_rate = 0,
     entry_compartment = "susceptible",
     birth_approach = "no_births",
     variable_quantities = list(),
@@ -100,17 +99,20 @@ EpiModel <- R6Class(
       
       self$times <- times
       
-      available_birth_approaches <- 
-        c("add_crude_birth_rate", "replace_deaths", "no_births")
+      available_birth_approaches <- c("add_crude_birth_rate", "replace_deaths", "no_births")
       if (!birth_approach %in% available_birth_approaches) {
         stop("requested birth approach not available")
       }
+      if (birth_approach == "add_crude_birth_rate" 
+          & !"crude_birth_rate" %in% names(self$parameters)) {
+        self$parameters <- c(self$parameters, c(crude_birth_rate=0))
+      }
       self$birth_approach <- birth_approach
-      
+
       if (!"universal_death_rate" %in% names(self$parameters)) {
         self$parameters <- c(self$parameters, c(universal_death_rate=0))
       }
-      
+  
       if (!is.numeric(self$parameters["universal_death_rate"])) {
         stop("universal death rate is not numeric")
       }
@@ -442,7 +444,8 @@ EpiModel <- R6Class(
         if (!self$parameters["universal_death_rate"] == 0) {
           for (compartment in 1: length(ode_equations)) {
             ode_equations <- self$increment_compartment(
-              ode_equations, compartment, -compartment_values[compartment] * self$parameters["universal_death_rate"])
+              ode_equations, compartment, 
+              -compartment_values[compartment] * self$parameters["universal_death_rate"])
           }
         }
         ode_equations
@@ -453,7 +456,8 @@ EpiModel <- R6Class(
         entry_compartment <- match(self$entry_compartment, names(self$compartment_values))
         if (self$birth_approach == "add_crude_birth_rate") {
           ode_equations <- self$increment_compartment(
-            ode_equations, entry_compartment, sum(compartment_values) * self$crude_birth_rate)
+            ode_equations, entry_compartment, 
+            sum(compartment_values) * self$parameters["crude_birth_rate"])
         }
         else if (self$birth_approach == "replace_deaths") {
           ode_equations <- self$increment_compartment(
