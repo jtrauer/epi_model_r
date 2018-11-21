@@ -53,6 +53,7 @@ EpiModel <- R6Class(
     parameter_multipliers = list(),
     strata = list(),
     multipliers = list(),
+    unstratified_flows = data.frame(),
 
     # initialise basic model characteristics from inputs and check appropriately requested
     initialize = function(parameters, compartment_types, times, initial_conditions, flows,
@@ -366,6 +367,7 @@ EpiModel <- R6Class(
                                                    to=working_flow[4],
                                                    implement=TRUE,
                                                    stringsAsFactors=FALSE))
+        self$unstratified_flows <- self$flows
         
         if (grepl("infection", working_flow[1])) {
           self$tracked_quantities["infectious_population"] <- 0
