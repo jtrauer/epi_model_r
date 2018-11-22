@@ -67,6 +67,7 @@ EpiModel <- R6Class(
     strata = list(),
     multipliers = list(),
     unstratified_flows = data.frame(),
+    stratification_names = c(),
 
     # initialise basic model characteristics from inputs and check appropriately requested
     initialize = function(parameters, compartment_types, times, initial_conditions, flows,
@@ -224,6 +225,7 @@ EpiModel <- R6Class(
       self$stratify_compartments(
         stratification_name, seq(n_strata), compartment_types_to_stratify, proportions)
       self$stratify_flows(stratification_name, seq(n_strata), compartment_types_to_stratify)
+      self$stratification_names <- c(self$stratification_names, stratification_name)
     },
     
     # work through compartment stratification
@@ -345,8 +347,6 @@ EpiModel <- R6Class(
             self$flows$parameter[flow], stratification_name, stratum)
           
           self$multipliers[[parameter_name]] <- 1 / length(strata_names)
-          
-          # print(parameter_name)
           
           self$parameters[parameter_name] <-
             self$parameters[self$flows$parameter[flow]] / length(strata_names)
@@ -491,14 +491,16 @@ EpiModel <- R6Class(
       }
       
       # split the total births across entry compartments
-      for (compartment in names(compartment_values)) {
-        if (find_stem(compartment) == self$entry_compartment) {
-          compartment_births <- 
-            self$parameters[[paste("entry_fractions", find_stratum(compartment), sep="")]] * 
-            total_births
-          ode_equations <- self$increment_compartment(
-            ode_equations, match(compartment, names(self$compartment_values)),
-            compartment_births)
+      if (length(self$stratification_names) > 0) {
+        for (compartment in names(compartment_values)) {
+          if (find_stem(compartment) == self$entry_compartment) {
+            compartment_births <- 
+              self$parameters[[paste("entry_fractions", find_stratum(compartment), sep="")]] * 
+              total_births
+            ode_equations <- self$increment_compartment(
+              ode_equations, match(compartment, names(self$compartment_values)),
+              compartment_births)
+          }
         }
       }
       ode_equations
