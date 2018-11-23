@@ -9,9 +9,7 @@
 
 library(deSolve)
 library(R6)
-library(stringr)
-library(dplyr)
-library(stringr)
+library(tidyverse)
 library(DiagrammeR)
 # this file contains the main model builder function, that is intended to be agnostic
 # to the type and complexity of model that the user wants to build
