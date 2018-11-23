@@ -558,12 +558,20 @@ ModelInterpreter <- R6Class(
     outputs = NULL,
     compartment_types = list(),
     compartment_totals = data.frame(),
+    compartment_capitalised = '',
+    table_final_outputs = data.frame(),
+    #table_final_outputs <- cbind(self$outputs, self$compartment_totals),
     initialize = function(model) {
       self$model <- model
       self$outputs <- self$model$outputs
       self$times <- self$outputs$time
       self$compartment_types <- self$model$compartment_types
       self$find_compartment_totals()
+      self$table_final_outputs <- cbind(self$outputs, self$compartment_totals)
+      for (time_value in 1:length(self$table_final_outputs$time)) {
+        self$table_final_outputs$time[[time_value]] <- 
+        self$table_final_outputs$time[[time_value]]*365
+      }
       },
     
     # sum all the compartment values of one type
@@ -580,14 +588,24 @@ ModelInterpreter <- R6Class(
         }
         }
       },
-    
+    plot_function = function(compartment) {
+      self$compartment_capitalised <- compartment %>% str_replace_all('~', ' ') %>% 
+        str_replace_all('_', ' ') %>%
+        str_to_title()
+      ggplot(self$table_final_outputs, 
+             aes_string(x = "time", y = compartment)) + 
+        geom_point(color = 'red', alpha = 0.5) + 
+        geom_line() + 
+        labs(title = paste("Time against", 
+                           self$compartment_capitalised), 
+             x = "Time", y = self$compartment_capitalised) 
+    },
     # simple method to plot the size of a compartment
     plot_compartment = function(compartment) {
       plot(self$times, self$compartment_totals[[compartment]])
       }
     )
 )
-
 
 
 
