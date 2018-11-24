@@ -587,7 +587,7 @@ ModelInterpreter <- R6Class(
         }
       },
     #Allows the user to plot compartment/multiple compartments against time
-    plot_function = function(compartment = c('susceptible', 'infectious')) {
+    plot_function = function(compartment = c('susceptible', 'infectious'), points = FALSE) {
       #final_data is the dataframe used for ggplot
       final_data <- data.frame()
       #final_data is populated with key/value columns that is put into ggplot
@@ -598,7 +598,11 @@ ModelInterpreter <- R6Class(
         str_replace_all('_', ' ') %>% str_to_title()
       #ggplot is initiated
       plot <- ggplot(final_data, aes(time, value, color = Compartments)) +
-        geom_line() + geom_point(alpha = 0.1, color = 'red')
+        geom_line()
+      #If points set as true, points signifying each day is placed
+      if (points) {
+        plot <- plot + geom_point(size = 0.4, color = 'red')
+      }
       #Labels are cleaned - depending on how many variables are used
       if (length(compartment) == 1) {
         plot <- plot + labs(title = paste("Time (days) against",
