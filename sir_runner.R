@@ -1,5 +1,5 @@
 
-source("summer_model.r")
+source("summer_model.R")
 
 
 create_arbitrary_time_variant_function = function(time) {
@@ -26,5 +26,8 @@ sir_model$add_time_variant("recovery", create_arbitrary_time_variant_function)
 sir_model$run_model()
 
 interpreter <- ModelInterpreter$new(sir_model)
-interpreter$plot_compartment("infectious")
 
+interpreter$plot_function(c("infectious", 'susceptible', 'recovered'))
+interpreter$plot_function('infectious')
+interpreter$plot_function(c('susceptible~hiv_1', 'susceptible~hiv_2', 'recovered~hiv_1~risk_2'))
+names(interpreter$table_final_outputs)
