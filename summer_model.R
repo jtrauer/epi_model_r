@@ -586,17 +586,34 @@ ModelInterpreter <- R6Class(
         }
         }
       },
-    plot_function = function(compartment) {
-      self$compartment_capitalised <- compartment %>% str_replace_all('~', ' ') %>% 
-        str_replace_all('_', ' ') %>%
-        str_to_title()
-      ggplot(self$table_final_outputs, 
-             aes_string(x = "time", y = compartment)) + 
-        geom_point(color = 'red', alpha = 0.5) + 
-        geom_line() + 
-        labs(title = paste("Time against", 
-                           self$compartment_capitalised), 
-             x = "Time", y = self$compartment_capitalised) 
+    #Allows the user to plot compartment/multiple compartments against time
+    plot_function = function(compartment = c('susceptible', 'infectious')) {
+      #final_data is the dataframe used for ggplot
+      final_data <- data.frame()
+      #final_data is populated with key/value columns that is put into ggplot
+      final_data <- interpreter$table_final_outputs %>% 
+        gather(Compartments, value, compartment)
+      #Str is cleaned up for presentation
+      compartment_capitalised <- compartment %>% str_replace_all('~', ' ') %>% 
+        str_replace_all('_', ' ') %>% str_to_title()
+      #ggplot is initiated
+      plot <- ggplot(final_data, aes(time, value, color = Compartments)) +
+        geom_line() + geom_point(alpha = 0.1, color = 'red')
+      #Labels are cleaned - depending on how many variables are used
+      if (length(compartment) == 1) {
+        plot <- plot + labs(title = paste("Time (days) against",
+                                          compartment_capitalised[[1]]),
+                            x = "Time", y = compartment_capitalised[[1]])
+      }
+      else {
+        plot <- plot + labs(title = paste("Time against compartments"),
+                            x = "Time", y = "Proportion of people")
+      }
+      #The legend is also cleaned up with necessary outputs
+      plot <- plot + scale_color_discrete(breaks = compartment,
+                                            labels = compartment_capitalised)
+      #Function plotted
+      plot
     },
     # simple method to plot the size of a compartment
     plot_compartment = function(compartment) {
