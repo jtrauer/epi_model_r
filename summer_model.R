@@ -606,13 +606,14 @@ ModelInterpreter <- R6Class(
                             x = "Time", y = compartment_capitalised[[1]])
       }
       else {
-        plot <- plot + labs(title = paste("Time against compartments"),
+        plot <- plot + labs(title = paste("Time against Compartments"),
                             x = "Time", y = "Proportion of people")
       }
       #The legend is also cleaned up with necessary outputs
       plot <- plot + scale_color_discrete(breaks = compartment,
                                             labels = compartment_capitalised) +
-        theme_bw()
+        theme_bw() +
+        theme(plot.title = element_text(hjust = 0.5))
       #Function plotted
       plot
     },
