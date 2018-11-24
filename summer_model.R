@@ -611,7 +611,8 @@ ModelInterpreter <- R6Class(
       }
       #The legend is also cleaned up with necessary outputs
       plot <- plot + scale_color_discrete(breaks = compartment,
-                                            labels = compartment_capitalised)
+                                            labels = compartment_capitalised) +
+        theme_bw()
       #Function plotted
       plot
     },
