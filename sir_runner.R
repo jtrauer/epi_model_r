@@ -15,19 +15,22 @@ sir_model <- EpiModel$new(c(beta=400, recovery=365/13),
                           seq(from=0, to=60/365, by=1/365),
                           list("infectious"=0.001),
                           list(c("standard_flows", "recovery", "infectious", "recovered"),
-                               c("infection_flows", "beta", "susceptible", "infectious")))
-sir_model$implement_stratification("hiv", 2, c())
-sir_model$implement_stratification("risk", 2, c("recovered"))
+                               c("infection_density", "beta", "susceptible", "infectious")))
+# sir_model$implement_stratification("hiv", 2, c())
+# sir_model$implement_stratification("risk", 2, c("recovered"))
 
 sir_model$add_time_variant("recovery", create_arbitrary_time_variant_function)
 
-# sir_model$report_model_structure()
+sir_model$report_model_structure()
 
 sir_model$run_model()
 
 interpreter <- ModelInterpreter$new(sir_model)
 
-interpreter$plot_function(c("infectious", 'susceptible', 'recovered'))
-interpreter$plot_function('infectious')
-interpreter$plot_function(c('susceptible~hiv_1', 'susceptible~hiv_2', 'recovered~hiv_1~risk_2'))
-names(interpreter$table_final_outputs)
+
+interpreter$plot_compartment("infectious")
+
+# interpreter$plot_function(c("infectious", 'susceptible', 'recovered'))
+# interpreter$plot_function('infectious')
+# interpreter$plot_function(c('susceptible~hiv_1', 'susceptible~hiv_2', 'recovered~hiv_1~risk_2'))
+# names(interpreter$table_final_outputs)
