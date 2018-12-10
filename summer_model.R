@@ -39,6 +39,12 @@ create_stratum_name = function(stratification_name, stratum_name) {
   paste("~", stratification_name, "_", stratum_name, sep = "")
 }
 
+# string is cleaned up for presentation
+capitalise_compartment_name = function(compartment) {
+  compartment_capitalised <- compartment %>% str_replace_all('~', ' ') %>% 
+    str_replace_all('_', ' ') %>% str_to_title()
+}
+
 
 # objects
 
@@ -567,9 +573,8 @@ ModelInterpreter <- R6Class(
       self$find_compartment_totals()
       self$table_final_outputs <- cbind(self$outputs, self$compartment_totals)
       for (time_value in 1:length(self$table_final_outputs$time)) {
-        self$table_final_outputs$time[[time_value]] <- 
-        self$table_final_outputs$time[[time_value]]*365
-      }
+        self$table_final_outputs$time[[time_value]] <- self$table_final_outputs$time[[time_value]] * 365
+        }
       },
     
     # sum all the compartment values of one type
@@ -583,55 +588,59 @@ ModelInterpreter <- R6Class(
             self$compartment_totals[[compartment_type]] <-
               self$compartment_totals[[compartment_type]] + self$outputs[[compartment]]
           }
-        }
+          }
         }
       },
-    #Allows the user to plot compartment/multiple compartments against time
-    plot_function = function(compartment = c('susceptible', 'infectious'), points = FALSE) {
-      #final_data is the dataframe used for ggplot
-      final_data <- data.frame()
-      #final_data is populated with key/value columns that is put into ggplot
-      final_data <- interpreter$table_final_outputs %>% 
-        gather(Compartments, value, compartment)
-      #Str is cleaned up for presentation
-      compartment_capitalised <- compartment %>% str_replace_all('~', ' ') %>% 
-        str_replace_all('_', ' ') %>% str_to_title()
-      #ggplot is initiated
-      plot <- ggplot(final_data, aes(time, value, color = Compartments)) +
-        geom_line()
-      #If points set as true, points signifying each day is placed
+    
+    # allows the user to plot compartment/multiple compartments against time
+    plot_function = function(compartment = c("susceptible", "infectious"), points = FALSE) {
+
+      # final_data is populated with key/value columns that is put into ggplot
+      final_data <- data.frame(interpreter$table_final_outputs %>% 
+        gather(Compartments, value, compartment))
+      
+      # ggplot is initiated
+      plot <- ggplot(final_data, aes(time, value, color = Compartments)) + geom_line()
+      
+      # capitalise compartment name
+      compartment_capitalised <- capitalise_compartment_name(compartment)
+      
+      # if points set as true, points signifying each day is placed
       if (points) {
         plot <- plot + geom_point(size = 0.4, color = 'red')
       }
-      #Labels are cleaned - depending on how many variables are used
+      
+      # labels are cleaned - depending on how many variables are used
       if (length(compartment) == 1) {
-        plot <- plot + labs(title = paste("Time (days) against",
-                                          compartment_capitalised[[1]]),
+        plot <- plot + labs(title = paste(compartment_capitalised[[1]],
+                                          " over time"),
                             x = "Time", y = compartment_capitalised[[1]])
       }
       else {
-        plot <- plot + labs(title = paste("Time against Compartments"),
+        plot <- plot + labs(title = paste("Compartment sizes over time"),
                             x = "Time", y = "Proportion of people")
       }
-      #The legend is also cleaned up with necessary outputs
+      
+      # the legend is also cleaned up with necessary outputs
       plot <- plot + scale_color_discrete(breaks = compartment,
                                             labels = compartment_capitalised) +
         theme_bw() +
         theme(plot.title = element_text(hjust = 0.5))
-      #Function plotted
-      plot
+      
+      # save function
+      ggsave("outputs.pdf")
     },
+    
     # simple method to plot the size of a compartment
     plot_compartment = function(compartment) {
       plot(self$times, self$compartment_totals[[compartment]])
       }
     )
-)
+  )
 
 
-
-#Creates a flowchart. A stratified flowchart is presented unless otherwise specified
-#Parameters can also be presented unless otherwise specified
+# creates a flowchart - stratified flowchart unless otherwise specified
+# parameters can also be presented unless otherwise specified
 create_flowchart <- function(model, type = 'stratified', parameters = TRUE) {
   #Pick type of input into the function, depending on whether the type of flowchart is 
   if (type == 'stratified') {
