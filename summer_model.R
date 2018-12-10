@@ -11,6 +11,8 @@ library(deSolve)
 library(R6)
 library(tidyverse)
 library(DiagrammeR)
+library(DiagrammeRsvg)
+library(rsvg)
 # this file contains the main model builder function, that is intended to be agnostic
 # to the type and complexity of model that the user wants to build
 # all instructions for what the characteristics of the model are are separated out to a
@@ -569,7 +571,6 @@ ModelInterpreter <- R6Class(
     compartment_totals = data.frame(),
     compartment_capitalised = '',
     table_final_outputs = data.frame(),
-    #table_final_outputs <- cbind(self$outputs, self$compartment_totals),
     initialize = function(model) {
       self$model <- model
       self$outputs <- self$model$outputs
@@ -577,9 +578,10 @@ ModelInterpreter <- R6Class(
       self$compartment_types <- self$model$compartment_types
       self$find_compartment_totals()
       self$table_final_outputs <- cbind(self$outputs, self$compartment_totals)
+      self$table_final_outputs <- self$table_final_outputs[!duplicated(as.list(self$table_final_outputs))]
       for (time_value in 1:length(self$table_final_outputs$time)) {
         self$table_final_outputs$time[[time_value]] <- self$table_final_outputs$time[[time_value]] * 365
-        }
+      }
       },
     
     # sum all the compartment values of one type
@@ -618,7 +620,7 @@ ModelInterpreter <- R6Class(
       # labels are cleaned - depending on how many variables are used
       if (length(compartment) == 1) {
         plot <- plot + labs(title = paste(compartment_capitalised[[1]],
-                                          " over time"),
+                                          "over time"),
                             x = "Time", y = compartment_capitalised[[1]])
       }
       else {
@@ -633,97 +635,124 @@ ModelInterpreter <- R6Class(
         theme(plot.title = element_text(hjust = 0.5))
       
       # save function
-      ggsave("outputs.pdf")
+      ggsave(paste('graph~',
+                   paste(compartment, collapse = '~'),
+                   ".pdf",
+                   sep = ''))
     },
     
     # simple method to plot the size of a compartment
     plot_compartment = function(compartment) {
       plot(self$times, self$compartment_totals[[compartment]])
+      },
+    
+    # creates a flowchart - stratified flowchart unless otherwise specified
+    # parameters can also be presented unless otherwise specified
+    create_flowchart = function(type = 'stratified', parameters = TRUE) {
+      
+      
+      #Pick type of input into the function, depending on whether the type of flowchart is 
+      if (type == 'stratified') {
+        input_nodes <- names(self$model$compartment_values)
+        type_of_flow <- self$model$flows
+      } 
+      else if (type == 'unstratified') {
+        input_nodes <- self$model$compartment_types
+        type_of_flow <- self$model$unstratified_flows
       }
+      else {
+        stop("Type needs to be either stratified or unstratified.")
+      }
+      
+      #Inputs are sectioned according to the 
+      #stem value so colours can be added to each type.
+      #broken_down_nodes list created
+      
+      broken_down_nodes = list()
+      
+      #broken_down_nodes is populated with different list for each stem value
+      
+      for (stem_value in 1:length(self$model$compartment_types)) {
+        x_vector <- c()
+        for (stem_type in 1:length(input_nodes)) {
+          if (self$model$compartment_types[[stem_value]] == find_stem(input_nodes[[stem_type]])) {
+            x_vector <- c(x_vector, input_nodes[[stem_type]])
+          }
+        }
+        broken_down_nodes[[stem_value]] <- x_vector
+      }
+      
+      #The colours of each stem value (compartment type) is created
+      #The settings string is set
+      
+      settings <- ''
+      
+      #Settings is populated with the string necessary for grViz function
+      
+      for (list_different_nodes in 1:length(broken_down_nodes)) {
+        nodes <- c()
+        nodes <- paste(broken_down_nodes[[list_different_nodes]], collapse = ' ')
+        settings <- paste(settings, 'node [shape = box,
+                          fontname = Helvetica, style = filled, color =', 
+                          c('BlanchedAlmond', 'Grey', 
+                            'RosyBrown', 'LavenderBlush',
+                            'Salmon', 'LightPink', 
+                            'PaleGreen', 'Thistle', 
+                            'Beige', 'PeachPuff', 
+                            'MintCream', 'AquaMarine', 
+                            'MistyRose', 'Tomato',
+                            'Honeydew', 'LightCyan')[[sample(1:16, 
+                                                             1,
+                                                             replace = FALSE, 
+                                                             prob = NULL)]],
+                          ']', nodes)
+      }
+      
+      #The pathways between nodes are set as empty
+      
+      connection_between_nodes <- ""
+      connections <- ''
+      
+      #The pathway between nodes is populated from type_of_flow, as well as the parameters
+      
+      for (row in seq(nrow(type_of_flow))) {
+        if (type_of_flow$implement[[row]]) {
+          
+          #Parameters are added or not added in to the flowchart depending on the setting
+         
+           if (parameters) {
+            connections <- paste(' edge [label =',
+                                 type_of_flow$parameter[[row]],
+                                 ']')
+          }
+          else if (!parameters) {
+            connections <- ''
+          }
+          connection_between_nodes <- paste(connection_between_nodes,
+                                            connections,
+                                            type_of_flow$from[[row]], 
+                                            "->", type_of_flow$to[[row]], 
+                                            ' ', sep = '')
+        }}
+      
+      #The final string necessary for grViz is created here
+      input_for_grViz <- ''
+      input_for_grViz <- paste("digraph dot {
+                               graph [layout = dot,
+                               rankdir = LR]", 
+                               settings,
+                               connection_between_nodes, '}')
+      
+      # '~' are substituted for '_' and input into the function
+      
+      final_flowchart <- grViz(str_replace_all(input_for_grViz, "~", "_"))
+      svg <- export_svg(final_flowchart)
+      svg <- charToRaw(svg)
+      rsvg_pdf(svg, paste('flowchart~', type , '.pdf', sep = ''))
+    }
     )
   )
 
 
-# creates a flowchart - stratified flowchart unless otherwise specified
-# parameters can also be presented unless otherwise specified
-create_flowchart <- function(model, type = 'stratified', parameters = TRUE) {
-  #Pick type of input into the function, depending on whether the type of flowchart is 
-  if (type == 'stratified') {
-    input_nodes <- names(sir_model$compartment_values)
-    type_of_flow <- model$flows
-  } 
-  else if (type == 'unstratified') {
-    input_nodes <- model$compartment_types
-    type_of_flow <- model$unstratified_flows
-  }
-  else {
-    stop("Type needs to be either stratified or unstratified.")
-  }
-  #The inputs for the flowchart is ordered alphabetically
-  sorted_nodes <- sort(input_nodes)
-  #Inputs are sectioned according to the 
-  #stem value so colours can be added to each type.
-  #broken_down_nodes list created
-  broken_down_nodes <- list()
-  #broken_down_nodes is populated with different list for each stem value
-  for (stem_value in 1:length(model$compartment_types)) {
-    x_vector <- c()
-    for (stem_type in 1:length(sorted_nodes)) {
-      if (model$compartment_types[[stem_value]] == find_stem(sorted_nodes[[stem_type]])) {
-        x_vector <- c(x_vector, sorted_nodes[[stem_type]])
-      }
-    }
-    broken_down_nodes[[stem_value]] <- x_vector
-  }
-  #The colours of each stem value (compartment type) is created
-  #The settings string is set
-  settings <- ''
-  #Settings is populated with the string necessary for grViz function
-  for (list_different_nodes in 1:length(broken_down_nodes)) {
-    nodes <- c()
-    nodes <- paste(broken_down_nodes[[list_different_nodes]], collapse = ' ')
-    settings <- paste(settings, 'node [shape = box,
-                      fontname = Helvetica, style = filled, color =', 
-                      c('BlanchedAlmond', 'Grey', 
-                        'RosyBrown', 'LavenderBlush',
-                        'Salmon', 'LightPink', 
-                        'PaleGreen', 'Thistle', 
-                        'Beige', 'PeachPuff', 
-                        'MintCream', 'AquaMarine', 
-                        'MistyRose', 'Tomato',
-                        'Honeydew', 'LightCyan')[[sample(1:16, 
-                                                         1,
-                                                         replace = FALSE, 
-                                                         prob = NULL)]],
-                      ']', nodes)
-  }
-  #The pathways between nodes are set as empty
-  connection_between_nodes <- ""
-  #The pathway between nodes is populated from type_of_flow, as well as the parameters
-  for (row in seq(nrow(type_of_flow))) {
-    if (type_of_flow$implement[[row]]) {
-      #Parameters are added or not added in to the flowchart depending on the setting
-      if (parameters) {
-        connections <- paste(' edge [label =',
-                             type_of_flow$parameter[[row]],
-                             ']')
-      }
-      else if (!parameters) {
-        connections <- ''
-      }
-      connection_between_nodes <- paste(connection_between_nodes,
-                                        connections,
-                                        type_of_flow$from[[row]], 
-                                        "->", type_of_flow$to[[row]], 
-                                        ' ', sep = '')
-    }}
-  #The final string necessary for grViz is created here
-  input_for_grViz <- paste("digraph dot {
-                           graph [layout = dot,
-                           rankdir = LR]", 
-                           settings,
-                           connection_between_nodes, '}')
-  # '~' are substituted for '_' and input into the function
-  grViz(str_replace_all(input_for_grViz, "~", "_"))
-}
+
 
