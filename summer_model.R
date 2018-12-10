@@ -25,7 +25,12 @@ find_stem = function(compartment) {
 
 # find the trailing text for the stratum of the compartment
 find_stratum = function(compartment) {
-  stratum <- substr(compartment, gregexpr(pattern="~", compartment)[[1]][1], 100)
+  if ("~" %in% compartment) {
+    stratum <- substr(compartment, gregexpr(pattern="~", compartment)[[1]][1], 100)
+  }
+  else {
+    ""
+  }
 }
 
 
