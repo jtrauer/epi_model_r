@@ -219,7 +219,9 @@ EpiModel <- R6Class(
     
     # master stratification function
     implement_stratification = function(
-      stratification_name, n_strata, compartment_types_to_stratify, proportions=c()) {
+      stratification_name, strata_request, compartment_types_to_stratify, proportions=c()) {
+      
+      strata_names <- self$find_strata_names_from_input(strata_request)
       
       # if vector of length zero passed, use stratify the compartment types in the model
       if (length(compartment_types_to_stratify) == 0) {
@@ -234,9 +236,22 @@ EpiModel <- R6Class(
       
       # stratify the compartments and then the flows
       self$stratify_compartments(
-        stratification_name, seq(n_strata), compartment_types_to_stratify, proportions)
-      self$stratify_flows(stratification_name, seq(n_strata), compartment_types_to_stratify)
+        stratification_name, strata_names, compartment_types_to_stratify, proportions)
+      self$stratify_flows(stratification_name, strata_names, compartment_types_to_stratify)
       self$stratification_names <- c(self$stratification_names, stratification_name)
+    },
+    
+    # find the names of the stratifications from a particular user request
+    find_strata_names_from_input = function(strata_request) {
+      if (length(strata_request) == 0) {
+        stop("requested to stratify, but no stratification labels provided")
+      }
+      else if (length(strata_request) == 1 & typeof(strata_request) == "double") {
+        strata_names <- seq(strata_request)
+      }
+      else {
+        strata_names <- strata_request
+      }
     },
     
     # work through compartment stratification
