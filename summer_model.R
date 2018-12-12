@@ -308,7 +308,7 @@ EpiModel <- R6Class(
     # stratify flows depending on whether inflow, outflow or both need replication
     stratify_flows = function(
       stratification_name, strata_names, compartments_to_stratify) {
-      
+
       for (flow in 1:nrow(self$flows)) {
         
         # both from and to compartments being stratified
@@ -316,21 +316,18 @@ EpiModel <- R6Class(
             find_stem(self$flows$to[flow]) %in% compartments_to_stratify &
             self$flows$implement[flow]) {
           self$add_stratified_flows(flow, stratification_name, strata_names, TRUE, TRUE)
-          self$remove_flow(flow)
         }
         
         # from compartment being stratified but not to compartment
         else if (find_stem(self$flows$from[flow]) %in% compartments_to_stratify &
                  self$flows$implement[flow]) {
           self$add_stratified_flows(flow, stratification_name, strata_names, TRUE, FALSE)            
-          self$remove_flow(flow)
         }
         
         # to compartment being stratified but not from compartment
         else if (find_stem(self$flows$to[flow]) %in% compartments_to_stratify &
                  self$flows$implement[flow]) {
           self$add_stratified_flows(flow, stratification_name, strata_names, FALSE, TRUE)            
-          self$remove_flow(flow)
         }
       }
     },
@@ -393,6 +390,7 @@ EpiModel <- R6Class(
                                        from=from_compartment, to=to_compartment,
                                        implement=TRUE, type=self$flows$type[flow]))
       }
+      self$remove_flow(flow)
     },
     
     # remove flow
