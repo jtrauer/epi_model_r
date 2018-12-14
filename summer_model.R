@@ -315,22 +315,27 @@ EpiModel <- R6Class(
         if (find_stem(self$flows$from[flow]) %in% compartments_to_stratify &
             find_stem(self$flows$to[flow]) %in% compartments_to_stratify &
             self$flows$implement[flow]) {
-          self$add_stratified_flows(flow, stratification_name, strata_names, TRUE, TRUE, 
-                                    parameter_adjustments)
+          whether_stratify <- c(TRUE, TRUE)
         }
         
         # from compartment being stratified but not to compartment
         else if (find_stem(self$flows$from[flow]) %in% compartments_to_stratify &
                  self$flows$implement[flow]) {
-          self$add_stratified_flows(flow, stratification_name, strata_names, TRUE, FALSE,
-                                    parameter_adjustments)            
+          whether_stratify <- c(TRUE, FALSE)
         }
         
         # to compartment being stratified but not from compartment
         else if (find_stem(self$flows$to[flow]) %in% compartments_to_stratify &
                  self$flows$implement[flow]) {
-          self$add_stratified_flows(flow, stratification_name, strata_names, FALSE, TRUE,
-                                    parameter_adjustments)            
+          whether_stratify <- c(FALSE, TRUE)
+        }
+        else {
+          whether_stratify <- c(FALSE, FALSE)
+        }
+        
+        if (TRUE %in% whether_stratify) {
+          self$add_stratified_flows(flow, stratification_name, strata_names, 
+                                    whether_stratify[1], whether_stratify[2], parameter_adjustments)
         }
       }
     },
