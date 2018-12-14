@@ -344,21 +344,17 @@ EpiModel <- R6Class(
       for (stratum in strata_names) {
         
         # determine whether parameters need to be adjusted, according to user request and model structure
-        if (is.list(parameter_adjustments)) {
-          if (self$flows$parameter[flow] == names(parameter_adjustments)) {
+        if (is.list(parameter_adjustments) & self$flows$parameter[flow] == names(parameter_adjustments)) {
           
             # multiply original parameter by new requested value
             parameter_name <- create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)
             self$parameters[parameter_name] <-
               self$parameters[[self$flows$parameter[flow]]] *
               parameter_adjustments[[self$flows$parameter[flow]]][["adjustments"]][[stratum]]
-          }
-          else {
-            parameter_name <- self$flows$parameter[flow]
-          }
         }
+        
+        # split the parameter into equal parts by default if to split but from not split
         else if (!stratify_from & stratify_to) {
-          # split the parameter into equal parts
           parameter_name <- create_stratified_name(
             self$flows$parameter[flow], stratification_name, stratum)
           self$multipliers[[parameter_name]] <- 1 / length(strata_names)
@@ -366,6 +362,8 @@ EpiModel <- R6Class(
             self$parameters[self$flows$parameter[flow]] / length(strata_names)
 
         }
+        
+        # otherwise just keep the same parameter
         else {
           parameter_name <- self$flows$parameter[flow]
         }
