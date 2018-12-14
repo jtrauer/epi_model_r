@@ -337,22 +337,29 @@ EpiModel <- R6Class(
     # add additional stratified flow to flow data frame
     add_stratified_flows = function(flow, stratification_name, strata_names, stratify_from, stratify_to, 
                                     parameter_adjustments) {
+      parameter_name <- NULL
       
       # loop over each stratum in the requested stratification structure
       for (stratum in strata_names) {
         
-        # determine whether parameters need to be adjusted, according to user request and model structure
-        if (is.list(parameter_adjustments) & self$flows$parameter[flow] == names(parameter_adjustments)) {
+        # working out whether to adjust parameters up the tree
+        if (is.list(parameter_adjustments)) {
           
-            # multiply original parameter by new requested value
-            parameter_name <- create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)
-            self$parameters[parameter_name] <-
-              self$parameters[[self$flows$parameter[flow]]] *
-              parameter_adjustments[[self$flows$parameter[flow]]][["adjustments"]][[stratum]]
+          # cycle through the parameter requests with the last one overwriting previous ones
+          for (parameter_request in names(parameter_adjustments)) {
+            if (parameter_request == substr(self$flows$parameter[flow], 1, nchar(parameter_request))) {
+
+              # multiply original parameter by new requested value
+              parameter_name <- create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)
+              self$parameters[parameter_name] <-
+                self$parameters[[self$flows$parameter[flow]]] *
+                parameter_adjustments[[parameter_request]][["adjustments"]][[stratum]]
+            }
+          }
         }
-        
+
         # split the parameter into equal parts by default if to split but from not split
-        else if (!stratify_from & stratify_to) {
+        if (is.null(parameter_name) & !stratify_from & stratify_to) {
           parameter_name <- create_stratified_name(
             self$flows$parameter[flow], stratification_name, stratum)
           self$multipliers[[parameter_name]] <- 1 / length(strata_names)
@@ -362,16 +369,17 @@ EpiModel <- R6Class(
         }
         
         # otherwise just keep the same parameter
-        else {
+        else if (is.null(parameter_name)) {
           parameter_name <- self$flows$parameter[flow]
         }
 
-        # work out whether to and from compartments are being stratified
+        # determine whether to and/or from compartments are stratified
         if (stratify_from) {
           from_compartment <- create_stratified_name(self$flows$from[flow], stratification_name, stratum)
         }
         else {
           from_compartment <- self$flows$from[flow]
+          
         }
         if (stratify_to) {
           to_compartment <- create_stratified_name(self$flows$to[flow], stratification_name, stratum)
@@ -382,8 +390,7 @@ EpiModel <- R6Class(
 
         # implement new flow
         self$flows <- rbind(self$flows,
-                            data.frame(parameter=parameter_name,
-                                       from=from_compartment, to=to_compartment,
+                            data.frame(parameter=parameter_name, from=from_compartment, to=to_compartment,
                                        implement=TRUE, type=self$flows$type[flow]))
       }
       
