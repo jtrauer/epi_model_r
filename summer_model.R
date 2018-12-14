@@ -27,7 +27,8 @@ find_stem = function(compartment) {
 
 # find the trailing text for the stratum of the compartment
 find_stratum = function(compartment) {
-  if ("0" %in% compartment) {
+  print(compartment)
+  if (grepl("0", compartment)) {
     stratum <- substr(compartment, gregexpr(pattern="0", compartment)[[1]][1], 100)
   }
   else {
