@@ -27,7 +27,6 @@ find_stem = function(compartment) {
 
 # find the trailing text for the stratum of the compartment
 find_stratum = function(compartment) {
-  print(compartment)
   if (grepl("0", compartment)) {
     stratum <- substr(compartment, gregexpr(pattern="0", compartment)[[1]][1], 100)
   }
@@ -258,14 +257,27 @@ EpiModel <- R6Class(
     
     # work through compartment stratification
     stratify_compartments = function(
-      stratification_name, strata_names, compartments_to_stratify, starting_proportions) {
-      
+      stratification_name, strata_names, compartments_to_stratify, proportions) {
+      starting_proportions <- list()
+
       # create list of vectors for the stratifications implemented
       for (stratum in strata_names) {
         self$strata[[stratification_name]] <- 
           c(self$strata[[stratification_name]], create_stratum_name(stratification_name, stratum))
+        
+        # default behaviour to split the starting proportions evenly across strata
+        if (length(proportions) == 0) {
+          starting_proportions[stratum] <- 1 / length(strata_names)
+        }
+        # otherwise check and tidy the input as to how to split the requested proportions
+        else if (!length(proportions) == length(strata_names)) {
+          stop("requested split of starting proportions not equal to number of strata")
+        }
+        else {
+          starting_proportions[stratum] <- proportions[stratum] * sum(starting_proportion)
+        }
       }
-      
+
       # stratify each compartment that needs stratification
       for (compartment in names(self$compartment_values)) {
         
@@ -274,27 +286,13 @@ EpiModel <- R6Class(
         # is the compartment's stem in the compartments types to stratify
         if (compartment_stem %in% compartments_to_stratify) {
           
-          # if no proportions provided, split evenly by default
-          if (length(starting_proportions) == 0) {
-            starting_proportions <- rep(1 / length(strata_names), times=length(strata_names))
-          }
-          
-          # otherwise check and tidy the input as to how to split the requested proportions
-          else if (!length(starting_proportions) == length(strata_names)) {
-            stop("requested split of starting proportions not equal to number of strata")
-          }
-          else if (!sum(starting_proportions) == 1) {
-            warning("requested starting proportions do not sum to one, normalising")
-            starting_proportions <- starting_proportions / sum(starting_proportions)
-          }
-          
           # append the additional compartment and remove the original one
           for (stratum in strata_names) {
             stratified_compartment_name <- create_stratified_name(
               compartment, stratification_name, stratum)
             self$compartment_values[stratified_compartment_name] <-
-              self$compartment_values[[compartment]] * starting_proportions[stratum]
-
+              self$compartment_values[[compartment]] * starting_proportions[[stratum]]
+            
             # split birth rate parameters between entry compartments
             if (compartment_stem == self$entry_compartment) {
               self$parameters[[gsub(compartment_stem, "entry_fractions", stratified_compartment_name)]] <- 
@@ -560,14 +558,14 @@ EpiModel <- R6Class(
     # output some information about the model
     report_model_structure = function() {
       # describe stratified model
+      writeLines("\ninitial conditions (unstratified):")
+      print(self$initial_conditions)
       writeLines("compartment names:")
       print(names(self$compartment_values))
       writeLines("\nall flows:")
       print(self$flows)
       writeLines("\nparameters:")
       print(self$parameters)
-      writeLines("\ninitial conditions (unstratified):")
-      print(self$initial_conditions)
     }
   )
 )
