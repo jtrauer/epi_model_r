@@ -40,11 +40,6 @@ create_stratified_name = function(stem, stratification_name, stratum_name) {
   paste(stem, create_stratum_name(stratification_name, stratum_name), sep = "")
 }
 
-# create the tail of the name of the stratified compartment or parameter
-create_stratum_name = function(stratification_name, stratum_name) {
-  paste("0", stratification_name, "_", stratum_name, sep = "")
-}
-
 # string is cleaned up for presentation
 capitalise_compartment_name = function(compartment) {
   compartment_capitalised <- compartment %>% str_replace_all('0', ' ') %>% 
@@ -260,10 +255,8 @@ EpiModel <- R6Class(
       stratification_name, strata_names, compartments_to_stratify, proportions) {
       starting_proportions <- list()
 
-      # create list of vectors for the stratifications implemented
+      # 
       for (stratum in strata_names) {
-        self$strata[[stratification_name]] <- 
-          c(self$strata[[stratification_name]], create_stratum_name(stratification_name, stratum))
         
         # default behaviour to split the starting proportions evenly across strata
         if (length(proportions) == 0) {
@@ -443,26 +436,7 @@ EpiModel <- R6Class(
           flow <- self$flows[f,]
           
           if (flow$implement) {
-            parameter_name <- as.character(flow$parameter)
-            parameter_value <- self$find_parameter_value(parameter_name, time)
-            stem_value <- self$find_parameter_value(find_stem(parameter_name), time)
-            
-            multiplier <- 1
-            for (stratification in names(self$strata)) {
-              for (stratum in seq(self$strata[[stratification]])) {
-                stratum_name <- self$strata[[stratification]][[stratum]]                
-                multiplier_name <- 
-                  paste(find_stem(parameter_name), stratum_name, sep="")
-                if (stratum_name %in% parameter_name & 
-                    multiplier_name %in% names(self$multipliers)) {
-                  multiplier <- multiplier * self$multipliers[[multiplier_name]]
-                }
-              }
-            }
-            parameter_value <- stem_value * multiplier
-  
             infectious_population <- self$find_infectious_multiplier(flow$type)
-
             from_compartment <- match(flow$from, names(self$compartment_values))
             net_flow <- self$parameters[flow$parameter] *
               compartment_values[from_compartment] * infectious_population
