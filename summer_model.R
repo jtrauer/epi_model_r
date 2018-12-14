@@ -288,10 +288,10 @@ EpiModel <- R6Class(
               self$compartment_values[[compartment]] * starting_proportions[[stratum]]
             
             # split birth rate parameters between entry compartments
+            # planning to make this more flexible to other user requests in the future
             if (compartment_stem == self$entry_compartment) {
               self$parameters[[gsub(compartment_stem, "entry_fractions", stratified_compartment_name)]] <- 
-                self$parameters[[gsub(compartment_stem, "entry_fractions", compartment)]] / 
-                length(strata_names)
+                self$parameters[[gsub(compartment_stem, "entry_fractions", compartment)]] / length(strata_names)
             }
           }
           self$compartment_values[compartment] <- NULL
@@ -386,11 +386,8 @@ EpiModel <- R6Class(
                                        from=from_compartment, to=to_compartment,
                                        implement=TRUE, type=self$flows$type[flow]))
       }
-      self$remove_flow(flow)
-    },
-    
-    # remove flow
-    remove_flow = function(flow) {
+      
+      # remove old flow
       self$flows$implement[flow] <- FALSE
     },
     
