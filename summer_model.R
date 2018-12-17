@@ -22,13 +22,13 @@ library(rsvg)
 
 # find the stem of the compartment name as the text leading up to the first occurrence of _
 find_stem = function(compartment) {
-  str_split(compartment, fixed("0"))[[1]][1]
+  str_split(compartment, fixed("X"))[[1]][1]
 }
 
 # find the trailing text for the stratum of the compartment
 find_stratum = function(compartment) {
-  if (grepl("0", compartment)) {
-    stratum <- substr(compartment, gregexpr(pattern="0", compartment)[[1]][1], 100)
+  if (grepl("X", compartment)) {
+    stratum <- substr(compartment, gregexpr(pattern="X", compartment)[[1]][1], 100)
   }
   else {
     ""
@@ -40,9 +40,14 @@ create_stratified_name = function(stem, stratification_name, stratum_name) {
   paste(stem, create_stratum_name(stratification_name, stratum_name), sep = "")
 }
 
+# generate the name just for the particular stratification
+create_stratum_name = function(stratification_name, stratum_name) {
+  paste("X", stratification_name, "_", stratum_name, sep = "")
+}
+
 # string is cleaned up for presentation
 capitalise_compartment_name = function(compartment) {
-  compartment_capitalised <- compartment %>% str_replace_all('0', ' ') %>% 
+  compartment_capitalised <- compartment %>% str_replace_all('X', ' ') %>% 
     str_replace_all('_', ' ') %>% str_to_title()
 }
 
@@ -275,7 +280,7 @@ EpiModel <- R6Class(
       # stratify each compartment that needs stratification
       for (compartment in names(self$compartment_values)) {
         
-        compartment_stem <- sub("0.*", "", compartment)
+        compartment_stem <- sub("X.*", "", compartment)
         
         # is the compartment's stem in the compartments types to stratify
         if (compartment_stem %in% compartments_to_stratify) {
@@ -735,9 +740,9 @@ ModelInterpreter <- R6Class(
                                settings,
                                connection_between_nodes, '}')
       
-      # '0' are substituted for '_' and input into the function
+      # 'X' are substituted for '_' and input into the function
       
-      final_flowchart <- grViz(str_replace_all(input_for_grViz, "0", "_"))
+      final_flowchart <- grViz(str_replace_all(input_for_grViz, "X", "_"))
       svg <- export_svg(final_flowchart)
       svg <- charToRaw(svg)
       rsvg_pdf(svg, paste('flowchart~', type , '.pdf', sep = ''))
