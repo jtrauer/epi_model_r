@@ -106,9 +106,10 @@ EpiModel <- R6Class(
     time_variants = list(),
     tracked_quantities = list(),
     parameter_multipliers = list(),
-    strata = list(),
+    strata = c(),
     multipliers = list(),
     unstratified_flows = data.frame(),
+    removed_compartments = c(),
 
     # initialise basic model characteristics from inputs and check appropriately requested
     initialize = function(parameters, compartment_types, times, initial_conditions, flows,
@@ -248,10 +249,13 @@ EpiModel <- R6Class(
     },
     
     # master stratification function
-    implement_stratification = function(
+    stratify = function(
       stratification_name, strata_request, compartment_types_to_stratify, 
       parameter_adjustments=c(), proportions=c()) {
       
+      writeLines("\nImplementing model stratification for:")
+      print(stratification_name)
+      self$strata <- c(self$strata, stratification_name)
       strata_names <- find_strata_names_from_input(strata_request)
       
       # if vector of length zero passed, use stratify the compartment types in the model
@@ -299,6 +303,9 @@ EpiModel <- R6Class(
                 self$parameters[[gsub(compartment_stem, "entry_fractions", compartment)]] / length(strata_names)
             }
           }
+          writeLines("\nRemoving compartment:")
+          print(compartment)
+          self$removed_compartments <- c(self$removed_compartments, compartment)
           self$compartment_values[compartment] <- NULL
         }
       }
