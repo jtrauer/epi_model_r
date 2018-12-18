@@ -149,6 +149,9 @@ EpiModel <- R6Class(
       if (!is.character(infectious_compartment)) {
         stop("infectious compartment name is not character")
       }
+      if (!(infectious_compartment %in% compartment_types)) {
+        stop("infectious compartment name is not one of the listed compartment types")
+      }
       
       self$infectious_compartment <- infectious_compartment
       if (!is.numeric(times)) {
