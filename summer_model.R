@@ -110,6 +110,7 @@ EpiModel <- R6Class(
     multipliers = list(),
     unstratified_flows = data.frame(),
     removed_compartments = c(),
+    parameter_adjustments = list(),
 
     # initialise basic model characteristics from inputs and check appropriately requested
     initialize = function(parameters, compartment_types, times, initial_conditions, flows,
@@ -364,11 +365,13 @@ EpiModel <- R6Class(
           for (parameter_request in names(parameter_adjustments)) {
             if (parameter_request == substr(self$flows$parameter[flow], 1, nchar(parameter_request))) {
 
-              # multiply original parameter by new requested value
-              parameter_name <- create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)
-              self$parameters[parameter_name] <-
-                self$parameters[[self$flows$parameter[flow]]] *
+              # find the parameter adjustments that will be needed later on
+              parameter_adjustment <- create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)
+              self$parameter_adjustments[parameter_adjustment] <- 
                 parameter_adjustments[[parameter_request]][["adjustments"]][[stratum]]
+              
+              # create the parameter's name, that may never now be populated to the parameters attribute
+              parameter_name <- create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)
             }
           }
         }
@@ -456,9 +459,24 @@ EpiModel <- R6Class(
           flow <- self$flows[f,]
           
           if (flow$implement) {
-            infectious_population <- self$find_infectious_multiplier(flow$type)
+            
+            # find from compartment and "infectious population", which is 1 for standard flows
             from_compartment <- match(flow$from, names(self$compartment_values))
-            net_flow <- self$parameters[flow$parameter] *
+            infectious_population <- self$find_infectious_multiplier(flow$type)
+            
+            # calculate adjustment to original stem parameter
+            parameter_adjustment <- 1
+            x_positions <- c(unlist(gregexpr("X", flow$parameter)), nchar(flow$parameter) + 1)
+            if (x_positions[1] != -1) {
+              for (x_instance in seq(2, length(x_positions))) {
+                parameter_adjustment <- parameter_adjustment * 
+                  as.numeric(self$parameter_adjustments[
+                    substr(flow$parameter, 1, x_positions[[x_instance]] - 1)])
+              }
+            }
+
+            # calculate the flow and apply to the odes            
+            net_flow <- self$parameters[find_stem(flow$parameter)] * parameter_adjustment *
               compartment_values[from_compartment] * infectious_population
             ode_equations <- self$increment_compartment(
               ode_equations, from_compartment, -net_flow)
@@ -537,7 +555,7 @@ EpiModel <- R6Class(
       }
     },
     
-    # apply all flow times to a vector of zeros
+    # apply all flow types to a vector of zeros
     apply_all_flow_types_to_odes = function(ode_equations, compartment_values, time) {
       ode_equations <- self$apply_transition_flows(ode_equations, compartment_values, time)
       ode_equations <- self$apply_universal_death_flow(ode_equations, compartment_values, time)
