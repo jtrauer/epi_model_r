@@ -111,6 +111,7 @@ EpiModel <- R6Class(
     unstratified_flows = data.frame(),
     removed_compartments = c(),
     parameter_adjustments = list(),
+    overwrite_parameters = c(),
 
     # initialise basic model characteristics from inputs and check appropriately requested
     initialize = function(parameters, compartment_types, times, initial_conditions, flows,
@@ -361,13 +362,19 @@ EpiModel <- R6Class(
         # working out whether to adjust parameters up the tree
         if (is.list(parameter_adjustments)) {
           
-          # cycle through the parameter requests with the last one overwriting previous ones
+          # cycle through the parameter requests with the last one overwriting earlier ones in the list
           for (parameter_request in names(parameter_adjustments)) {
             if (parameter_request == substr(self$flows$parameter[flow], 1, nchar(parameter_request))) {
 
               # find the parameter adjustments that will be needed later on
-              self$parameter_adjustments[create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)] <- 
+              adjustment_name <- create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)
+              self$parameter_adjustments[adjustment_name] <- 
                 parameter_adjustments[[parameter_request]][["adjustments"]][[stratum]]
+
+              # if the user requests over-writing the values higher up the hierarchy of parameter adjustments
+              if (stratum %in% parameter_adjustments[[parameter_request]][["overwrite"]]) {
+                self$overwrite_parameters <- c(self$overwrite_parameters, adjustment_name)
+              }
               
               # create the parameter's name, that may never now be populated to the parameters attribute
               parameter_name <- create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)
@@ -465,17 +472,24 @@ EpiModel <- R6Class(
             
             # calculate adjustment to original stem parameter
             parameter_adjustment <- 1
+            base_parameter_value <- self$parameters[find_stem(flow$parameter)]
             x_positions <- c(unlist(gregexpr("X", flow$parameter)), nchar(flow$parameter) + 1)
             if (x_positions[1] != -1) {
               for (x_instance in seq(2, length(x_positions))) {
-                parameter_adjustment <- parameter_adjustment * 
-                  as.numeric(self$parameter_adjustments[
-                    substr(flow$parameter, 1, x_positions[[x_instance]] - 1)])
+                adjustment <- substr(flow$parameter, 1, x_positions[[x_instance]] - 1)
+                if (flow$parameter %in% self$overwrite_parameters) {
+                  base_parameter_value <- 1
+                  parameter_adjustment <- self$parameter_adjustments[[flow$parameter]]
+                }
+                else {
+                  parameter_adjustment <- parameter_adjustment * 
+                    as.numeric(self$parameter_adjustments[adjustment])
+                }
               }
             }
-
+            
             # calculate the flow and apply to the odes            
-            net_flow <- self$parameters[find_stem(flow$parameter)] * parameter_adjustment *
+            net_flow <- base_parameter_value * parameter_adjustment *
               compartment_values[from_compartment] * infectious_population
             ode_equations <- self$increment_compartment(
               ode_equations, from_compartment, -net_flow)
