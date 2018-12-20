@@ -257,8 +257,8 @@ EpiModel <- R6Class(
       stratification_name, strata_request, compartment_types_to_stratify, 
       parameter_adjustments=c(), proportions=c()) {
       
-      writeLines("\nImplementing model stratification for:")
-      print(stratification_name)
+      # writeLines("\nImplementing model stratification for:")
+      # print(stratification_name)
       self$strata <- c(self$strata, stratification_name)
       strata_names <- find_strata_names_from_input(strata_request)
       
@@ -307,8 +307,8 @@ EpiModel <- R6Class(
                 self$parameters[[gsub(compartment_stem, "entry_fractions", compartment)]] / length(strata_names)
             }
           }
-          writeLines("\nRemoving compartment:")
-          print(compartment)
+          # writeLines("\nRemoving compartment:")
+          # print(compartment)
           self$removed_compartments <- c(self$removed_compartments, compartment)
           self$compartment_values[compartment] <- NULL
         }
@@ -366,8 +366,7 @@ EpiModel <- R6Class(
             if (parameter_request == substr(self$flows$parameter[flow], 1, nchar(parameter_request))) {
 
               # find the parameter adjustments that will be needed later on
-              parameter_adjustment <- create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)
-              self$parameter_adjustments[parameter_adjustment] <- 
+              self$parameter_adjustments[create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)] <- 
                 parameter_adjustments[[parameter_request]][["adjustments"]][[stratum]]
               
               # create the parameter's name, that may never now be populated to the parameters attribute
