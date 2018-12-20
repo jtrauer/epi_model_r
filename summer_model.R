@@ -367,17 +367,14 @@ EpiModel <- R6Class(
             if (parameter_request == substr(self$flows$parameter[flow], 1, nchar(parameter_request))) {
 
               # find the parameter adjustments that will be needed later on
-              adjustment_name <- create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)
-              self$parameter_adjustments[adjustment_name] <- 
+              parameter_name <- create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)
+              self$parameter_adjustments[parameter_name] <- 
                 parameter_adjustments[[parameter_request]][["adjustments"]][[stratum]]
 
               # if the user requests over-writing the values higher up the hierarchy of parameter adjustments
               if (stratum %in% parameter_adjustments[[parameter_request]][["overwrite"]]) {
-                self$overwrite_parameters <- c(self$overwrite_parameters, adjustment_name)
+                self$overwrite_parameters <- c(self$overwrite_parameters, parameter_name)
               }
-              
-              # create the parameter's name, that may never now be populated to the parameters attribute
-              parameter_name <- create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)
             }
           }
         }
@@ -473,10 +470,10 @@ EpiModel <- R6Class(
             # calculate adjustment to original stem parameter
             parameter_adjustment <- 1
             base_parameter_value <- self$parameters[find_stem(flow$parameter)]
-            x_positions <- c(unlist(gregexpr("X", flow$parameter)), nchar(flow$parameter) + 1)
-            if (x_positions[1] != -1) {
-              for (x_instance in seq(2, length(x_positions))) {
-                adjustment <- substr(flow$parameter, 1, x_positions[[x_instance]] - 1)
+            if (grepl("X", flow$parameter)) {
+              x_positions <- c(unlist(gregexpr("X", flow$parameter)), nchar(flow$parameter) + 1)
+              for (x_instance in x_positions[2:length(x_positions)]) {
+                adjustment <- substr(flow$parameter, 1, x_instance - 1)
                 if (flow$parameter %in% self$overwrite_parameters) {
                   base_parameter_value <- 1
                   parameter_adjustment <- self$parameter_adjustments[[flow$parameter]]
