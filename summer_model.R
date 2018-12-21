@@ -78,7 +78,7 @@ find_starting_proportions = function(proportions, strata_names) {
       stop("requested split of starting proportions not equal to number of strata")
     }
     else {
-      starting_proportions[stratum] <- proportions[stratum] * sum(starting_proportion)
+      starting_proportions[stratum] <- as.numeric(proportions[stratum]) * sum(unlist(proportions))
     }
   }
   starting_proportions
