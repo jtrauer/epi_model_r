@@ -278,17 +278,15 @@ EpiModel <- R6Class(
       self$stratify_compartments(
         stratification_name, strata_names, compartment_types_to_stratify, proportions)
       self$stratify_flows(stratification_name, strata_names, compartment_types_to_stratify,
-                          parameter_adjustments)
+                          parameter_adjustments, proportions)
     },
     
     # work through compartment stratification
     stratify_compartments = function(
       stratification_name, strata_names, compartments_to_stratify, proportions) {
-      starting_proportions <- find_starting_proportions(proportions, strata_names)
 
       # stratify each compartment that needs stratification
       for (compartment in names(self$compartment_values)) {
-        
         compartment_stem <- sub("X.*", "", compartment)
         
         # is the compartment's stem in the compartments types to stratify
@@ -296,18 +294,11 @@ EpiModel <- R6Class(
           
           # append the additional compartment and remove the original one
           for (stratum in strata_names) {
-            stratified_compartment_name <- create_stratified_name(
-              compartment, stratification_name, stratum)
+            stratified_compartment_name <- create_stratified_name(compartment, stratification_name, stratum)
             self$compartment_values[stratified_compartment_name] <-
-              self$compartment_values[[compartment]] * starting_proportions[[stratum]]
-            
-            # split birth rate parameters between entry compartments
-            # planning to make this more flexible to other user requests in the future
-            if (compartment_stem == self$entry_compartment) {
-              self$parameters[[gsub(compartment_stem, "entry_fractions", stratified_compartment_name)]] <- 
-                self$parameters[[gsub(compartment_stem, "entry_fractions", compartment)]] / length(strata_names)
-            }
+              self$compartment_values[[compartment]] / length(strata_names)
           }
+          
           # writeLines("\nRemoving compartment:")
           # print(compartment)
           self$removed_compartments <- c(self$removed_compartments, compartment)
@@ -318,7 +309,7 @@ EpiModel <- R6Class(
     
     # stratify flows depending on whether inflow, outflow or both need replication
     stratify_flows = function(
-      stratification_name, strata_names, compartments_to_stratify, parameter_adjustments) {
+      stratification_name, strata_names, compartments_to_stratify, parameter_adjustments, proportions) {
 
       for (flow in 1:nrow(self$flows)) {
         
@@ -346,14 +337,28 @@ EpiModel <- R6Class(
         
         if (TRUE %in% whether_stratify) {
           self$add_stratified_flows(flow, stratification_name, strata_names, 
-                                    whether_stratify[1], whether_stratify[2], parameter_adjustments)
+                                    whether_stratify[1], whether_stratify[2], parameter_adjustments,
+                                    proportions)
+        }
+      }
+      
+      # work out parameter values for stratifying the entry proportion adjustments
+      if (self$entry_compartment %in% compartments_to_stratify) {
+        for (stratum in strata_names) {
+          entry_fraction_name <- create_stratified_name("entry_fraction", stratification_name, stratum)
+          if (stratum %in% names(proportions[["adjustments"]])) {
+            self$parameter_adjustments[entry_fraction_name] <- proportions[["adjustments"]][[stratum]]
+          }
+          else {
+            self$parameter_adjustments[entry_fraction_name] <- 1 / length(strata_names)
+          }
         }
       }
     },
     
     # add additional stratified flow to flow data frame
     add_stratified_flows = function(flow, stratification_name, strata_names, stratify_from, stratify_to, 
-                                    parameter_adjustments) {
+                                    parameter_adjustments, proportions) {
       parameter_name <- NULL
       
       # loop over each stratum in the requested stratification structure
@@ -541,9 +546,19 @@ EpiModel <- R6Class(
       # split the total births across entry compartments
       for (compartment in names(compartment_values)) {
         if (find_stem(compartment) == self$entry_compartment) {
-          compartment_births <- 
-            self$parameters[[paste("entry_fractions", find_stratum(compartment), sep="")]] * 
-            total_births
+          
+          # calculate adjustment to original stem entry rate
+          entry_fraction <- 1
+          x_positions <- c(unlist(gregexpr("X", compartment)), nchar(compartment) + 1)
+          if (!x_positions[1] == -1) {
+            for (x_instance in seq(length(x_positions) - 1)) {
+              adjustment <- paste("entry_fraction", "X", 
+                                  substr(compartment, x_positions[x_instance] + 1, x_positions[x_instance + 1] - 1), sep="")
+              entry_fraction <- entry_fraction * self$parameter_adjustments[[adjustment]]
+            }
+          }
+          compartment_births <- entry_fraction * total_births
+          
           ode_equations <- self$increment_compartment(
             ode_equations, match(compartment, names(self$compartment_values)),
             compartment_births)

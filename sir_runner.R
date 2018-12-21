@@ -17,7 +17,8 @@ sir_model <- EpiModel$new(c(beta=400, recovery=365/13),
                           list(c("standard_flows", "recovery", "infectious", "recovered"),
                                c("infection_density", "beta", "susceptible", "infectious")))
 sir_model$stratify("hiv", c("negative", "positive"), c(),
-                   list(recovery=list(adjustments=list("negative"=0.7, "positive"=0.5))))
+                   list(recovery=list(adjustments=list("negative"=0.7, "positive"=0.5))),
+                   list(adjustments=list("negative"=0.6, "positive"=0.4)))
 sir_model$stratify("risk", 2, c("recovered"),
                    list(recovery=list(adjustments=list("1"=1.5, "2"=1)), recoveryXhiv_positive=list(adjustments=list("1"=2, "2"=365/13*.5),
                                                                                                     overwrite=c("2"))))
