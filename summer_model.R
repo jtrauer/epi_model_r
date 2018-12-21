@@ -552,13 +552,12 @@ EpiModel <- R6Class(
           x_positions <- c(unlist(gregexpr("X", compartment)), nchar(compartment) + 1)
           if (!x_positions[1] == -1) {
             for (x_instance in seq(length(x_positions) - 1)) {
-              adjustment <- paste("entry_fraction", "X", 
+              adjustment <- paste("entry_fractionX", 
                                   substr(compartment, x_positions[x_instance] + 1, x_positions[x_instance + 1] - 1), sep="")
               entry_fraction <- entry_fraction * self$parameter_adjustments[[adjustment]]
             }
           }
           compartment_births <- entry_fraction * total_births
-          
           ode_equations <- self$increment_compartment(
             ode_equations, match(compartment, names(self$compartment_values)),
             compartment_births)
