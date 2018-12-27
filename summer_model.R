@@ -495,11 +495,9 @@ EpiModel <- R6Class(
             from_compartment <- match(flow$from, names(self$compartment_values))
             infectious_population <- self$find_infectious_multiplier(flow$type)
             
-            # calculate adjustment to original stem parameter
-            parameter_adjustment_value <- 1
-            base_parameter_value <- self$parameters[find_stem(flow$parameter)]
-            updated_values <- self$update_parameter_adjustments(base_parameter_value,
-                                                                parameter_adjustment_value, flow$parameter)
+            # determine adjustment to original stem parameter
+            updated_values <- self$update_parameter_adjustment(
+              self$parameters[find_stem(flow$parameter)], flow$parameter)
             base_parameter_value <- updated_values$base_value
             parameter_adjustment_value <- updated_values$adjustment_value
             
@@ -533,23 +531,26 @@ EpiModel <- R6Class(
     # apply a population-wide death rate to all compartments
     apply_universal_death_flow = function(ode_equations, compartment_values, time) {
       
-      for (compartment in names(self$compartment_values)) {
-        parameter_adjustment_value <- 1
-        base_parameter_value <- self$parameters["universal_death_rate"]
-        parameter <- gsub(find_stem(compartment), "universal_death_rate", compartment)
-        updated_values <- self$update_parameter_adjustments(
-          base_parameter_value, parameter_adjustment_value, parameter)
+      # cycle through each compartment
+      for (compartment_number in seq(length(compartment_values))) {
+
+        # find the population death parameter value that applies to the compartment
+        updated_values <- self$update_parameter_adjustment(
+          self$parameters["universal_death_rate"],
+          gsub(find_stem(names(self$compartment_values)[compartment_number]), "universal_death_rate", 
+               names(self$compartment_values)[compartment_number]))
         base_parameter_value <- updated_values$base_value
         parameter_adjustment_value <- updated_values$adjustment_value
-        from_compartment <- match(compartment, names(self$compartment_values))
-        net_flow <- base_parameter_value * parameter_adjustment_value * compartment_values[from_compartment]
-        ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
+        
+        # apply the rate to the compartment
+        net_flow <- base_parameter_value * parameter_adjustment_value * compartment_values[compartment_number]
+        ode_equations <- self$increment_compartment(ode_equations, compartment_number, -net_flow)
       }
         ode_equations
       },
 
-    update_parameter_adjustments = function(base_parameter_value,
-                                           parameter_adjustment_value, parameter) {
+    update_parameter_adjustment = function(base_parameter_value, parameter) {
+      parameter_adjustment_value <- 1
       if (grepl("X", parameter)) {
         x_positions <- c(unlist(gregexpr("X", parameter)), nchar(parameter) + 1)
         for (x_instance in x_positions[2:length(x_positions)]) {
