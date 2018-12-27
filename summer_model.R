@@ -498,16 +498,10 @@ EpiModel <- R6Class(
             # calculate adjustment to original stem parameter
             parameter_adjustment_value <- 1
             base_parameter_value <- self$parameters[find_stem(flow$parameter)]
-            if (grepl("X", flow$parameter)) {
-              x_positions <- c(unlist(gregexpr("X", flow$parameter)), nchar(flow$parameter) + 1)
-              for (x_instance in x_positions[2:length(x_positions)]) {
-                updated_values <- self$update_parameter_adjustments(substr(flow$parameter, 1, x_instance - 1),
-                                                                    base_parameter_value,
-                                                                    parameter_adjustment_value)
-                base_parameter_value <- updated_values$base_value
-                parameter_adjustment_value <- updated_values$adjustment_value
-              }
-            }
+            updated_values <- self$update_parameter_adjustments(base_parameter_value,
+                                                                parameter_adjustment_value, flow$parameter)
+            base_parameter_value <- updated_values$base_value
+            parameter_adjustment_value <- updated_values$adjustment_value
             
             # calculate the flow and apply to the odes            
             net_flow <- base_parameter_value * parameter_adjustment_value *
@@ -542,16 +536,11 @@ EpiModel <- R6Class(
       for (compartment in names(self$compartment_values)) {
         parameter_adjustment_value <- 1
         base_parameter_value <- self$parameters["universal_death_rate"]
-        if (grepl("X", compartment)) {
-          x_positions <- c(unlist(gregexpr("X", compartment)), nchar(compartment) + 1)
-          for (x_instance in x_positions[2:length(x_positions)]) {
-            updated_values <- self$update_parameter_adjustments(
-              paste("universal_death_rate", find_stratum(substr(compartment, 1, x_instance - 1)), sep=""),
-              base_parameter_value, parameter_adjustment_value)
-            base_parameter_value <- updated_values$base_value
-            parameter_adjustment_value <- updated_values$adjustment_value
-          }
-        }
+        parameter <- gsub(find_stem(compartment), "universal_death_rate", compartment)
+        updated_values <- self$update_parameter_adjustments(
+          base_parameter_value, parameter_adjustment_value, parameter)
+        base_parameter_value <- updated_values$base_value
+        parameter_adjustment_value <- updated_values$adjustment_value
         from_compartment <- match(compartment, names(self$compartment_values))
         net_flow <- base_parameter_value * parameter_adjustment_value * compartment_values[from_compartment]
         ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
@@ -559,15 +548,21 @@ EpiModel <- R6Class(
         ode_equations
       },
 
-    update_parameter_adjustments = function(parameter_adjustment, base_parameter_value,
-                                           parameter_adjustment_value) {
-      if (parameter_adjustment %in% self$overwrite_parameters) {
-        base_parameter_value <- 1
-        parameter_adjustment_value <- self$parameter_adjustments[[parameter_adjustment]]
-      }
-      else if (parameter_adjustment %in% names(self$parameter_adjustments)) {
-        parameter_adjustment_value <- parameter_adjustment_value *
-          as.numeric(self$parameter_adjustments[[parameter_adjustment]])
+    update_parameter_adjustments = function(base_parameter_value,
+                                           parameter_adjustment_value, parameter) {
+      if (grepl("X", parameter)) {
+        x_positions <- c(unlist(gregexpr("X", parameter)), nchar(parameter) + 1)
+        for (x_instance in x_positions[2:length(x_positions)]) {
+          parameter_adjustment <- substr(parameter, 1, x_instance - 1)
+          if (parameter_adjustment %in% self$overwrite_parameters) {
+            base_parameter_value <- 1
+            parameter_adjustment_value <- self$parameter_adjustments[[parameter_adjustment]]
+          }
+          else if (parameter_adjustment %in% names(self$parameter_adjustments)) {
+            parameter_adjustment_value <- parameter_adjustment_value *
+              as.numeric(self$parameter_adjustments[[parameter_adjustment]])
+          }
+        }
       }
       updated_values <- list(base_value=base_parameter_value,
                              adjustment_value=parameter_adjustment_value)
