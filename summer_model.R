@@ -138,6 +138,7 @@ EpiModel <- R6Class(
     check_and_set_attributes = function(
       parameters, compartment_types, infectious_compartment, times, 
       available_birth_approaches, birth_approach, universal_death_rate) {
+      
       if (!is.numeric(parameters)) {
         stop("one or more parameter values are not numeric")
       }
@@ -174,18 +175,18 @@ EpiModel <- R6Class(
       self$parameters[["entry_fractions"]] <- 1
       
       if (!"universal_death_rate" %in% names(self$parameters)) {
-        self$parameters <- c(self$parameters, c(universal_death_rate=0))
+        self$parameters <- c(self$parameters, universal_death_rate=universal_death_rate)
       }
   
-      if (!is.numeric(self$parameters["universal_death_rate"])) {
-        stop("universal death rate is not numeric")
-      }
-      else if (self$parameters["universal_death_rate"] < 0) {
-        stop("universal death rate is negative")
-      }
-      else if (self$parameters["universal_death_rate"] > 0) {
-        self$tracked_quantities$total_deaths <- 0
-      }
+      # if (!is.numeric(self$parameters[universal_death_rate])) {
+      #   stop("universal death rate is not numeric")
+      # }
+      # else if (self$parameters["universal_death_rate"] < 0) {
+      #   stop("universal death rate is negative")
+      # }
+      # else if (self$parameters["universal_death_rate"] > 0) {
+      #   self$tracked_quantities$total_deaths <- 0
+      # }
     },
     
     # find the value of a parameter either from time-variant or from constant values
@@ -319,12 +320,11 @@ EpiModel <- R6Class(
       }
     },
     
-    # add parameter adjustment
+    # cycle through the parameter requests with the last one overwriting earlier ones in the list
     add_adjusted_parameter = function(parameter, stratification_name, stratum, parameter_adjustments) {
-
       parameter_adjustment_name <- NULL
       
-      # for each request for adjustment
+      # for each request for adjustment, if there are any
       if (is.list(parameter_adjustments)) {
         for (parameter_request in names(parameter_adjustments)) {
           
@@ -406,7 +406,6 @@ EpiModel <- R6Class(
       # loop over each stratum in the requested stratification structure
       for (stratum in strata_names) {
 
-        # cycle through the parameter requests with the last one overwriting earlier ones in the list
         parameter_name <- self$add_adjusted_parameter(self$flows$parameter[flow], stratification_name, stratum, parameter_adjustments)
 
         # split the parameter into equal parts by default if to split but from not split
@@ -490,7 +489,6 @@ EpiModel <- R6Class(
       function(ode_equations, compartment_values, time) {
         for (f in as.numeric(row.names(self$flows))) {
           flow <- self$flows[f,]
-          
           if (flow$implement) {
             
             # find from compartment and "infectious population", which is 1 for standard flows
@@ -543,14 +541,38 @@ EpiModel <- R6Class(
     },
     
     # apply a population-wide death rate to all compartments
-    apply_universal_death_flow = function(ode_equations, compartment_values,time) {
-        if (!self$parameters["universal_death_rate"] == 0) {
-          for (compartment in 1: length(ode_equations)) {
-            ode_equations <- self$increment_compartment(
-              ode_equations, compartment, 
-              -compartment_values[compartment] * self$parameters["universal_death_rate"])
+    apply_universal_death_flow = function(ode_equations, compartment_values, time) {
+      
+      for (comp in names(self$compartment_values)) {
+        parameter_adjustment_value <- 1
+        base_parameter_value <- self$parameters["universal_death_rate"]
+        if (grepl("X", comp)) {
+          x_positions <- c(unlist(gregexpr("X", comp)), nchar(comp) + 1)
+          for (x_instance in x_positions[2:length(x_positions)]) {
+            adjustment <- substr(comp, 1, x_instance - 1)
+            parameter_adjustment <- paste("universal_death_rate", find_stratum(adjustment), sep="")
+            if (parameter_adjustment %in% self$overwrite_parameters) {
+              base_parameter_value <- 1
+              parameter_adjustment_value <- self$parameter_adjustments[[parameter_adjustment]]
+            }
+            else if (parameter_adjustment %in% names(self$parameter_adjustments)) {
+              parameter_adjustment_value <- parameter_adjustment_value *
+                as.numeric(self$parameter_adjustments[[parameter_adjustment]])
+            }
           }
         }
+        from_compartment <- match(comp, names(self$compartment_values))
+        net_flow <- base_parameter_value * parameter_adjustment_value * compartment_values[from_compartment]
+        ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
+        
+      }
+        # if (!self$parameters["universal_death_rate"] == 0) {
+        #   for (compartment in 1: length(ode_equations)) {
+        #     ode_equations <- self$increment_compartment(
+        #       ode_equations, compartment, 
+        #       -compartment_values[compartment] * self$parameters["universal_death_rate"])
+        #   }
+        # }
         ode_equations
       },
 
