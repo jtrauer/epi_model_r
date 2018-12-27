@@ -306,24 +306,38 @@ EpiModel <- R6Class(
         }
       }
       
-      for (parameter_request in names(parameter_adjustments)) {
-        if (startsWith(parameter_request, "universal_death_rate")) {
-          if (!"universal_death_rate" %in% self$parameter_adjustments) {
-            self$parameter_adjustments$universal_death_rate <- 1
-          }
-          for (parameter in names(self$parameter_adjustments)) {
-            if (startsWith(parameter, "universal_death_rate")) {
-              for (stratum in strata_names) {
-                universal_death_rate_name <- create_stratified_name(parameter, stratification_name, stratum)
-                self$parameter_adjustments[universal_death_rate_name] <-
-                  parameter_adjustments[[parameter_request]][["adjustments"]][[stratum]]
-                if (stratum %in% parameter_adjustments[[parameter_request]][["overwrite"]]) {
-                  self$overwrite_parameters <- c(self$overwrite_parameters, parameter_name)
-                }
-              }
-            }
+      # make adjustments to universal death rate parameter if requested
+      if (!"universal_death_rate" %in% self$parameter_adjustments) {
+        self$parameter_adjustments$universal_death_rate <- 1
+      }      
+      for (parameter in names(self$parameter_adjustments)) {
+        for (stratum in strata_names) {
+          parameter_stem <- "universal_death_rate"
+          for (parameter_request in names(parameter_adjustments)) {
+            self$add_adjusted_parameter(parameter, stratification_name, stratum, parameter_adjustments, parameter_request, parameter_stem)
           }
         }
+      }
+    },
+    
+    # add parameter adjustment
+    add_adjusted_parameter = function(parameter, stratification_name, stratum, parameter_adjustments, parameter_request, parameter_stem) {
+
+      # if the parameter being considered is an extension of the parameter type considered
+      if (startsWith(parameter, parameter_stem)) {
+
+        # populate the parameter adjustment attribute with the new adjustment
+        parameter_adjustment_name <- create_stratified_name(parameter, stratification_name, stratum)
+        self$parameter_adjustments[parameter_adjustment_name] <-
+          parameter_adjustments[[parameter_request]][["adjustments"]][[stratum]]
+        
+        # overwrite parameters higher up the tree by listing which ones to be overwritten
+        if (stratum %in% parameter_adjustments[[parameter_request]][["overwrite"]]) {
+          self$overwrite_parameters <- c(self$overwrite_parameters, parameter_adjustment_name)
+        }
+        
+        # return the parameter name if cycling through flows to populate the data frame
+        parameter_adjustment_name
       }
     },
     
@@ -389,18 +403,9 @@ EpiModel <- R6Class(
           
           # cycle through the parameter requests with the last one overwriting earlier ones in the list
           for (parameter_request in names(parameter_adjustments)) {
-            if (startsWith(self$flows$parameter[flow], parameter_request)) {
-
-              # find the parameter adjustments that will be needed later on
-              parameter_name <- create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)
-              self$parameter_adjustments[parameter_name] <- 
-                parameter_adjustments[[parameter_request]][["adjustments"]][[stratum]]
-
-              # if the user requests over-writing the values higher up the hierarchy of parameter adjustments
-              if (stratum %in% parameter_adjustments[[parameter_request]][["overwrite"]]) {
-                self$overwrite_parameters <- c(self$overwrite_parameters, parameter_name)
-              }
-            }
+            parameter_stem <- parameter_request
+            parameter_name <- self$add_adjusted_parameter(
+                self$flows$parameter[flow], stratification_name, stratum, parameter_adjustments, parameter_request, parameter_stem)
           }
         }
 
