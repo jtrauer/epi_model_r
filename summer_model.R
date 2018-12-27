@@ -311,34 +311,42 @@ EpiModel <- R6Class(
         self$parameter_adjustments$universal_death_rate <- 1
       }      
       for (parameter in names(self$parameter_adjustments)) {
-        for (stratum in strata_names) {
-          parameter_stem <- "universal_death_rate"
-          for (parameter_request in names(parameter_adjustments)) {
-            self$add_adjusted_parameter(parameter, stratification_name, stratum, parameter_adjustments, parameter_request, parameter_stem)
+        if (startsWith(parameter, "universal_death_rate")) {
+          for (stratum in strata_names) {
+            self$add_adjusted_parameter(parameter, stratification_name, stratum, parameter_adjustments)
           }
         }
       }
     },
     
     # add parameter adjustment
-    add_adjusted_parameter = function(parameter, stratification_name, stratum, parameter_adjustments, parameter_request, parameter_stem) {
+    add_adjusted_parameter = function(parameter, stratification_name, stratum, parameter_adjustments) {
 
-      # if the parameter being considered is an extension of the parameter type considered
-      if (startsWith(parameter, parameter_stem)) {
-
-        # populate the parameter adjustment attribute with the new adjustment
-        parameter_adjustment_name <- create_stratified_name(parameter, stratification_name, stratum)
-        self$parameter_adjustments[parameter_adjustment_name] <-
-          parameter_adjustments[[parameter_request]][["adjustments"]][[stratum]]
-        
-        # overwrite parameters higher up the tree by listing which ones to be overwritten
-        if (stratum %in% parameter_adjustments[[parameter_request]][["overwrite"]]) {
-          self$overwrite_parameters <- c(self$overwrite_parameters, parameter_adjustment_name)
+      parameter_adjustment_name <- NULL
+      
+      # for each request for adjustment
+      if (is.list(parameter_adjustments)) {
+        for (parameter_request in names(parameter_adjustments)) {
+          
+          # if the parameter being considered is an extension of the parameter type considered
+          if (startsWith(parameter, parameter_request)) {
+    
+            # populate the parameter adjustment attribute with the new adjustment
+            parameter_adjustment_name <- create_stratified_name(parameter, stratification_name, stratum)
+            self$parameter_adjustments[parameter_adjustment_name] <-
+              parameter_adjustments[[parameter_request]][["adjustments"]][[stratum]]
+            
+            # overwrite parameters higher up the tree by listing which ones to be overwritten
+            if (stratum %in% parameter_adjustments[[parameter_request]][["overwrite"]]) {
+              self$overwrite_parameters <- c(self$overwrite_parameters, parameter_adjustment_name)
+            }
+            
+          }
         }
-        
-        # return the parameter name if cycling through flows to populate the data frame
-        parameter_adjustment_name
       }
+
+      # return the parameter name if cycling through flows to populate the data frame
+      parameter_adjustment_name
     },
     
     # stratify flows depending on whether inflow, outflow or both need replication
@@ -397,17 +405,9 @@ EpiModel <- R6Class(
       
       # loop over each stratum in the requested stratification structure
       for (stratum in strata_names) {
-        
-        # working out whether to adjust parameters up the tree
-        if (is.list(parameter_adjustments)) {
-          
-          # cycle through the parameter requests with the last one overwriting earlier ones in the list
-          for (parameter_request in names(parameter_adjustments)) {
-            parameter_stem <- parameter_request
-            parameter_name <- self$add_adjusted_parameter(
-                self$flows$parameter[flow], stratification_name, stratum, parameter_adjustments, parameter_request, parameter_stem)
-          }
-        }
+
+        # cycle through the parameter requests with the last one overwriting earlier ones in the list
+        parameter_name <- self$add_adjusted_parameter(self$flows$parameter[flow], stratification_name, stratum, parameter_adjustments)
 
         # split the parameter into equal parts by default if to split but from not split
         if (is.null(parameter_name) & !stratify_from & stratify_to) {
