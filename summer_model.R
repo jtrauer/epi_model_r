@@ -276,14 +276,14 @@ EpiModel <- R6Class(
       
       # stratify the compartments and then the flows
       self$stratify_compartments(
-        stratification_name, strata_names, compartment_types_to_stratify, proportions)
+        stratification_name, strata_names, compartment_types_to_stratify, parameter_adjustments, proportions)
       self$stratify_flows(stratification_name, strata_names, compartment_types_to_stratify,
                           parameter_adjustments, proportions)
     },
     
     # work through compartment stratification
     stratify_compartments = function(
-      stratification_name, strata_names, compartments_to_stratify, proportions) {
+      stratification_name, strata_names, compartments_to_stratify, parameter_adjustments, proportions) {
 
       # stratify each compartment that needs stratification
       for (compartment in names(self$compartment_values)) {
@@ -297,12 +297,32 @@ EpiModel <- R6Class(
             stratified_compartment_name <- create_stratified_name(compartment, stratification_name, stratum)
             self$compartment_values[stratified_compartment_name] <-
               self$compartment_values[[compartment]] / length(strata_names)
-          }
+            }
           
           # writeLines("\nRemoving compartment:")
           # print(compartment)
           self$removed_compartments <- c(self$removed_compartments, compartment)
           self$compartment_values[compartment] <- NULL
+        }
+      }
+      
+      for (parameter_request in names(parameter_adjustments)) {
+        if (startsWith(parameter_request, "universal_death_rate")) {
+          if (!"universal_death_rate" %in% self$parameter_adjustments) {
+            self$parameter_adjustments$universal_death_rate <- 1
+          }
+          for (parameter in names(self$parameter_adjustments)) {
+            if (startsWith(parameter, "universal_death_rate")) {
+              for (stratum in strata_names) {
+                universal_death_rate_name <- create_stratified_name(parameter, stratification_name, stratum)
+                self$parameter_adjustments[universal_death_rate_name] <-
+                  parameter_adjustments[[parameter_request]][["adjustments"]][[stratum]]
+                if (stratum %in% parameter_adjustments[[parameter_request]][["overwrite"]]) {
+                  self$overwrite_parameters <- c(self$overwrite_parameters, parameter_name)
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -369,7 +389,7 @@ EpiModel <- R6Class(
           
           # cycle through the parameter requests with the last one overwriting earlier ones in the list
           for (parameter_request in names(parameter_adjustments)) {
-            if (parameter_request == substr(self$flows$parameter[flow], 1, nchar(parameter_request))) {
+            if (startsWith(self$flows$parameter[flow], parameter_request)) {
 
               # find the parameter adjustments that will be needed later on
               parameter_name <- create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)
@@ -601,9 +621,9 @@ EpiModel <- R6Class(
       print(self$initial_conditions)
       writeLines("compartment names:")
       print(names(self$compartment_values))
-      writeLines("\nall flows:")
+      writeLines("\nall transition flows:")
       print(self$flows)
-      writeLines("\nparameters:")
+      writeLines("\nunadjusted parameters:")
       print(self$parameters)
     }
   )
