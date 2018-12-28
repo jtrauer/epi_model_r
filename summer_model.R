@@ -286,11 +286,9 @@ EpiModel <- R6Class(
       }
       
       # stratify the compartments and then the flows
-      self$stratify_compartments(
-        stratification_name, strata_names, compartment_types_to_stratify)
-      self$stratify_universal_death_rate(
-        stratification_name, strata_names, parameter_adjustments)
-      self$stratify_flows(stratification_name, strata_names, compartment_types_to_stratify,
+      self$stratify_compartments(stratification_name, strata_names, compartment_types_to_stratify)
+      self$stratify_universal_death_rate(stratification_name, strata_names, parameter_adjustments)
+      self$stratify_flows(stratification_name, strata_names, compartment_types_to_stratify, 
                           parameter_adjustments, proportions)
     },
     
