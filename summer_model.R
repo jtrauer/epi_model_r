@@ -549,16 +549,16 @@ EpiModel <- R6Class(
       },
 
     # calculate the adjustment to a parameter value for transition flows or death rates
-    find_parameter_adjustments = function(base_parameter_value, parameter) {
+    find_parameter_adjustments = function(base_parameter_value, parameter_name) {
       parameter_adjustment_value <- 1
       
       # if the parameter of interested is stratified
-      if (grepl("X", parameter)) {
+      if (grepl("X", parameter_name)) {
         
         # loop through each potential parameter value according to the strata present
-        x_positions <- c(unlist(gregexpr("X", parameter)), nchar(parameter) + 1)
+        x_positions <- c(unlist(gregexpr("X", parameter_name)), nchar(parameter_name) + 1)
         for (x_position in x_positions[2:length(x_positions)]) {
-          parameter_adjustment <- substr(parameter, 1, x_position - 1)
+          parameter_adjustment <- substr(parameter_name, 1, x_position - 1)
           
           # if the parameter is in overwrite parameter, ignore the previous calculations and start again
           if (parameter_adjustment %in% self$overwrite_parameters) {
