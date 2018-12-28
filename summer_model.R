@@ -199,6 +199,16 @@ EpiModel <- R6Class(
       }
     },
     
+    # find the value of a parameter either from time-variant or from constant values
+    find_parameter_adjustment = function(parameter_name, time) {
+      if (parameter_name %in% names(self$time_variants)) {
+        self$time_variants[[parameter_name]](time)
+      }
+      else {
+        self$parameter_adjustments[parameter_name]
+      }
+    },
+    
     # add a time-variant function
     add_time_variant = function(function_name, time_function) {
       self$time_variants[[function_name]] <- time_function
@@ -602,7 +612,7 @@ EpiModel <- R6Class(
             for (x_instance in seq(length(x_positions) - 1)) {
               adjustment <- paste("entry_fractionX", 
                                   substr(compartment, x_positions[x_instance] + 1, x_positions[x_instance + 1] - 1), sep="")
-              entry_fraction <- entry_fraction * self$parameter_adjustments[[adjustment]]
+              entry_fraction <- entry_fraction * as.numeric(self$find_parameter_adjustment(adjustment, time))
             }
           }
           compartment_births <- entry_fraction * total_births
