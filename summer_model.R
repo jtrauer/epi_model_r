@@ -535,7 +535,7 @@ EpiModel <- R6Class(
 
         # find the population death parameter value that applies to the compartment
         updated_values <- self$find_parameter_adjustments(
-          self$parameters["universal_death_rate"],
+          self$find_parameter_value("universal_death_rate", time),
           gsub(find_stem(names(self$compartment_values)[compartment_number]), "universal_death_rate", 
                names(self$compartment_values)[compartment_number]))
         base_parameter_value <- updated_values$base_value
@@ -582,7 +582,7 @@ EpiModel <- R6Class(
       
       # work out the total births to apply dependent on the approach requested
       if (self$birth_approach == "add_crude_birth_rate") {
-        total_births <- self$parameters[["crude_birth_rate"]] * sum(compartment_values)
+        total_births <- self$find_parameter_value("crude_birth_rate", time) * sum(compartment_values)
       }
       else if (self$birth_approach == "replace_deaths") {
         total_births <- self$variable_quantities$total_deaths
