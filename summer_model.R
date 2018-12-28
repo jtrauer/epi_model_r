@@ -215,7 +215,7 @@ EpiModel <- R6Class(
     },
     
     # update quantities that emerge during model running (not pre-defined functions of time)
-    update_tracked_quantities = function(compartment_values) {
+    update_tracked_quantities = function(compartment_values, time) {
       
       # for each listed quantity in the quantities requested for tracking
       for (quantity in names(self$tracked_quantities)) {
@@ -234,7 +234,7 @@ EpiModel <- R6Class(
         }
         else if (quantity == "total_deaths") {
           self$variable_quantities$total_deaths <- 
-            sum(compartment_values) * self$parameters[universal_death_rate]
+            sum(compartment_values) * as.numeric(self$find_parameter_value(universal_death_rate, time))
         }
       }
     },
@@ -287,14 +287,16 @@ EpiModel <- R6Class(
       
       # stratify the compartments and then the flows
       self$stratify_compartments(
-        stratification_name, strata_names, compartment_types_to_stratify, parameter_adjustments, proportions)
+        stratification_name, strata_names, compartment_types_to_stratify)
+      self$stratify_universal_death_rate(
+        stratification_name, strata_names, parameter_adjustments)
       self$stratify_flows(stratification_name, strata_names, compartment_types_to_stratify,
                           parameter_adjustments, proportions)
     },
     
     # work through compartment stratification
     stratify_compartments = function(
-      stratification_name, strata_names, compartments_to_stratify, parameter_adjustments, proportions) {
+      stratification_name, strata_names, compartments_to_stratify) {
 
       # stratify each compartment that needs stratification
       for (compartment in names(self$compartment_values)) {
@@ -316,7 +318,12 @@ EpiModel <- R6Class(
           self$compartment_values[compartment] <- NULL
         }
       }
+    },
       
+    # stratify the population-wide death rate
+    stratify_universal_death_rate = function(
+      stratification_name, strata_names, parameter_adjustments) {
+
       # make adjustments to universal death rate parameter if requested
       if (!"universal_death_rate" %in% self$parameter_adjustments) {
         self$parameter_adjustments$universal_death_rate <- 1
@@ -503,7 +510,7 @@ EpiModel <- R6Class(
             
             # determine adjustment to original stem parameter
             updated_values <- self$find_parameter_adjustments(
-              self$find_parameter_value(find_stem(flow$parameter), time), flow$parameter)
+              self$find_parameter_value(find_stem(flow$parameter), time), flow$parameter, time)
             base_parameter_value <- updated_values$base_value
             parameter_adjustment_value <- updated_values$adjustment_value
             
@@ -547,7 +554,8 @@ EpiModel <- R6Class(
         updated_values <- self$find_parameter_adjustments(
           self$find_parameter_value("universal_death_rate", time),
           gsub(find_stem(names(self$compartment_values)[compartment_number]), "universal_death_rate", 
-               names(self$compartment_values)[compartment_number]))
+               names(self$compartment_values)[compartment_number]),
+          time)
         base_parameter_value <- updated_values$base_value
         parameter_adjustment_value <- updated_values$adjustment_value
         
@@ -559,7 +567,7 @@ EpiModel <- R6Class(
       },
 
     # calculate the adjustment to a parameter value for transition flows or death rates
-    find_parameter_adjustments = function(base_parameter_value, parameter_name) {
+    find_parameter_adjustments = function(base_parameter_value, parameter_name, time) {
       parameter_adjustment_value <- 1
       
       # if the parameter of interested is stratified
@@ -573,13 +581,13 @@ EpiModel <- R6Class(
           # if the parameter is in overwrite parameter, ignore the previous calculations and start again
           if (parameter_adjustment %in% self$overwrite_parameters) {
             base_parameter_value <- 1
-            parameter_adjustment_value <- self$parameter_adjustments[[parameter_adjustment]]
+            parameter_adjustment_value <- as.numeric(self$find_parameter_adjustment(parameter_adjustment, time))
           }
           
           # otherwise continue to update
           else if (parameter_adjustment %in% names(self$parameter_adjustments)) {
             parameter_adjustment_value <- parameter_adjustment_value *
-              as.numeric(self$parameter_adjustments[[parameter_adjustment]])
+              as.numeric(self$find_parameter_adjustment(parameter_adjustment, time))
           }
         }
       }
@@ -629,7 +637,7 @@ EpiModel <- R6Class(
       epi_model_function <- function(time, compartment_values, parameters) {
 
         # update all the emergent model quantities needed for integration
-        self$update_tracked_quantities(compartment_values)
+        self$update_tracked_quantities(compartment_values, time)
 
         # apply flows
         self$apply_all_flow_types_to_odes(
@@ -815,18 +823,15 @@ ModelInterpreter <- R6Class(
                           ']', nodes)
       }
       
-      #The pathways between nodes are set as empty
-      
+      # the pathways between nodes are set as empty
       connection_between_nodes <- ""
       connections <- ''
       
-      #The pathway between nodes is populated from type_of_flow, as well as the parameters
-      
+      # the pathway between nodes is populated from type_of_flow, as well as the parameters
       for (row in seq(nrow(type_of_flow))) {
         if (type_of_flow$implement[[row]]) {
           
-          #Parameters are added or not added in to the flowchart depending on the setting
-         
+          # parameters are added or not added in to the flowchart depending on the setting
            if (parameters) {
             connections <- paste(' edge [label =',
                                  type_of_flow$parameter[[row]],
@@ -842,7 +847,7 @@ ModelInterpreter <- R6Class(
                                             ' ', sep = '')
         }}
       
-      #The final string necessary for grViz is created here
+      # the final string necessary for grViz is created here
       input_for_grViz <- ''
       input_for_grViz <- paste("digraph dot {
                                graph [layout = dot,
