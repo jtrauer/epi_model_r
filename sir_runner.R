@@ -6,6 +6,10 @@ create_arbitrary_time_variant_function = function(time) {
   365 / 13 * exp(-time)
 }
 
+arbitrary_name = function(time) {
+  10 * exp(time)
+}
+
 
 # an example script to call the generic model builder file that constructs a compartmental model
 # from the instructions contained in this file
@@ -19,14 +23,17 @@ sir_model <- EpiModel$new(c(beta=400, recovery=365/13),
                           universal_death_rate=1/70)
 sir_model$stratify("hiv", c("negative", "positive"), c(),
                    list(recovery=list(adjustments=list("negative"=0.7, "positive"=0.5)),
-                        universal_death_rate=list(adjustments=list("negative"=1, "positive"=2))),
+                      universal_death_rate=list(adjustments=list("negative"=1, "positive"=100))),
                    list(adjustments=list("negative"=0.6, "positive"=0.4)))
 sir_model$stratify("risk", 2, c("recovered"),
-                   list(recovery=list(adjustments=list("1"=1.5, "2"=1)), recoveryXhiv_positive=list(adjustments=list("1"=2, "2"=365/13*.5),
-                                                                                                    overwrite=c("2")),
+                   list(recovery=list(adjustments=list("1"=1.5, "2"=1)),
+                        recoveryXhiv_positive=list(adjustments=list("1"="arbitrary_name", "2"=365/13*.5), overwrite=c("2")),
                         universal_death_rate=list(adjustments=list("1"=3, "2"=2))))
 
-# sir_model$add_time_variant("recovery", create_arbitrary_time_variant_function)
+# print(sir_model$parameter_adjustments)
+
+sir_model$add_time_variant("recovery", create_arbitrary_time_variant_function)
+sir_model$add_time_variant("arbitrary_name", arbitrary_name)
 
 # sir_model$report_model_structure()
 

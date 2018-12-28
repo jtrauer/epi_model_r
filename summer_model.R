@@ -52,15 +52,15 @@ capitalise_compartment_name = function(compartment) {
 }
 
 # find the names of the stratifications from a particular user request
-find_strata_names_from_input = function(strata_request) {
-  if (length(strata_request) == 0) {
+find_strata_names_from_input = function(strata_names) {
+  if (length(strata_names) == 0) {
     stop("requested to stratify, but no stratification labels provided")
   }
-  else if (length(strata_request) == 1 & typeof(strata_request) == "double") {
-    strata_names <- seq(strata_request)
+  else if (length(strata_names) == 1 & typeof(strata_names) == "double") {
+    strata_names <- seq(strata_names)
   }
   else {
-    strata_names <- strata_request
+    strata_names <- strata_names
   }
 }
 
@@ -138,12 +138,9 @@ EpiModel <- R6Class(
     check_and_set_attributes = function(
       parameters, compartment_types, infectious_compartment, times, 
       available_birth_approaches, birth_approach, universal_death_rate) {
-      
-      if (!is.numeric(parameters)) {
-        stop("one or more parameter values are not numeric")
-      }
-      
+
       self$parameters <- parameters
+
       if (!is.character(compartment_types)) {
         stop("one or more compartment types are not character")
       }
@@ -191,7 +188,10 @@ EpiModel <- R6Class(
     
     # find the value of a parameter either from time-variant or from constant values
     find_parameter_value = function(parameter_name, time) {
-      if (parameter_name %in% names(self$time_variants)) {
+      if (is.character(self$parameters[[parameter_name]])) {
+        self$time_variants[[self$parameters[[parameter_name]]]](time)
+      }
+      else if (parameter_name %in% names(self$time_variants)) {
         self$time_variants[[parameter_name]](time)
       }
       else {
@@ -201,7 +201,10 @@ EpiModel <- R6Class(
     
     # find the value of a parameter either from time-variant or from constant values
     find_parameter_adjustment = function(parameter_name, time) {
-      if (parameter_name %in% names(self$time_variants)) {
+      if (is.character(self$parameter_adjustments[[parameter_name]])) {
+        self$time_variants[[self$parameter_adjustments[[parameter_name]]]](time)
+      }
+      else if (parameter_name %in% names(self$time_variants)) {
         self$time_variants[[parameter_name]](time)
       }
       else {
@@ -266,13 +269,13 @@ EpiModel <- R6Class(
     
     # master stratification function
     stratify = function(
-      stratification_name, strata_request, compartment_types_to_stratify, 
+      stratification_name, strata_names, compartment_types_to_stratify, 
       parameter_adjustments=c(), starting_proportions=c()) {
       
       # writeLines("\nImplementing model stratification for:")
       # print(stratification_name)
       self$strata <- c(self$strata, stratification_name)
-      strata_names <- find_strata_names_from_input(strata_request)
+      strata_names <- find_strata_names_from_input(strata_names)
       
       # if vector of length zero passed, use stratify the compartment types in the model
       if (length(compartment_types_to_stratify) == 0) {
@@ -355,7 +358,6 @@ EpiModel <- R6Class(
             if (stratum %in% parameter_adjustments[[parameter_request]][["overwrite"]]) {
               self$overwrite_parameters <- c(self$overwrite_parameters, parameter_adjustment_name)
             }
-            
           }
         }
       }
@@ -589,8 +591,7 @@ EpiModel <- R6Class(
           
           # otherwise continue to update
           else if (parameter_adjustment %in% names(self$parameter_adjustments)) {
-            parameter_adjustment_value <- parameter_adjustment_value *
-              as.numeric(self$find_parameter_adjustment(parameter_adjustment, time))
+            parameter_adjustment_value <- as.numeric(self$find_parameter_adjustment(parameter_adjustment, time))
           }
         }
       }
