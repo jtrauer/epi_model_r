@@ -288,8 +288,8 @@ EpiModel <- R6Class(
       # stratify the compartments and then the flows
       self$stratify_compartments(stratification_name, strata_names, compartment_types_to_stratify)
       self$stratify_universal_death_rate(stratification_name, strata_names, parameter_adjustments)
-      self$stratify_flows(stratification_name, strata_names, compartment_types_to_stratify, 
-                          parameter_adjustments, proportions)
+      self$stratify_flows(stratification_name, strata_names, compartment_types_to_stratify, parameter_adjustments)
+      self$stratify_entry_fractions(stratification_name, strata_names, compartment_types_to_stratify, proportions)
     },
     
     # work through compartment stratification
@@ -366,8 +366,7 @@ EpiModel <- R6Class(
     
     # stratify flows depending on whether inflow, outflow or both need replication
     stratify_flows = function(
-      stratification_name, strata_names, compartments_to_stratify, parameter_adjustments, proportions) {
-
+      stratification_name, strata_names, compartments_to_stratify, parameter_adjustments) {
       for (flow in seq(nrow(self$flows))) {
         
         # both from and to compartments being stratified
@@ -397,16 +396,22 @@ EpiModel <- R6Class(
                                     whether_stratify[1], whether_stratify[2], parameter_adjustments)
         }
       }
+    },
       
-      # work out parameter values for stratifying the entry proportion adjustments
-      if (self$entry_compartment %in% compartments_to_stratify) {
-        for (stratum in strata_names) {
-          entry_fraction_name <- create_stratified_name("entry_fraction", stratification_name, stratum)
-          if (stratum %in% names(proportions[["adjustments"]])) {
-            self$parameter_adjustments[entry_fraction_name] <- proportions[["adjustments"]][[stratum]]
-          }
-          else {
-            self$parameter_adjustments[entry_fraction_name] <- 1 / length(strata_names)
+    stratify_entry_fractions = function(
+      stratification_name, strata_names, compartments_to_stratify, proportions) {
+      for (flow in seq(nrow(self$flows))) {
+        
+        # work out parameter values for stratifying the entry proportion adjustments
+        if (self$entry_compartment %in% compartments_to_stratify) {
+          for (stratum in strata_names) {
+            entry_fraction_name <- create_stratified_name("entry_fraction", stratification_name, stratum)
+            if (stratum %in% names(proportions[["adjustments"]])) {
+              self$parameter_adjustments[entry_fraction_name] <- proportions[["adjustments"]][[stratum]]
+            }
+            else {
+              self$parameter_adjustments[entry_fraction_name] <- 1 / length(strata_names)
+            }
           }
         }
       }
