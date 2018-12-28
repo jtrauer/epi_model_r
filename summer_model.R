@@ -267,7 +267,7 @@ EpiModel <- R6Class(
     # master stratification function
     stratify = function(
       stratification_name, strata_request, compartment_types_to_stratify, 
-      parameter_adjustments=c(), proportions=c()) {
+      parameter_adjustments=c(), starting_proportions=c()) {
       
       # writeLines("\nImplementing model stratification for:")
       # print(stratification_name)
@@ -289,7 +289,7 @@ EpiModel <- R6Class(
       self$stratify_compartments(stratification_name, strata_names, compartment_types_to_stratify)
       self$stratify_universal_death_rate(stratification_name, strata_names, parameter_adjustments)
       self$stratify_flows(stratification_name, strata_names, compartment_types_to_stratify, parameter_adjustments)
-      self$stratify_entry_fractions(stratification_name, strata_names, compartment_types_to_stratify, proportions)
+      self$stratify_entry_fractions(stratification_name, strata_names, compartment_types_to_stratify, starting_proportions)
     },
     
     # work through compartment stratification
@@ -398,16 +398,17 @@ EpiModel <- R6Class(
       }
     },
       
+    # split entry fractions according to requested starting proportions
     stratify_entry_fractions = function(
-      stratification_name, strata_names, compartments_to_stratify, proportions) {
+      stratification_name, strata_names, compartments_to_stratify, starting_proportions) {
       for (flow in seq(nrow(self$flows))) {
         
         # work out parameter values for stratifying the entry proportion adjustments
         if (self$entry_compartment %in% compartments_to_stratify) {
           for (stratum in strata_names) {
             entry_fraction_name <- create_stratified_name("entry_fraction", stratification_name, stratum)
-            if (stratum %in% names(proportions[["adjustments"]])) {
-              self$parameter_adjustments[entry_fraction_name] <- proportions[["adjustments"]][[stratum]]
+            if (stratum %in% names(starting_proportions[["adjustments"]])) {
+              self$parameter_adjustments[entry_fraction_name] <- starting_proportions[["adjustments"]][[stratum]]
             }
             else {
               self$parameter_adjustments[entry_fraction_name] <- 1 / length(strata_names)
