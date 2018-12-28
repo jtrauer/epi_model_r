@@ -368,7 +368,7 @@ EpiModel <- R6Class(
     stratify_flows = function(
       stratification_name, strata_names, compartments_to_stratify, parameter_adjustments, proportions) {
 
-      for (flow in 1:nrow(self$flows)) {
+      for (flow in seq(nrow(self$flows))) {
         
         # both from and to compartments being stratified
         if (find_stem(self$flows$from[flow]) %in% compartments_to_stratify &
@@ -394,8 +394,7 @@ EpiModel <- R6Class(
         
         if (TRUE %in% whether_stratify) {
           self$add_stratified_flows(flow, stratification_name, strata_names, 
-                                    whether_stratify[1], whether_stratify[2], parameter_adjustments,
-                                    proportions)
+                                    whether_stratify[1], whether_stratify[2], parameter_adjustments)
         }
       }
       
@@ -415,13 +414,13 @@ EpiModel <- R6Class(
     
     # add additional stratified flow to flow data frame
     add_stratified_flows = function(flow, stratification_name, strata_names, stratify_from, stratify_to, 
-                                    parameter_adjustments, proportions) {
+                                    parameter_adjustments) {
       parameter_name <- NULL
       
       # loop over each stratum in the requested stratification structure
       for (stratum in strata_names) {
-
-        parameter_name <- self$add_adjusted_parameter(self$flows$parameter[flow], stratification_name, stratum, parameter_adjustments)
+        parameter_name <- self$add_adjusted_parameter(
+          self$flows$parameter[flow], stratification_name, stratum, parameter_adjustments)
 
         # split the parameter into equal parts by default if to split but from not split
         if (is.null(parameter_name) & !stratify_from & stratify_to) {
