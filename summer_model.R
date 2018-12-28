@@ -492,7 +492,7 @@ EpiModel <- R6Class(
           if (flow$implement) {
             
             # determine adjustment to original stem parameter
-            updated_values <- self$update_parameter_adjustment(
+            updated_values <- self$find_parameter_adjustments(
               self$parameters[find_stem(flow$parameter)], flow$parameter)
             base_parameter_value <- updated_values$base_value
             parameter_adjustment_value <- updated_values$adjustment_value
@@ -534,7 +534,7 @@ EpiModel <- R6Class(
       for (compartment_number in seq(length(compartment_values))) {
 
         # find the population death parameter value that applies to the compartment
-        updated_values <- self$update_parameter_adjustment(
+        updated_values <- self$find_parameter_adjustments(
           self$parameters["universal_death_rate"],
           gsub(find_stem(names(self$compartment_values)[compartment_number]), "universal_death_rate", 
                names(self$compartment_values)[compartment_number]))
@@ -548,16 +548,25 @@ EpiModel <- R6Class(
         ode_equations
       },
 
-    update_parameter_adjustment = function(base_parameter_value, parameter) {
+    # calculate the adjustment to a parameter value for transition flows or death rates
+    find_parameter_adjustments = function(base_parameter_value, parameter) {
       parameter_adjustment_value <- 1
+      
+      # if the parameter of interested is stratified
       if (grepl("X", parameter)) {
+        
+        # loop through each potential parameter value according to the strata present
         x_positions <- c(unlist(gregexpr("X", parameter)), nchar(parameter) + 1)
-        for (x_instance in x_positions[2:length(x_positions)]) {
-          parameter_adjustment <- substr(parameter, 1, x_instance - 1)
+        for (x_position in x_positions[2:length(x_positions)]) {
+          parameter_adjustment <- substr(parameter, 1, x_position - 1)
+          
+          # if the parameter is in overwrite parameter, ignore the previous calculations and start again
           if (parameter_adjustment %in% self$overwrite_parameters) {
             base_parameter_value <- 1
             parameter_adjustment_value <- self$parameter_adjustments[[parameter_adjustment]]
           }
+          
+          # otherwise continue to update
           else if (parameter_adjustment %in% names(self$parameter_adjustments)) {
             parameter_adjustment_value <- parameter_adjustment_value *
               as.numeric(self$parameter_adjustments[[parameter_adjustment]])
