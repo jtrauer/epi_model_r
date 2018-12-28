@@ -493,7 +493,7 @@ EpiModel <- R6Class(
             
             # determine adjustment to original stem parameter
             updated_values <- self$find_parameter_adjustments(
-              self$parameters[find_stem(flow$parameter)], flow$parameter)
+              self$find_parameter_value(find_stem(flow$parameter), time), flow$parameter)
             base_parameter_value <- updated_values$base_value
             parameter_adjustment_value <- updated_values$adjustment_value
             
