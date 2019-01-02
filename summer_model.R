@@ -52,15 +52,15 @@ capitalise_compartment_name = function(compartment) {
 }
 
 # find the names of the stratifications from a particular user request
-find_strata_names_from_input = function(strata_names) {
-  if (length(strata_names) == 0) {
+find_strata_names_from_input = function(strata_request) {
+  if (length(strata_request) == 0) {
     stop("requested to stratify, but no stratification labels provided")
   }
-  else if (length(strata_names) == 1 & typeof(strata_names) == "double") {
-    strata_names <- seq(strata_names)
+  else if (length(strata_request) == 1 & typeof(strata_request) == "double") {
+    strata_names <- seq(strata_request)
   }
   else {
-    strata_names <- strata_names
+    strata_names <- strata_request
   }
 }
 
@@ -138,9 +138,12 @@ EpiModel <- R6Class(
     check_and_set_attributes = function(
       parameters, compartment_types, infectious_compartment, times, 
       available_birth_approaches, birth_approach, universal_death_rate) {
-
+      
+      # if (!is.numeric(parameters)) {
+      #   stop("one or more parameter values are not numeric")
+      # }
       self$parameters <- parameters
-
+      
       if (!is.character(compartment_types)) {
         stop("one or more compartment types are not character")
       }
@@ -188,27 +191,11 @@ EpiModel <- R6Class(
     
     # find the value of a parameter either from time-variant or from constant values
     find_parameter_value = function(parameter_name, time) {
-      if (is.character(self$parameters[[parameter_name]])) {
-        self$time_variants[[self$parameters[[parameter_name]]]](time)
-      }
-      else if (parameter_name %in% names(self$time_variants)) {
+      if (parameter_name %in% names(self$time_variants)) {
         self$time_variants[[parameter_name]](time)
       }
       else {
         self$parameters[parameter_name]
-      }
-    },
-    
-    # find the value of a parameter either from time-variant or from constant values
-    find_parameter_adjustment = function(parameter_name, time) {
-      if (is.character(self$parameter_adjustments[[parameter_name]])) {
-        self$time_variants[[self$parameter_adjustments[[parameter_name]]]](time)
-      }
-      else if (parameter_name %in% names(self$time_variants)) {
-        self$time_variants[[parameter_name]](time)
-      }
-      else {
-        self$parameter_adjustments[parameter_name]
       }
     },
     
@@ -218,7 +205,7 @@ EpiModel <- R6Class(
     },
     
     # update quantities that emerge during model running (not pre-defined functions of time)
-    update_tracked_quantities = function(compartment_values, time) {
+    update_tracked_quantities = function(compartment_values) {
       
       # for each listed quantity in the quantities requested for tracking
       for (quantity in names(self$tracked_quantities)) {
@@ -237,7 +224,7 @@ EpiModel <- R6Class(
         }
         else if (quantity == "total_deaths") {
           self$variable_quantities$total_deaths <- 
-            sum(compartment_values) * as.numeric(self$find_parameter_value(universal_death_rate, time))
+            sum(compartment_values) * self$parameters[universal_death_rate]
         }
       }
     },
@@ -269,13 +256,13 @@ EpiModel <- R6Class(
     
     # master stratification function
     stratify = function(
-      stratification_name, strata_names, compartment_types_to_stratify, 
-      parameter_adjustments=c(), starting_proportions=c()) {
+      stratification_name, strata_request, compartment_types_to_stratify, 
+      parameter_adjustments=c(), proportions=c()) {
       
       # writeLines("\nImplementing model stratification for:")
       # print(stratification_name)
       self$strata <- c(self$strata, stratification_name)
-      strata_names <- find_strata_names_from_input(strata_names)
+      strata_names <- find_strata_names_from_input(strata_request)
       
       # if vector of length zero passed, use stratify the compartment types in the model
       if (length(compartment_types_to_stratify) == 0) {
@@ -289,15 +276,15 @@ EpiModel <- R6Class(
       }
       
       # stratify the compartments and then the flows
-      self$stratify_compartments(stratification_name, strata_names, compartment_types_to_stratify)
-      self$stratify_universal_death_rate(stratification_name, strata_names, parameter_adjustments)
-      self$stratify_flows(stratification_name, strata_names, compartment_types_to_stratify, parameter_adjustments)
-      self$stratify_entry_fractions(stratification_name, strata_names, compartment_types_to_stratify, starting_proportions)
+      self$stratify_compartments(
+        stratification_name, strata_names, compartment_types_to_stratify, parameter_adjustments, proportions)
+      self$stratify_flows(stratification_name, strata_names, compartment_types_to_stratify,
+                          parameter_adjustments, proportions)
     },
     
     # work through compartment stratification
     stratify_compartments = function(
-      stratification_name, strata_names, compartments_to_stratify) {
+      stratification_name, strata_names, compartments_to_stratify, parameter_adjustments, proportions) {
 
       # stratify each compartment that needs stratification
       for (compartment in names(self$compartment_values)) {
@@ -319,12 +306,7 @@ EpiModel <- R6Class(
           self$compartment_values[compartment] <- NULL
         }
       }
-    },
       
-    # stratify the population-wide death rate
-    stratify_universal_death_rate = function(
-      stratification_name, strata_names, parameter_adjustments) {
-
       # make adjustments to universal death rate parameter if requested
       if (!"universal_death_rate" %in% self$parameter_adjustments) {
         self$parameter_adjustments$universal_death_rate <- 1
@@ -358,6 +340,7 @@ EpiModel <- R6Class(
             if (stratum %in% parameter_adjustments[[parameter_request]][["overwrite"]]) {
               self$overwrite_parameters <- c(self$overwrite_parameters, parameter_adjustment_name)
             }
+            
           }
         }
       }
@@ -368,8 +351,9 @@ EpiModel <- R6Class(
     
     # stratify flows depending on whether inflow, outflow or both need replication
     stratify_flows = function(
-      stratification_name, strata_names, compartments_to_stratify, parameter_adjustments) {
-      for (flow in seq(nrow(self$flows))) {
+      stratification_name, strata_names, compartments_to_stratify, parameter_adjustments, proportions) {
+
+      for (flow in 1:nrow(self$flows)) {
         
         # both from and to compartments being stratified
         if (find_stem(self$flows$from[flow]) %in% compartments_to_stratify &
@@ -395,26 +379,20 @@ EpiModel <- R6Class(
         
         if (TRUE %in% whether_stratify) {
           self$add_stratified_flows(flow, stratification_name, strata_names, 
-                                    whether_stratify[1], whether_stratify[2], parameter_adjustments)
+                                    whether_stratify[1], whether_stratify[2], parameter_adjustments,
+                                    proportions)
         }
       }
-    },
       
-    # split entry fractions according to requested starting proportions
-    stratify_entry_fractions = function(
-      stratification_name, strata_names, compartments_to_stratify, starting_proportions) {
-      for (flow in seq(nrow(self$flows))) {
-        
-        # work out parameter values for stratifying the entry proportion adjustments
-        if (self$entry_compartment %in% compartments_to_stratify) {
-          for (stratum in strata_names) {
-            entry_fraction_name <- create_stratified_name("entry_fraction", stratification_name, stratum)
-            if (stratum %in% names(starting_proportions[["adjustments"]])) {
-              self$parameter_adjustments[entry_fraction_name] <- starting_proportions[["adjustments"]][[stratum]]
-            }
-            else {
-              self$parameter_adjustments[entry_fraction_name] <- 1 / length(strata_names)
-            }
+      # work out parameter values for stratifying the entry proportion adjustments
+      if (self$entry_compartment %in% compartments_to_stratify) {
+        for (stratum in strata_names) {
+          entry_fraction_name <- create_stratified_name("entry_fraction", stratification_name, stratum)
+          if (stratum %in% names(proportions[["adjustments"]])) {
+            self$parameter_adjustments[entry_fraction_name] <- proportions[["adjustments"]][[stratum]]
+          }
+          else {
+            self$parameter_adjustments[entry_fraction_name] <- 1 / length(strata_names)
           }
         }
       }
@@ -422,13 +400,13 @@ EpiModel <- R6Class(
     
     # add additional stratified flow to flow data frame
     add_stratified_flows = function(flow, stratification_name, strata_names, stratify_from, stratify_to, 
-                                    parameter_adjustments) {
+                                    parameter_adjustments, proportions) {
       parameter_name <- NULL
       
       # loop over each stratum in the requested stratification structure
       for (stratum in strata_names) {
-        parameter_name <- self$add_adjusted_parameter(
-          self$flows$parameter[flow], stratification_name, stratum, parameter_adjustments)
+
+        parameter_name <- self$add_adjusted_parameter(self$flows$parameter[flow], stratification_name, stratum, parameter_adjustments)
 
         # split the parameter into equal parts by default if to split but from not split
         if (is.null(parameter_name) & !stratify_from & stratify_to) {
@@ -509,24 +487,37 @@ EpiModel <- R6Class(
     # add fixed or infection-related flow to odes
     apply_transition_flows =
       function(ode_equations, compartment_values, time) {
-        for (f in seq(nrow(self$flows))) {
+        for (f in as.numeric(row.names(self$flows))) {
           flow <- self$flows[f,]
           if (flow$implement) {
-            
-            # determine adjustment to original stem parameter
-            updated_values <- self$find_parameter_adjustments(
-              self$find_parameter_value(find_stem(flow$parameter), time), flow$parameter, time)
-            base_parameter_value <- updated_values$base_value
-            parameter_adjustment_value <- updated_values$adjustment_value
             
             # find from compartment and "infectious population", which is 1 for standard flows
             from_compartment <- match(flow$from, names(self$compartment_values))
             infectious_population <- self$find_infectious_multiplier(flow$type)
+            
+            # calculate adjustment to original stem parameter
+            parameter_adjustment_value <- 1
+            base_parameter_value <- self$parameters[find_stem(flow$parameter)]
+            if (grepl("X", flow$parameter)) {
+              x_positions <- c(unlist(gregexpr("X", flow$parameter)), nchar(flow$parameter) + 1)
+              for (x_instance in x_positions[2:length(x_positions)]) {
+                adjustment <- substr(flow$parameter, 1, x_instance - 1)
+                if (flow$parameter %in% self$overwrite_parameters) {
+                  base_parameter_value <- 1
+                  parameter_adjustment_value <- self$parameter_adjustments[[flow$parameter]]
+                }
+                else {
+                  parameter_adjustment_value <- parameter_adjustment_value * 
+                    as.numeric(self$parameter_adjustments[adjustment])
+                }
+              }
+            }
 
             # calculate the flow and apply to the odes            
             net_flow <- base_parameter_value * parameter_adjustment_value *
               compartment_values[from_compartment] * infectious_population
-            ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
+            ode_equations <- self$increment_compartment(
+              ode_equations, from_compartment, -net_flow)
             ode_equations <- self$increment_compartment(
               ode_equations, match(flow$to, names(self$compartment_values)), net_flow)
           }
@@ -552,59 +543,45 @@ EpiModel <- R6Class(
     # apply a population-wide death rate to all compartments
     apply_universal_death_flow = function(ode_equations, compartment_values, time) {
       
-      # cycle through each compartment
-      for (compartment_number in seq(length(compartment_values))) {
-
-        # find the population death parameter value that applies to the compartment
-        updated_values <- self$find_parameter_adjustments(
-          self$find_parameter_value("universal_death_rate", time),
-          gsub(find_stem(names(self$compartment_values)[compartment_number]), "universal_death_rate", 
-               names(self$compartment_values)[compartment_number]),
-          time)
-        base_parameter_value <- updated_values$base_value
-        parameter_adjustment_value <- updated_values$adjustment_value
+      for (comp in names(self$compartment_values)) {
+        parameter_adjustment_value <- 1
+        base_parameter_value <- self$parameters["universal_death_rate"]
+        if (grepl("X", comp)) {
+          x_positions <- c(unlist(gregexpr("X", comp)), nchar(comp) + 1)
+          for (x_instance in x_positions[2:length(x_positions)]) {
+            adjustment <- substr(comp, 1, x_instance - 1)
+            parameter_adjustment <- paste("universal_death_rate", find_stratum(adjustment), sep="")
+            if (parameter_adjustment %in% self$overwrite_parameters) {
+              base_parameter_value <- 1
+              parameter_adjustment_value <- self$parameter_adjustments[[parameter_adjustment]]
+            }
+            else if (parameter_adjustment %in% names(self$parameter_adjustments)) {
+              parameter_adjustment_value <- parameter_adjustment_value *
+                as.numeric(self$parameter_adjustments[[parameter_adjustment]])
+            }
+          }
+        }
+        from_compartment <- match(comp, names(self$compartment_values))
+        net_flow <- base_parameter_value * parameter_adjustment_value * compartment_values[from_compartment]
+        ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
         
-        # apply the rate to the compartment
-        net_flow <- base_parameter_value * parameter_adjustment_value * compartment_values[compartment_number]
-        ode_equations <- self$increment_compartment(ode_equations, compartment_number, -net_flow)
       }
+        # if (!self$parameters["universal_death_rate"] == 0) {
+        #   for (compartment in 1: length(ode_equations)) {
+        #     ode_equations <- self$increment_compartment(
+        #       ode_equations, compartment, 
+        #       -compartment_values[compartment] * self$parameters["universal_death_rate"])
+        #   }
+        # }
         ode_equations
       },
 
-    # calculate the adjustment to a parameter value for transition flows or death rates
-    find_parameter_adjustments = function(base_parameter_value, parameter_name, time) {
-      parameter_adjustment_value <- 1
-      
-      # if the parameter of interested is stratified
-      if (grepl("X", parameter_name)) {
-        
-        # loop through each potential parameter value according to the strata present
-        x_positions <- c(unlist(gregexpr("X", parameter_name)), nchar(parameter_name) + 1)
-        for (x_position in x_positions[2:length(x_positions)]) {
-          parameter_adjustment <- substr(parameter_name, 1, x_position - 1)
-          
-          # if the parameter is in overwrite parameter, ignore the previous calculations and start again
-          if (parameter_adjustment %in% self$overwrite_parameters) {
-            base_parameter_value <- 1
-            parameter_adjustment_value <- as.numeric(self$find_parameter_adjustment(parameter_adjustment, time))
-          }
-          
-          # otherwise continue to update
-          else if (parameter_adjustment %in% names(self$parameter_adjustments)) {
-            parameter_adjustment_value <- as.numeric(self$find_parameter_adjustment(parameter_adjustment, time))
-          }
-        }
-      }
-      updated_values <- list(base_value=base_parameter_value,
-                             adjustment_value=parameter_adjustment_value)
-    },
-    
     # apply a population-wide death rate to all compartments
     apply_birth_rate = function(ode_equations, compartment_values, time) {
       
       # work out the total births to apply dependent on the approach requested
       if (self$birth_approach == "add_crude_birth_rate") {
-        total_births <- self$find_parameter_value("crude_birth_rate", time) * sum(compartment_values)
+        total_births <- self$parameters[["crude_birth_rate"]] * sum(compartment_values)
       }
       else if (self$birth_approach == "replace_deaths") {
         total_births <- self$variable_quantities$total_deaths
@@ -624,7 +601,7 @@ EpiModel <- R6Class(
             for (x_instance in seq(length(x_positions) - 1)) {
               adjustment <- paste("entry_fractionX", 
                                   substr(compartment, x_positions[x_instance] + 1, x_positions[x_instance + 1] - 1), sep="")
-              entry_fraction <- entry_fraction * as.numeric(self$find_parameter_adjustment(adjustment, time))
+              entry_fraction <- entry_fraction * self$parameter_adjustments[[adjustment]]
             }
           }
           compartment_births <- entry_fraction * total_births
@@ -641,7 +618,7 @@ EpiModel <- R6Class(
       epi_model_function <- function(time, compartment_values, parameters) {
 
         # update all the emergent model quantities needed for integration
-        self$update_tracked_quantities(compartment_values, time)
+        self$update_tracked_quantities(compartment_values)
 
         # apply flows
         self$apply_all_flow_types_to_odes(
@@ -827,15 +804,18 @@ ModelInterpreter <- R6Class(
                           ']', nodes)
       }
       
-      # the pathways between nodes are set as empty
+      #The pathways between nodes are set as empty
+      
       connection_between_nodes <- ""
       connections <- ''
       
-      # the pathway between nodes is populated from type_of_flow, as well as the parameters
+      #The pathway between nodes is populated from type_of_flow, as well as the parameters
+      
       for (row in seq(nrow(type_of_flow))) {
         if (type_of_flow$implement[[row]]) {
           
-          # parameters are added or not added in to the flowchart depending on the setting
+          #Parameters are added or not added in to the flowchart depending on the setting
+         
            if (parameters) {
             connections <- paste(' edge [label =',
                                  type_of_flow$parameter[[row]],
@@ -851,7 +831,7 @@ ModelInterpreter <- R6Class(
                                             ' ', sep = '')
         }}
       
-      # the final string necessary for grViz is created here
+      #The final string necessary for grViz is created here
       input_for_grViz <- ''
       input_for_grViz <- paste("digraph dot {
                                graph [layout = dot,
