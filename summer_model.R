@@ -308,10 +308,10 @@ EpiModel <- R6Class(
       }
       
       # make adjustments to universal death rate parameter if requested
-      if (!"universal_death_rate" %in% self$parameter_modifications) {
-        self$parameter_modifications$universal_death_rate <- 1
+      if (!"universal_death_rate" %in% self$parameters) {
+        self$parameters$universal_death_rate <- 1
       }      
-      for (parameter in names(self$parameter_modifications)) {
+      for (parameter in names(self$parameters)) {
         if (startsWith(parameter, "universal_death_rate")) {
           for (stratum in strata_names) {
             self$add_adjusted_parameter(parameter, stratification_name, stratum, parameter_adjustments)
@@ -333,7 +333,7 @@ EpiModel <- R6Class(
     
             # populate the parameter adjustment attribute with the new adjustment
             parameter_adjustment_name <- create_stratified_name(parameter, stratification_name, stratum)
-            self$parameter_modifications[parameter_adjustment_name] <-
+            self$parameters[parameter_adjustment_name] <-
               parameter_adjustments[[parameter_request]][["adjustments"]][[stratum]]
             
             # overwrite parameters higher up the tree by listing which ones to be overwritten
@@ -389,10 +389,10 @@ EpiModel <- R6Class(
         for (stratum in strata_names) {
           entry_fraction_name <- create_stratified_name("entry_fraction", stratification_name, stratum)
           if (stratum %in% names(proportions[["adjustments"]])) {
-            self$parameter_modifications[entry_fraction_name] <- proportions[["adjustments"]][[stratum]]
+            self$parameters[entry_fraction_name] <- proportions[["adjustments"]][[stratum]]
           }
           else {
-            self$parameter_modifications[entry_fraction_name] <- 1 / length(strata_names)
+            self$parameters[entry_fraction_name] <- 1 / length(strata_names)
           }
         }
       }
@@ -498,18 +498,30 @@ EpiModel <- R6Class(
             # calculate adjustment to original stem parameter
             parameter_adjustment_value <- 1
             base_parameter_value <- as.numeric(self$parameters[find_stem(flow$parameter)])
+            # print("____________________")
+            # print("parameter")
+            # print(flow$parameter)
+            
             if (grepl("X", flow$parameter)) {
               x_positions <- c(unlist(gregexpr("X", flow$parameter)), nchar(flow$parameter) + 1)
               for (x_instance in x_positions[2:length(x_positions)]) {
                 adjustment <- substr(flow$parameter, 1, x_instance - 1)
-                if (flow$parameter %in% self$overwrite_parameters) {
+                # print("||||")
+                # print("working adjustment name")
+                # print(adjustment)
+                if (adjustment %in% self$overwrite_parameters) {
                   base_parameter_value <- 1
-                  parameter_adjustment_value <- self$parameter_modifications[[flow$parameter]]
+                  parameter_adjustment_value <- self$parameters[[flow$parameter]]
+                  print("overwrite")
                 }
                 else {
                   parameter_adjustment_value <- parameter_adjustment_value * 
-                    as.numeric(self$parameter_modifications[adjustment])
+                    as.numeric(self$parameters[adjustment])
                 }
+                # print("running value (or overwritten value)")
+                # print(as.numeric(self$parameters[adjustment]))
+                # print("multiplied adjustment value")
+                # print(parameter_adjustment_value)
               }
             }
 
@@ -553,11 +565,11 @@ EpiModel <- R6Class(
             parameter_adjustment <- paste("universal_death_rate", find_stratum(adjustment), sep="")
             if (parameter_adjustment %in% self$overwrite_parameters) {
               base_parameter_value <- 1
-              parameter_adjustment_value <- self$parameter_modifications[[parameter_adjustment]]
+              parameter_adjustment_value <- self$parameters[[parameter_adjustment]]
             }
-            else if (parameter_adjustment %in% names(self$parameter_modifications)) {
+            else if (parameter_adjustment %in% names(self$parameters)) {
               parameter_adjustment_value <- parameter_adjustment_value *
-                as.numeric(self$parameter_modifications[[parameter_adjustment]])
+                as.numeric(self$parameters[[parameter_adjustment]])
             }
           }
         }
@@ -602,7 +614,7 @@ EpiModel <- R6Class(
             for (x_instance in seq(length(x_positions) - 1)) {
               adjustment <- paste("entry_fractionX", 
                                   substr(compartment, x_positions[x_instance] + 1, x_positions[x_instance + 1] - 1), sep="")
-              entry_fraction <- entry_fraction * self$parameter_modifications[[adjustment]]
+              entry_fraction <- entry_fraction * self$parameters[[adjustment]]
             }
           }
           compartment_births <- entry_fraction * total_births
