@@ -497,33 +497,23 @@ EpiModel <- R6Class(
             # calculate adjustment to original stem parameter
             parameter_adjustment_value <- 1
             base_parameter_value <- as.numeric(self$parameters[find_stem(flow$parameter)])
-            # print("____________________")
-            # print("parameter")
-            # print(flow$parameter)
             
             if (grepl("X", flow$parameter)) {
               x_positions <- c(unlist(gregexpr("X", flow$parameter)), nchar(flow$parameter) + 1)
-              for (x_instance in x_positions[2:length(x_positions)]) {
+              for (x_instance in rev(x_positions[2:length(x_positions)])) {
                 adjustment <- substr(flow$parameter, 1, x_instance - 1)
-                # print("||||")
-                # print("working adjustment name")
-                # print(adjustment)
                 if (adjustment %in% self$overwrite_parameters) {
+                  parameter_adjustment_value <- as.numeric(self$parameters[adjustment])
                   base_parameter_value <- 1
-                  parameter_adjustment_value <- self$parameters[[flow$parameter]]
-                  # print("overwrite")
+                  break
                 }
                 else {
-                  parameter_adjustment_value <- parameter_adjustment_value * 
+                  parameter_adjustment_value <- parameter_adjustment_value *
                     as.numeric(self$parameters[adjustment])
                 }
-                # print("running value (or overwritten value)")
-                # print(as.numeric(self$parameters[adjustment]))
-                # print("multiplied adjustment value")
-                # print(parameter_adjustment_value)
               }
             }
-
+            
             # calculate the flow and apply to the odes            
             net_flow <- base_parameter_value * parameter_adjustment_value *
               compartment_values[from_compartment] * infectious_population
