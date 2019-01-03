@@ -110,7 +110,6 @@ EpiModel <- R6Class(
     multipliers = list(),
     unstratified_flows = data.frame(),
     removed_compartments = c(),
-    parameter_modifications = list(),
     overwrite_parameters = c(),
 
     # initialise basic model characteristics from inputs and check appropriately requested
@@ -512,7 +511,7 @@ EpiModel <- R6Class(
                 if (adjustment %in% self$overwrite_parameters) {
                   base_parameter_value <- 1
                   parameter_adjustment_value <- self$parameters[[flow$parameter]]
-                  print("overwrite")
+                  # print("overwrite")
                 }
                 else {
                   parameter_adjustment_value <- parameter_adjustment_value * 
