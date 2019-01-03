@@ -90,7 +90,7 @@ find_starting_proportions = function(proportions, strata_names) {
 EpiModel <- R6Class(
   "EpiModel",
   public = list(
-    parameters = c(),
+    parameters = list(),
     compartment_types = c(),
     compartment_values = list(),
     initial_conditions = list(),
@@ -497,7 +497,7 @@ EpiModel <- R6Class(
             
             # calculate adjustment to original stem parameter
             parameter_adjustment_value <- 1
-            base_parameter_value <- self$parameters[find_stem(flow$parameter)]
+            base_parameter_value <- as.numeric(self$parameters[find_stem(flow$parameter)])
             if (grepl("X", flow$parameter)) {
               x_positions <- c(unlist(gregexpr("X", flow$parameter)), nchar(flow$parameter) + 1)
               for (x_instance in x_positions[2:length(x_positions)]) {
@@ -545,7 +545,7 @@ EpiModel <- R6Class(
       
       for (comp in names(self$compartment_values)) {
         parameter_adjustment_value <- 1
-        base_parameter_value <- self$parameters["universal_death_rate"]
+        base_parameter_value <- as.numeric(self$parameters["universal_death_rate"])
         if (grepl("X", comp)) {
           x_positions <- c(unlist(gregexpr("X", comp)), nchar(comp) + 1)
           for (x_instance in x_positions[2:length(x_positions)]) {
@@ -561,6 +561,7 @@ EpiModel <- R6Class(
             }
           }
         }
+        
         from_compartment <- match(comp, names(self$compartment_values))
         net_flow <- base_parameter_value * parameter_adjustment_value * compartment_values[from_compartment]
         ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
