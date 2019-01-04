@@ -510,17 +510,17 @@ EpiModel <- R6Class(
       },
 
     # adjust stratified parameter value
-    adjust_parameter = function(flow, base_parameter_value, mortality="") {
+    adjust_parameter = function(flow, base_parameter_name) {
       
       # if the parameter is stratified
-      base_parameter_value <- as.numeric(self$parameters[base_parameter_value])
+      base_parameter_value <- as.numeric(self$parameters[base_parameter_name])
       parameter_adjustment_value <- 1
       if (grepl("X", flow)) {
         x_positions <- c(unlist(gregexpr("X", flow)), nchar(flow) + 1)
         for (x_instance in rev(x_positions[2:length(x_positions)])) {
           adjustment <- substr(flow, 1, x_instance - 1)
-          if (!mortality == "") {
-            adjustment <- paste(mortality, find_stratum(adjustment), sep="")
+          if (base_parameter_name == "universal_death_rate") {
+            adjustment <- paste(base_parameter_name, find_stratum(adjustment), sep="")
           }
           if (adjustment %in% self$overwrite_parameters) {
             parameter_adjustment_value <- as.numeric(self$parameters[adjustment])
@@ -535,7 +535,6 @@ EpiModel <- R6Class(
       }
       adjusted_parameters <- list(base_parameter_value=base_parameter_value,
                                   parameter_adjustment_value=parameter_adjustment_value)
-      
     },
     
     
@@ -557,7 +556,7 @@ EpiModel <- R6Class(
     # apply a population-wide death rate to all compartments
     apply_universal_death_flow = function(ode_equations, compartment_values, time) {
       for (comp in names(self$compartment_values)) {
-        adjusted_parameters <- self$adjust_parameter(comp, "universal_death_rate", mortality="universal_death_rate")
+        adjusted_parameters <- self$adjust_parameter(comp, "universal_death_rate")
         from_compartment <- match(comp, names(self$compartment_values))
         net_flow <- adjusted_parameters$base_parameter_value * adjusted_parameters$parameter_adjustment_value * compartment_values[from_compartment]
         ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
