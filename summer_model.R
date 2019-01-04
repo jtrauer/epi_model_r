@@ -317,7 +317,7 @@ EpiModel <- R6Class(
           whether_stratify <- c(FALSE, FALSE)
         }
 
-        # if flow is active and stratification is relevant        
+        # if flow is active and stratification is relevant    
         if (any(whether_stratify) & self$flows$implement[flow]) {
           self$add_stratified_flows(flow, stratification_name, strata_names, 
                                     whether_stratify[1], whether_stratify[2], adjustment_requests,
@@ -353,10 +353,10 @@ EpiModel <- R6Class(
             # populate the parameter adjustment attribute with the new adjustment
             parameter_adjustment_name <- create_stratified_name(unadjusted_parameter, stratification_name, stratum)
             self$parameters[parameter_adjustment_name] <-
-              adjustment_requests[[parameter_request]][["adjustments"]][[stratum]]
+              adjustment_requests[[parameter_request]][["adjustments"]][stratum]
             
             # overwrite parameters higher up the tree by listing which ones to be overwritten
-            if (stratum %in% adjustment_requests[[parameter_request]][["overwrite"]]) {
+            if (stratum %in% adjustment_requests[parameter_request]["overwrite"]) {
               self$overwrite_parameters <- c(self$overwrite_parameters, parameter_adjustment_name)
             }
           }
@@ -365,23 +365,19 @@ EpiModel <- R6Class(
       parameter_adjustment_name
     },
     
-
-    
     # add additional stratified flow to flow data frame
-    add_stratified_flows = function(flow, stratification_name, strata_names, stratify_from, stratify_to, 
-                                    adjustment_requests, proportions) {
+    add_stratified_flows = function(
+      flow, stratification_name, strata_names, stratify_from, stratify_to, adjustment_requests, proportions) {
       parameter_name <- NULL
       
       # loop over each stratum in the requested stratification structure
       for (stratum in strata_names) {
-
-        parameter_name <- self$add_adjusted_parameter(self$flows$parameter[flow], stratification_name, stratum, adjustment_requests)
+        parameter_name <- self$add_adjusted_parameter(
+          self$flows$parameter[flow], stratification_name, stratum, adjustment_requests)
 
         # split the parameter into equal parts by default if to split but from not split
         if (is.null(parameter_name) & !stratify_from & stratify_to) {
-          parameter_name <- create_stratified_name(
-            self$flows$parameter[flow], stratification_name, stratum)
-          self$parameters[parameter_name] <- 1 / length(strata_names)
+          parameter_name <- create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)
           self$parameters[parameter_name] <- self$parameters[self$flows$parameter[flow]] / length(strata_names)
         }
         
@@ -406,9 +402,8 @@ EpiModel <- R6Class(
         }
 
         # implement new flow
-        self$flows <- rbind(self$flows,
-                            data.frame(parameter=parameter_name, from=from_compartment, to=to_compartment,
-                                       implement=TRUE, type=self$flows$type[flow]))
+        self$flows <- rbind(self$flows,data.frame(parameter=parameter_name, from=from_compartment, to=to_compartment,
+                                                  implement=TRUE, type=self$flows$type[flow]))
       }
       
       # remove old flow
@@ -428,12 +423,9 @@ EpiModel <- R6Class(
         if(!(working_flow[4] %in% self$compartment_types)) {
           stop("to compartment name not found in compartment types")
         }
-        self$flows <- rbind(self$flows, data.frame(type=working_flow[1],
-                                                   parameter=as.character(working_flow[2]),
-                                                   from=working_flow[3],
-                                                   to=working_flow[4],
-                                                   implement=TRUE,
-                                                   stringsAsFactors=FALSE))
+        self$flows <- rbind(
+          self$flows, data.frame(type=working_flow[1],parameter=as.character(working_flow[2]), from=working_flow[3],
+                                 to=working_flow[4], implement=TRUE, stringsAsFactors=FALSE))
         self$unstratified_flows <- self$flows
         
         if (grepl("infection", working_flow[1])) {
@@ -454,7 +446,8 @@ EpiModel <- R6Class(
     # add fixed or infection-related flow to odes
     apply_transition_flows =
       function(ode_equations, compartment_values, time) {
-        for (f in as.numeric(row.names(self$flows))) {
+        for (f in seq(nrow(self$flows))) {
+          print(f)
           flow <- self$flows[f,]
           if (flow$implement) {
 
