@@ -549,32 +549,24 @@ EpiModel <- R6Class(
         base_parameter_value <- as.numeric(self$parameters["universal_death_rate"])
         if (grepl("X", comp)) {
           x_positions <- c(unlist(gregexpr("X", comp)), nchar(comp) + 1)
-          for (x_instance in x_positions[2:length(x_positions)]) {
+          for (x_instance in rev(x_positions[2:length(x_positions)])) {
             adjustment <- substr(comp, 1, x_instance - 1)
             parameter_adjustment <- paste("universal_death_rate", find_stratum(adjustment), sep="")
             if (parameter_adjustment %in% self$overwrite_parameters) {
               base_parameter_value <- 1
-              parameter_adjustment_value <- self$parameters[[parameter_adjustment]]
+              parameter_adjustment_value <- as.numeric(self$parameters[parameter_adjustment])
+              break
             }
-            else if (parameter_adjustment %in% names(self$parameters)) {
+            else {
               parameter_adjustment_value <- parameter_adjustment_value *
                 as.numeric(self$parameters[[parameter_adjustment]])
             }
           }
         }
-        
         from_compartment <- match(comp, names(self$compartment_values))
         net_flow <- base_parameter_value * parameter_adjustment_value * compartment_values[from_compartment]
         ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
-        
       }
-        # if (!self$parameters["universal_death_rate"] == 0) {
-        #   for (compartment in 1: length(ode_equations)) {
-        #     ode_equations <- self$increment_compartment(
-        #       ode_equations, compartment, 
-        #       -compartment_values[compartment] * self$parameters["universal_death_rate"])
-        #   }
-        # }
         ode_equations
       },
 
