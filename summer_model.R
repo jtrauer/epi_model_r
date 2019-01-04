@@ -491,12 +491,12 @@ EpiModel <- R6Class(
           if (flow$implement) {
 
             # calculate adjustment to original stem parameter
-            adjusted_parameter <- self$adjust_parameter(flow$parameter, find_stem(flow$parameter))
+            adjusted_parameter <- self$adjust_parameter(flow$parameter)
                         
             # find from compartment and "infectious population", which is 1 for standard flows
             infectious_population <- self$find_infectious_multiplier(flow$type)
             
-            # calculate the flow and apply to the odes            
+            # calculate the flow and apply to the odes
             from_compartment <- match(flow$from, names(self$compartment_values))
             net_flow <- adjusted_parameter * compartment_values[from_compartment] * infectious_population
             ode_equations <- self$increment_compartment(
@@ -509,23 +509,42 @@ EpiModel <- R6Class(
       },
 
     # adjust stratified parameter value
-    adjust_parameter = function(flow, base_parameter_name) {
+    adjust_parameter = function(flow_or_compartment, parameter_stem_adjustment="") {
       
-      # if the parameter is stratified
+      # if adjusting the stem
+      if (!parameter_stem_adjustment == "") {
+        base_parameter_name <- parameter_stem_adjustment
+      }
+      else {
+        base_parameter_name <- find_stem(flow_or_compartment)
+      }
+      
+      # start from baseline values
       base_parameter_value <- as.numeric(self$parameters[base_parameter_name])
       parameter_adjustment_value <- 1
-      if (grepl("X", flow)) {
-        x_positions <- c(unlist(gregexpr("X", flow)), nchar(flow) + 1)
+
+      # if the parameter is stratified
+      if (grepl("X", flow_or_compartment)) {
+        
+        # cycle through the parameter adjustments by finding the Xs in the strings,
+        # starting from the most stratified parameter (longest string)
+        x_positions <- c(unlist(gregexpr("X", flow_or_compartment)), nchar(flow_or_compartment) + 1)
         for (x_instance in rev(x_positions[2:length(x_positions)])) {
-          adjustment <- substr(flow, 1, x_instance - 1)
-          if (base_parameter_name == "universal_death_rate") {
+          
+          # find the name of the parameter adjustment for the stratum considered
+          adjustment <- substr(flow_or_compartment, 1, x_instance - 1)
+          if (!parameter_stem_adjustment == "") {
             adjustment <- paste(base_parameter_name, find_stratum(adjustment), sep="")
           }
+          
+          # if overwrite has been requested at any stage and we can skip the higher strata
           if (adjustment %in% self$overwrite_parameters) {
             parameter_adjustment_value <- as.numeric(self$parameters[adjustment])
             base_parameter_value <- 1
             break
           }
+          
+          # otherwise, standard approach to progressively adjusting
           else {
             parameter_adjustment_value <- parameter_adjustment_value *
               as.numeric(self$parameters[adjustment])
@@ -534,7 +553,6 @@ EpiModel <- R6Class(
       }
       adjusted_parameter <- base_parameter_value * parameter_adjustment_value
     },
-    
     
     # find the multiplier to account for the infectious population in dynamic flows
     find_infectious_multiplier = function(flow_type) {
@@ -553,14 +571,14 @@ EpiModel <- R6Class(
     
     # apply a population-wide death rate to all compartments
     apply_universal_death_flow = function(ode_equations, compartment_values, time) {
-      for (comp in names(self$compartment_values)) {
-        adjusted_parameter <- self$adjust_parameter(comp, "universal_death_rate")
-        from_compartment <- match(comp, names(self$compartment_values))
+      for (compartment in names(self$compartment_values)) {
+        adjusted_parameter <- self$adjust_parameter(compartment, parameter_stem_adjustment="universal_death_rate")
+        from_compartment <- match(compartment, names(self$compartment_values))
         net_flow <- adjusted_parameter * compartment_values[from_compartment]
         ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
       }
         ode_equations
-      },
+    },
 
     # apply a population-wide death rate to all compartments
     apply_birth_rate = function(ode_equations, compartment_values, time) {
