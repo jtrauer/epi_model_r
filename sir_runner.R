@@ -20,7 +20,7 @@ sir_model <- EpiModel$new(list(beta=400, recovery=365/13),
 sir_model$stratify("hiv", c("negative", "positive"), c(),
                    list(recovery=list(adjustments=list("negative"=0.7, "positive"=0.5)),
                         universal_death_rate=list(adjustments=list("negative"=1, "positive"=2))),
-                   list(adjustments=list("negative"=0.6, "positive"=0.4)))
+                   list("negative"=0.6, "positive"=0.4))
 sir_model$stratify("risk", 2, c("recovered"),
                    list(recovery=list(adjustments=list("1"=1.5, "2"=1)), recoveryXhiv_positive=list(adjustments=list("1"=2, "2"=365/13*.5),
                                                                                                     overwrite=c("2")),

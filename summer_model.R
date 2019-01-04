@@ -20,15 +20,15 @@ library(rsvg)
 
 # static functions
 
-# find the stem of the compartment name as the text leading up to the first occurrence of _
-find_stem = function(compartment) {
-  str_split(compartment, fixed("X"))[[1]][1]
+# find the stem of the compartment name as the text leading up to the first occurrence of "X"
+find_stem = function(stratified_string) {
+  str_split(stratified_string, fixed("X"))[[1]][1]
 }
 
 # find the trailing text for the stratum of the compartment
-find_stratum = function(compartment) {
-  if (grepl("X", compartment)) {
-    stratum <- substr(compartment, gregexpr(pattern="X", compartment)[[1]][1], 100)
+find_stratum = function(stratified_string) {
+  if (grepl("X", stratified_string)) {
+    stratum <- substr(stratified_string, gregexpr(pattern="X", stratified_string)[[1]][1], 100)
   }
   else {
     ""
@@ -62,26 +62,6 @@ find_strata_names_from_input = function(strata_request) {
   else {
     strata_names <- strata_request
   }
-}
-
-# find starting proportions from user request
-find_starting_proportions = function(proportions, strata_names) {
-  starting_proportions <- list() 
-  for (stratum in strata_names) {
-    
-    # default behaviour to split the starting proportions evenly across strata
-    if (length(proportions) == 0) {
-      starting_proportions[stratum] <- 1 / length(strata_names)
-    }
-    # otherwise check and tidy the input as to how to split the requested proportions
-    else if (!length(proportions) == length(strata_names)) {
-      stop("requested split of starting proportions not equal to number of strata")
-    }
-    else {
-      starting_proportions[stratum] <- as.numeric(proportions[stratum]) * sum(unlist(proportions))
-    }
-  }
-  starting_proportions
 }
 
 # objects
@@ -283,21 +263,33 @@ EpiModel <- R6Class(
     
     # work through compartment stratification
     stratify_compartments = function(
-      stratification_name, strata_names, compartments_to_stratify, parameter_adjustments, proportions) {
+      stratification_name, strata_names, compartments_to_stratify, parameter_adjustments, requested_proportions) {
 
       # stratify each compartment that needs stratification
       for (compartment in names(self$compartment_values)) {
         compartment_stem <- sub("X.*", "", compartment)
         
-        # is the compartment's stem in the compartments types to stratify
         if (compartment_stem %in% compartments_to_stratify) {
+
+          # assume an equal proportion of the total for the compartment if not otherwise specified
+          for (stratum in strata_names) {
+            if (!stratum %in% names(requested_proportions)) {
+              requested_proportions[stratum] <- 1 / length(strata_names)
+            }
+          }
+          
+          # normalise if totals not equal to one
+          if (!sum(as.numeric(requested_proportions)) == 1) {
+            requested_proportions <- lapply(requested_proportions, function(requested_proportion) requested_proportions /
+                                              sum(as.numeric(requested_proportions)))
+          }
           
           # append the additional compartment and remove the original one
           for (stratum in strata_names) {
             stratified_compartment_name <- create_stratified_name(compartment, stratification_name, stratum)
             self$compartment_values[stratified_compartment_name] <-
-              self$compartment_values[[compartment]] / length(strata_names)
-            }
+              self$compartment_values[[compartment]] * as.numeric(requested_proportions[stratum])
+          }
           
           # writeLines("\nRemoving compartment:")
           # print(compartment)
