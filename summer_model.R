@@ -86,16 +86,14 @@ EpiModel <- R6Class(
     starting_population = 1,
     entry_compartment = "susceptible",
     birth_approach = "no_births",
+    unstratified_flows = data.frame(),
     flows = data.frame(),
     parameters = list(),
-    variable_quantities = list(),
     time_variants = list(),
     tracked_quantities = list(),
-    strata = c(),
-    multipliers = list(),
-    unstratified_flows = data.frame(),
-    removed_compartments = c(),
     overwrite_parameters = c(),
+    strata = c(),
+    removed_compartments = c(),
     infectious_compartment = NULL,
     outputs = NULL,
     
@@ -117,7 +115,6 @@ EpiModel <- R6Class(
         self$sum_initial_compartments_to_total(self$entry_compartment, self$starting_population)
       }
       self$implement_flows(flows)
-      
     },
     
     # set basic attributes of model
@@ -209,7 +206,7 @@ EpiModel <- R6Class(
           self$tracked_quantities$total_population <- sum(compartment_values)
         }
         else if (quantity == "total_deaths") {
-          self$variable_quantities$total_deaths <- 
+          self$tracked_quantities$total_deaths <- 
             sum(compartment_values) * self$parameters[universal_death_rate]
         }
       }
@@ -404,10 +401,8 @@ EpiModel <- R6Class(
         if (is.null(parameter_name) & !stratify_from & stratify_to) {
           parameter_name <- create_stratified_name(
             self$flows$parameter[flow], stratification_name, stratum)
-          self$multipliers[[parameter_name]] <- 1 / length(strata_names)
-          self$parameters[parameter_name] <-
-            self$parameters[self$flows$parameter[flow]] / length(strata_names)
-
+          self$parameters[parameter_name] <- 1 / length(strata_names)
+          self$parameters[parameter_name] <- self$parameters[self$flows$parameter[flow]] / length(strata_names)
         }
         
         # otherwise just keep the same parameter
@@ -581,7 +576,7 @@ EpiModel <- R6Class(
         total_births <- self$parameters[["crude_birth_rate"]] * sum(compartment_values)
       }
       else if (self$birth_approach == "replace_deaths") {
-        total_births <- self$variable_quantities$total_deaths
+        total_births <- self$tracked_quantities$total_deaths
       }
       else {
         total_births <- 0
