@@ -122,9 +122,6 @@ EpiModel <- R6Class(
       parameters, compartment_types, infectious_compartment, times, 
       available_birth_approaches, birth_approach, universal_death_rate) {
       
-      # if (!is.numeric(parameters)) {
-      #   stop("one or more parameter values are not numeric")
-      # }
       self$parameters <- parameters
       
       if (!is.character(compartment_types)) {
@@ -161,21 +158,12 @@ EpiModel <- R6Class(
         self$parameters <- c(self$parameters, universal_death_rate=universal_death_rate)
       }
   
-      # if (!is.numeric(self$parameters[universal_death_rate])) {
-      #   stop("universal death rate is not numeric")
-      # }
-      # else if (self$parameters["universal_death_rate"] < 0) {
-      #   stop("universal death rate is negative")
-      # }
-      # else if (self$parameters["universal_death_rate"] > 0) {
-      #   self$tracked_quantities$total_deaths <- 0
-      # }
     },
     
     # find the value of a parameter either from time-variant or from constant values
     find_parameter_value = function(parameter_name, time) {
       if (parameter_name %in% names(self$time_variants)) {
-        self$time_variants[[parameter_name]](time)
+        self$time_variants[parameter_name](time)
       }
       else {
         self$parameters[parameter_name]
@@ -184,7 +172,7 @@ EpiModel <- R6Class(
     
     # add a time-variant function
     add_time_variant = function(function_name, time_function) {
-      self$time_variants[[function_name]] <- time_function
+      self$time_variants[function_name] <- time_function
     },
     
     # update quantities that emerge during model running (not pre-defined functions of time)
@@ -198,16 +186,12 @@ EpiModel <- R6Class(
             if (find_stem(compartment) == self$infectious_compartment) {
               self$tracked_quantities$infectious_population <- 
                 self$tracked_quantities$infectious_population + 
-                compartment_values[[match(compartment, names(self$compartment_values))]]
+                compartment_values[match(compartment, names(self$compartment_values))]
             }
           }
         }
         else if (quantity == "total_population") {
           self$tracked_quantities$total_population <- sum(compartment_values)
-        }
-        else if (quantity == "total_deaths") {
-          self$tracked_quantities$total_deaths <- 
-            sum(compartment_values) * self$parameters[universal_death_rate]
         }
       }
     },
@@ -563,6 +547,11 @@ EpiModel <- R6Class(
         adjusted_parameter <- self$adjust_parameter(compartment, parameter_stem_adjustment="universal_death_rate")
         from_compartment <- match(compartment, names(self$compartment_values))
         net_flow <- adjusted_parameter * compartment_values[from_compartment]
+        
+        # track deaths in case births are meant to replace deaths
+        if ("total_deaths" %in% self$tracked_quantities) {
+          self$tracked_quantities$total_deaths <- self$tracked_quantities$total_deaths + net_flow
+        }
         ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
       }
         ode_equations
@@ -618,7 +607,7 @@ EpiModel <- R6Class(
       }
     },
     
-    # apply all flow types to a vector of zeros
+    # apply all flow types to a vector of zeros (deaths must come before births in case births replace deaths)
     apply_all_flow_types_to_odes = function(ode_equations, compartment_values, time) {
       ode_equations <- self$apply_transition_flows(ode_equations, compartment_values, time)
       ode_equations <- self$apply_universal_death_flow(ode_equations, compartment_values, time)
