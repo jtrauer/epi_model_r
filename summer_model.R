@@ -447,7 +447,6 @@ EpiModel <- R6Class(
     apply_transition_flows =
       function(ode_equations, compartment_values, time) {
         for (f in seq(nrow(self$flows))) {
-          print(f)
           flow <- self$flows[f,]
           if (flow$implement) {
 
@@ -521,9 +520,7 @@ EpiModel <- R6Class(
         infectious_population <- self$tracked_quantities$infectious_population
       }
       else if (flow_type == "infection_frequency") {
-        infectious_population <- 
-          self$tracked_quantities$infectious_population /
-          self$tracked_quantities$total_population
+        infectious_population <- self$tracked_quantities$infectious_population / self$tracked_quantities$total_population
       }
       else {
         infectious_population <- 1
@@ -575,8 +572,7 @@ EpiModel <- R6Class(
             }
           }
           compartment_births <- entry_fraction * total_births
-          ode_equations <- self$increment_compartment(
-            ode_equations, match(compartment, names(self$compartment_values)),
+          ode_equations <- self$increment_compartment(ode_equations, match(compartment, names(self$compartment_values)),
             compartment_births)
         }
       }
