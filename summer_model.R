@@ -64,6 +64,14 @@ find_strata_names_from_input = function(strata_request) {
   }
 }
 
+# simple function to normalise the values from a list
+normalise_list = function(value_list) {
+  if (!sum(as.numeric(value_list)) == 1) {
+    value_list <- lapply(value_list, function(value) value / sum(as.numeric(value_list)))
+  }
+  value_list
+}
+
 # objects
 
 # main epidemiological model object
@@ -279,11 +287,8 @@ EpiModel <- R6Class(
           }
           
           # normalise if totals not equal to one
-          if (!sum(as.numeric(requested_proportions)) == 1) {
-            requested_proportions <- lapply(requested_proportions, function(requested_proportion) requested_proportions /
-                                              sum(as.numeric(requested_proportions)))
-          }
-          
+          requested_proportions <- normalise_list(requested_proportions)
+
           # append the additional compartment and remove the original one
           for (stratum in strata_names) {
             stratified_compartment_name <- create_stratified_name(compartment, stratification_name, stratum)
