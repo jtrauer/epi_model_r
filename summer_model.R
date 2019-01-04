@@ -120,14 +120,13 @@ EpiModel <- R6Class(
     
     # initialise basic model characteristics from inputs and check appropriately requested
     initialize = function(parameters, compartment_types, times, initial_conditions, flows,
-                          initial_conditions_sum_to_one = TRUE,
-                          infectious_compartment="infectious", universal_death_rate=0, 
+                          initial_conditions_sum_to_one = TRUE, infectious_compartment="infectious", 
                           birth_approach = "no_births") {
       
       # run basic checks and set attributes to input arguments
       self$check_and_set_attributes(
         parameters, compartment_types, infectious_compartment, times, 
-        available_birth_approaches, birth_approach, universal_death_rate)
+        available_birth_approaches, birth_approach)
       
       # set initial conditions and implement flows (without stratification)
       self$set_initial_conditions(
@@ -140,8 +139,7 @@ EpiModel <- R6Class(
     
     # set basic attributes of model
     check_and_set_attributes = function(
-      parameters, compartment_types, infectious_compartment, times, 
-      available_birth_approaches, birth_approach, universal_death_rate) {
+      parameters, compartment_types, infectious_compartment, times, available_birth_approaches, birth_approach) {
       
       self$parameters <- parameters
       
@@ -174,11 +172,6 @@ EpiModel <- R6Class(
       }
       self$birth_approach <- birth_approach
       self$parameters[["entry_fractions"]] <- 1
-      
-      if (!"universal_death_rate" %in% names(self$parameters)) {
-        self$parameters <- c(self$parameters, universal_death_rate=universal_death_rate)
-      }
-  
     },
     
     # set starting values to requested value or zero if no value requested
