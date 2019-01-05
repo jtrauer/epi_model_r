@@ -96,6 +96,7 @@ EpiModel <- R6Class(
     removed_compartments = c(),
     infectious_compartment = NULL,
     outputs = NULL,
+    report_progress = TRUE,
 
     # __________
     # general methods that can be required at various stages
@@ -120,8 +121,10 @@ EpiModel <- R6Class(
     
     # initialise basic model characteristics from inputs and check appropriately requested
     initialize = function(parameters, compartment_types, times, initial_conditions, flows,
-                          initial_conditions_sum_to_one = TRUE, infectious_compartment="infectious", 
-                          birth_approach = "no_births") {
+                          initial_conditions_sum_to_one=TRUE, infectious_compartment="infectious", 
+                          birth_approach = "no_births", report_progress=TRUE) {
+      
+      self$report_progress=report_progress
       
       # run basic checks and set attributes to input arguments
       self$check_and_set_attributes(
@@ -140,6 +143,13 @@ EpiModel <- R6Class(
     # set basic attributes of model
     check_and_set_attributes = function(
       parameters, compartment_types, infectious_compartment, times, available_birth_approaches, birth_approach) {
+      
+      if (self$report_progress) {
+        writeLines("\nUnstratified parameter values are:")
+        for (parameter in names(parameters)) {
+          writeLines(paste(parameter, ": ", as.character(parameters[parameter]), sep=""))
+        }
+      }
       
       self$parameters <- parameters
       
@@ -206,8 +216,9 @@ EpiModel <- R6Class(
       stratification_name, strata_request, compartment_types_to_stratify, 
       adjustment_requests=c(), requested_proportions=c()) {
       
-      # writeLines("\nImplementing model stratification for:")
-      # print(stratification_name)
+      if (self$report_progress) {
+        writeLines(paste("\nImplementing stratification for:", stratification_name))
+      }
       self$strata <- c(self$strata, stratification_name)
       strata_names <- find_strata_names_from_input(strata_request)
       
@@ -253,8 +264,10 @@ EpiModel <- R6Class(
               self$compartment_values[[compartment]] * as.numeric(requested_proportions[stratum])
           }
           
-          # writeLines("\nRemoving compartment:")
-          # print(compartment)
+          if (self$report_progress) {
+            writeLines(paste("Removing compartment:", compartment))
+          }
+          
           self$removed_compartments <- c(self$removed_compartments, compartment)
           self$compartment_values[compartment] <- NULL
         }
@@ -395,9 +408,16 @@ EpiModel <- R6Class(
     
     # integrate model odes  
     run_model = function () {
-      self$outputs <- as.data.frame(ode(
-        func=self$make_model_function(), y=unlist(self$compartment_values), times=self$times)
+      if (self$report_progress) {
+        writeLines("\nNow integrating")
+      }
+      self$outputs <- as.data.frame(
+        ode(func=self$make_model_function(), y=unlist(self$compartment_values), times=self$times)
       )  
+      
+      if (self$report_progress) {
+        writeLines("\nIntegration complete")
+      }
     },   
     
     # create derivative function
