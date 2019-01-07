@@ -82,10 +82,12 @@ EpiModel <- R6Class(
     compartment_types = c(),
     compartment_values = list(),
     initial_conditions = list(),
-    initial_conditions_sum_to_one = TRUE,
+    unstratified_initial_conditions = list(),
+    initial_conditions_sum_to_total = TRUE,
     starting_population = 1,
-    entry_compartment = "susceptible",
-    birth_approach = "no_births",
+    entry_compartment = "",
+    default_starting_compartment = "",
+    birth_approach = "",
     unstratified_flows = data.frame(),
     flows = data.frame(),
     parameters = list(),
@@ -122,26 +124,30 @@ EpiModel <- R6Class(
     
     # initialise basic model characteristics from inputs and check appropriately requested
     initialize = function(times, compartment_types, initial_conditions, parameters, flows,
-                          initial_conditions_sum_to_one=TRUE, infectious_compartment="infectious", 
-                          birth_approach="no_births", report_progress=TRUE, reporting_sigfigs=3) {
+                          initial_conditions_sum_to_total=TRUE, infectious_compartment="infectious", 
+                          birth_approach="no_births", report_progress=TRUE, reporting_sigfigs=4,
+                          entry_compartment="susceptible", starting_population=1, default_starting_compartment="") {
       
       # convert some inputs to model attributes
       self$times <- times
       self$compartment_types <- compartment_types
+      self$unstratified_initial_conditions <- initial_conditions
       self$parameters <- parameters
       self$infectious_compartment <- infectious_compartment
       self$birth_approach <- birth_approach
       self$report_progress=report_progress
       self$reporting_sigfigs=reporting_sigfigs
+      self$entry_compartment=entry_compartment
+      self$starting_population=starting_population
+      self$default_starting_compartment=default_starting_compartment
       
       # run basic checks and set attributes to input arguments
       self$check_and_report_attributes()
       
       # set initial conditions and implement flows (without stratification)
-      self$set_initial_conditions(
-        compartment_types, initial_conditions, initial_conditions_sum_to_one)
-      if (initial_conditions_sum_to_one) {
-        self$sum_initial_compartments_to_total(self$entry_compartment, self$starting_population)
+      self$set_initial_conditions()
+      if (initial_conditions_sum_to_total) {
+        self$sum_initial_compartments_to_total()
       }
       self$implement_flows(flows)
     },
@@ -186,6 +192,11 @@ EpiModel <- R6Class(
       if (self$report_progress) {
         writeLines(paste("\nIntegrating from time ", round(self$times[1], self$reporting_sigfigs), 
                          " to ", round(tail(self$times, 1), self$reporting_sigfigs), sep=""))
+        writeLines("\nUnstratified requested initial conditions are:")
+        for (compartment in names(self$unstratified_initial_conditions)) {
+          writeLines(paste(compartment, ": ", 
+                           as.character(round(as.numeric(self$unstratified_initial_conditions[compartment]), self$reporting_sigfigs)), sep=""))
+        }
         writeLines("\nUnstratified parameter values are:")
         for (parameter in names(self$parameters)) {
           writeLines(paste(parameter, ": ", as.character(round(as.numeric(self$parameters[parameter]), self$reporting_sigfigs)), sep=""))
@@ -199,27 +210,41 @@ EpiModel <- R6Class(
     },
     
     # set starting values to requested value or zero if no value requested
-    set_initial_conditions = function(
-      compartment_types, initial_conditions, initial_conditions_sum_to_one) {
-      self$compartment_values <- list()
-      for (compartment in compartment_types) {
-        if (compartment %in% names(initial_conditions)) {
-          self$compartment_values[compartment] <- initial_conditions[compartment]
+    set_initial_conditions = function() {
+      for (compartment in self$compartment_types) {
+        if (compartment %in% names(self$unstratified_initial_conditions)) {
+          self$compartment_values[compartment] <- self$unstratified_initial_conditions[compartment]
         }
-        else {self$compartment_values[compartment] <- 0}
+        else {
+          self$compartment_values[compartment] <- 0
+        }
       }
     },
     
     # make initial conditions sum to a certain value    
-    sum_initial_compartments_to_total = function(compartment, total) {
+    sum_initial_compartments_to_total = function() {
+      if (!self$default_starting_compartment == "") {
+        compartment <- self$default_starting_compartment
+      }
+      else {
+        compartment <- self$entry_compartment
+        if (self$report_progress) {
+          writeLines("\nNo default starting compartment requested for unallocated population, so will be allocated to entry compartment")
+        }
+      }
       if (!compartment %in% names(self$compartment_values)) {
-        stop("starting compartment to populate with initial values not found")
+        stop("starting compartment to populate with initial values not found in available compartments")
       }
-      else if (Reduce("+", self$compartment_values) > total) {
-        stop("requested total value for starting compartments greater than requested total")
+      else if (Reduce("+", self$compartment_values) > self$starting_population) {
+        stop("requested a total value for starting compartments, but total of requested compartment values is greater than this")
       }
-      self$compartment_values[compartment] <- total - Reduce("+", self$compartment_values)
-      self$initial_conditions <- self$compartment_values
+      remaining_population <- self$starting_population - Reduce("+", self$compartment_values)
+      if (self$report_progress) {
+        writeLines(paste("\nRequested that total population sum to", self$starting_population))
+        writeLines(paste("Remaining population of ", as.character(round(remaining_population, self$reporting_sigfigs)), 
+                         " allocated to ", compartment, " compartment", sep=""))
+      }
+      self$compartment_values[compartment] <- remaining_population
     },
 
     # __________
@@ -649,7 +674,7 @@ EpiModel <- R6Class(
     report_model_structure = function() {
       # describe stratified model
       writeLines("\ninitial conditions (unstratified):")
-      print(self$initial_conditions)
+      print(self$unstratified_initial_conditions)
       writeLines("compartment names:")
       print(names(self$compartment_values))
       writeLines("\nall transition flows:")
