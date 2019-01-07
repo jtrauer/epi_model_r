@@ -258,7 +258,9 @@ EpiModel <- R6Class(
       # if vector of length zero passed, stratify all the compartment types in the model
       if (length(compartment_types_to_stratify) == 0) {
         compartment_types_to_stratify <- self$compartment_types
-        writeLines("No compartment names requested for this stratification, so stratification applied to all model compartments")
+        if (self$report_progress) {
+          writeLines("No compartment names requested for this stratification, so stratification applied to all model compartments")
+        }
       }
       
       # otherwise check all the requested compartments are available and allow model run to proceed
@@ -267,11 +269,34 @@ EpiModel <- R6Class(
         return()
       }
       
+      # check adjustments have been requested appropriately and warn if not
+      for (parameter in names(adjustment_requests)) {
+        for (requested_stratum in names(adjustment_requests[[parameter]][["adjustments"]])) {
+          if (!requested_stratum %in% as.character(strata_names) & self$report_progress) {
+            writeLines(paste("Stratum '", requested_stratum, "' requested under ", 
+                             stratification_name, " stratification, but unavailable, so ignored", sep=""))
+          }
+        }
+        for (stratum in as.character(strata_names)) {
+          if (!stratum %in% names(adjustment_requests[[parameter]][["adjustments"]])) {
+            adjustment_requests[[parameter]][["adjustments"]][stratum] <- 1
+            if (self$report_progress) {
+              writeLines(paste("No request made for adjustment to stratum ", stratum, 
+                               " under ", stratification_name, " stratification, so using value of one by default", sep=""))
+            }
+          }
+        }
+      }
+      
       # stratify the compartments and then the flows
       requested_proportions <- self$tidy_starting_proportions(strata_names, requested_proportions)
       self$stratify_compartments(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions)
       self$stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests)
       self$stratify_transition_flows(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions)
+      if (self$report_progress) {
+        writeLines("\nStratified flows matrix:")
+        print(self$flows)
+      }
       self$stratify_entry_flows(stratification_name, strata_names, compartment_types_to_stratify, requested_proportions)
     },
     
@@ -363,7 +388,7 @@ EpiModel <- R6Class(
       for (parameter in names(self$parameters)) {
         if (startsWith(parameter, "universal_death_rate")) {
           for (stratum in strata_names) {
-            self$add_adjusted_parameter(parameter, stratification_name, stratum, adjustment_requests)
+            self$add_adjusted_parameter(parameter, stratification_name, stratum, strata_names, adjustment_requests)
           }
         }
       }
@@ -404,15 +429,14 @@ EpiModel <- R6Class(
       
       # loop over each stratum in the requested stratification structure
       for (stratum in strata_names) {
-        parameter_name <- self$add_adjusted_parameter(self$flows$parameter[flow], stratification_name, stratum, adjustment_requests)
         
-        # split the parameter into equal parts by default if to split but from not split
+        parameter_name <- self$add_adjusted_parameter(self$flows$parameter[flow], stratification_name, stratum, strata_names, adjustment_requests)
+        
+        # split the parameter into equal parts by default if to split but from not split - and otherwise keep the same parameter
         if (is.null(parameter_name) & !stratify_from & stratify_to) {
           parameter_name <- create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)
           self$parameters[parameter_name] <- self$parameters[self$flows$parameter[flow]] / length(strata_names)
         }
-        
-        # otherwise just keep the same parameter
         else if (is.null(parameter_name)) {
           parameter_name <- self$flows$parameter[flow]
         }
@@ -423,7 +447,6 @@ EpiModel <- R6Class(
         }
         else {
           from_compartment <- self$flows$from[flow]
-          
         }
         if (stratify_to) {
           to_compartment <- create_stratified_name(self$flows$to[flow], stratification_name, stratum)
@@ -433,8 +456,8 @@ EpiModel <- R6Class(
         }
         
         # implement new flow
-        self$flows <- rbind(self$flows,data.frame(parameter=parameter_name, from=from_compartment, to=to_compartment, 
-                                                  implement=TRUE, type=self$flows$type[flow]))
+        self$flows <- rbind(self$flows,data.frame(
+          parameter=parameter_name, from=from_compartment, to=to_compartment, implement=TRUE, type=self$flows$type[flow]))
       }
       
       # remove old flow
@@ -459,16 +482,21 @@ EpiModel <- R6Class(
     },  
     
     # cycle through parameter stratification requests with the last one overwriting earlier ones in the list
-    add_adjusted_parameter = function(unadjusted_parameter, stratification_name, stratum, adjustment_requests) {
+    add_adjusted_parameter = function(unadjusted_parameter, stratification_name, stratum, strata_names, adjustment_requests) {
       parameter_adjustment_name <- NULL
       
       # for each request for adjustment, if there are any
       if (is.list(adjustment_requests)) {
         for (parameter_request in names(adjustment_requests)) {
           
-          # if the parameter being considered is an extension of the parameter type considered
+          # if the parameter being considered is an extension of the parameter type requested
           if (startsWith(unadjusted_parameter, parameter_request)) {
-    
+            
+            # if a stratum hasn't been requested, assign it an adjustment value of 1
+            if (!stratum %in% names(adjustment_requests[[parameter_request]][["adjustments"]])) {
+              adjustment_requests[[parameter_request]][["adjustments"]][stratum] <- 1
+            }
+
             # populate the parameter adjustment attribute with the new adjustment
             parameter_adjustment_name <- create_stratified_name(unadjusted_parameter, stratification_name, stratum)
             self$parameters[parameter_adjustment_name] <- adjustment_requests[[parameter_request]][["adjustments"]][stratum]
