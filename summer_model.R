@@ -77,10 +77,10 @@ find_strata_names_from_input = function(strata_request) {
 
 # simple function to normalise the values from a list
 normalise_list = function(value_list) {
-  if (!sum(as.numeric(value_list)) == 1) {
-    value_list <- lapply(value_list, function(value) value / sum(as.numeric(value_list)))
-  }
-  value_list
+  # if (!sum(as.numeric(value_list)) == 1) {
+  value_list <- lapply(value_list, function(value) value / sum(as.numeric(value_list)))
+  # }
+  # value_list
 }
 
 # objects
@@ -287,27 +287,45 @@ EpiModel <- R6Class(
       }
       
       # stratify the compartments and then the flows
+      requested_proportions <- self$tidy_starting_proportions(strata_names, requested_proportions)
       self$stratify_compartments(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions)
       self$stratify_flows(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions)
+    },
+    
+    # prepare user inputs for starting proportions as needed
+    tidy_starting_proportions = function(strata_names, requested_proportions) {
+      
+      # assume an equal proportion of the total for the compartment if not otherwise specified
+      for (stratum in strata_names) {
+        if (!stratum %in% names(requested_proportions)) {
+          starting_proportion <- 1 / length(strata_names)
+          requested_proportions[stratum] <- starting_proportion
+          if (self$report_progress) {
+            writeLines(paste("No starting proportion requested for stratum", stratum, 
+                             "so allocated", round(as.numeric(starting_proportion), self$reporting_sigfigs), "of total"))
+          }
+        }
+      }
+      
+      # normalise if totals not equal to one
+      total_starting_proportions <- sum(as.numeric(requested_proportions))
+      if (total_starting_proportions != 1) {
+        requested_proportions <- normalise_list(requested_proportions)
+        if (self$report_progress) {
+          writeLines(paste("Total proportions for allocation of starting population sum to", 
+                           round(as.numeric(total_starting_proportions), self$reporting_sigfigs), "- therefore normalising"))
+        }
+      }
+      requested_proportions
     },
     
     # compartment stratification
     stratify_compartments = function(
       stratification_name, strata_names, compartments_to_stratify, adjustment_requests, requested_proportions) {
-
+      
       # stratify each compartment that needs stratification
       for (compartment in names(self$compartment_values)) {
         if (find_stem(compartment) %in% compartments_to_stratify) {
-
-          # assume an equal proportion of the total for the compartment if not otherwise specified
-          for (stratum in strata_names) {
-            if (!stratum %in% names(requested_proportions)) {
-              requested_proportions[stratum] <- 1 / length(strata_names)
-            }
-          }
-          
-          # normalise if totals not equal to one
-          requested_proportions <- normalise_list(requested_proportions)
 
           # append the additional compartment and remove the original one
           for (stratum in strata_names) {
