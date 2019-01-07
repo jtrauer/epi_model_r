@@ -28,8 +28,6 @@ sir_model$stratify("risk", 2, c("recovered"),
 
 # sir_model$add_time_variant("recovery", create_arbitrary_time_variant_function)
 
-# sir_model$report_model_structure()
-
 sir_model$run_model()
 
 

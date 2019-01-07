@@ -56,12 +56,23 @@ find_strata_names_from_input = function(strata_request) {
   if (length(strata_request) == 0) {
     stop("requested to stratify, but no stratification labels provided")
   }
-  else if (length(strata_request) == 1 & typeof(strata_request) == "double") {
-    strata_names <- seq(strata_request)
+  else if (length(strata_request) == 1 & is.numeric(strata_request)) {
+    if (strata_request%%1 == 0 & strata_request > 1) {
+      strata_names <- seq(strata_request)
+      writeLines(paste(
+        "Single integer passed as request for strata labels for stratification, hence strata implemented are integers from 1 to", strata_request))
+    }
+    else {
+      stop("Number passed as request for strata labels, but not an integer greater than one, so unclear what to do")
+    }
   }
   else {
     strata_names <- strata_request
   }
+  for (name in strata_names) {
+    writeLines(paste("Stratum to add:", name))
+  }
+  strata_names
 }
 
 # simple function to normalise the values from a list
@@ -251,32 +262,33 @@ EpiModel <- R6Class(
     # stratification methods
     
     # master stratification method
-    stratify = function(
-      stratification_name, strata_request, compartment_types_to_stratify, 
-      adjustment_requests=c(), requested_proportions=c()) {
-      
+    stratify = function(stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests=c(), requested_proportions=c()) {
+
+      # check stratification name is appropriate, report and add to list of strata
+      if (!is.character(stratification_name)) {
+        stop("requested stratification name is not string")
+      }
       if (self$report_progress) {
         writeLines(paste("\nImplementing stratification for:", stratification_name))
       }
       self$strata <- c(self$strata, stratification_name)
       strata_names <- find_strata_names_from_input(strata_request)
       
-      # if vector of length zero passed, use stratify the compartment types in the model
+      # if vector of length zero passed, stratify all the compartment types in the model
       if (length(compartment_types_to_stratify) == 0) {
         compartment_types_to_stratify <- self$compartment_types
+        writeLines("No compartment names requested for this stratification, so stratification applied to all model compartments")
       }
       
       # otherwise check all the requested compartments are available and allow model run to proceed
       else if (length(setdiff(compartment_types_to_stratify, self$compartment_types)) != 0) {
-        warning("stratification failed, requested compartment for stratification not available")
+        warning("stratification failed and not applied, requested compartment or compartments to be stratified unavailable")
         return()
       }
       
       # stratify the compartments and then the flows
-      self$stratify_compartments(
-        stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions)
-      self$stratify_flows(
-        stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions)
+      self$stratify_compartments(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions)
+      self$stratify_flows(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions)
     },
     
     # compartment stratification
