@@ -18,6 +18,10 @@ library(rsvg)
 # all instructions for what the characteristics of the model are are separated out to a
 # file that calls/sources this one
 
+# outstanding tasks
+# faster calculation of parameters to avoid repeatedly multiplying the non-time-variant quantities together at each time step
+# extend functionality - automatic age stratification, heterogeneous mixing, different infectivity for different compartments, stochastic implementation
+
 # static functions
 
 # find the stem of the compartment name as the text leading up to the first occurrence of "X"
@@ -57,6 +61,11 @@ normalise_list = function(value_list) {
   value_list <- lapply(value_list, function(value) value / sum(as.numeric(value_list)))
   # }
   # value_list
+}
+
+# extract the positions of the capital Xs from a string and join on to a number for the total length of the string
+extract_x_positions = function(input_string) {
+  x_positions <- c(unlist(gregexpr("X", input_string)), nchar(input_string) + 1)
 }
 
 # objects
@@ -635,7 +644,8 @@ EpiModel <- R6Class(
           
           # calculate adjustment to original stem entry rate
           entry_fraction <- 1
-          x_positions <- c(unlist(gregexpr("X", compartment)), nchar(compartment) + 1)
+          x_positions <- extract_x_positions(compartment)
+
           if (!x_positions[1] == -1) {
             for (x_instance in seq(length(x_positions) - 1)) {
               adjustment <- paste("entry_fractionX", substr(compartment, x_positions[x_instance] + 1, x_positions[x_instance + 1] - 1), sep="")
@@ -704,7 +714,7 @@ EpiModel <- R6Class(
         
         # cycle through the parameter adjustments by finding the Xs in the strings,
         # starting from the most stratified parameter (longest string)
-        x_positions <- c(unlist(gregexpr("X", flow_or_compartment)), nchar(flow_or_compartment) + 1)
+        x_positions <- extract_x_positions(flow_or_compartment)
         for (x_instance in rev(x_positions[2:length(x_positions)])) {
           
           # find the name of the parameter adjustment for the stratum considered
