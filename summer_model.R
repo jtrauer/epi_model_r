@@ -51,29 +51,7 @@ capitalise_compartment_name = function(compartment) {
     str_replace_all('_', ' ') %>% str_to_title()
 }
 
-# find the names of the stratifications from a particular user request
-find_strata_names_from_input = function(strata_request) {
-  if (length(strata_request) == 0) {
-    stop("requested to stratify, but no stratification labels provided")
-  }
-  else if (length(strata_request) == 1 & is.numeric(strata_request)) {
-    if (strata_request%%1 == 0 & strata_request > 1) {
-      strata_names <- seq(strata_request)
-      writeLines(paste(
-        "Single integer passed as request for strata labels for stratification, hence strata implemented are integers from 1 to", strata_request))
-    }
-    else {
-      stop("Number passed as request for strata labels, but not an integer greater than one, so unclear what to do")
-    }
-  }
-  else {
-    strata_names <- strata_request
-  }
-  for (name in strata_names) {
-    writeLines(paste("Stratum to add:", name))
-  }
-  strata_names
-}
+
 
 # simple function to normalise the values from a list
 normalise_list = function(value_list) {
@@ -218,6 +196,9 @@ EpiModel <- R6Class(
       
       # add any parameters that are essential for stratifications to be performed
       self$parameters[["entry_fractions"]] <- 1
+      if (!"universal_death_rate" %in% self$parameters) {
+        self$parameters$universal_death_rate <- 0
+      }
     },
     
     # set starting values to requested value or zero if no value requested
@@ -272,7 +253,7 @@ EpiModel <- R6Class(
         writeLines(paste("\nImplementing stratification for:", stratification_name))
       }
       self$strata <- c(self$strata, stratification_name)
-      strata_names <- find_strata_names_from_input(strata_request)
+      strata_names <- self$find_strata_names_from_input(strata_request)
       
       # if vector of length zero passed, stratify all the compartment types in the model
       if (length(compartment_types_to_stratify) == 0) {
@@ -290,7 +271,36 @@ EpiModel <- R6Class(
       requested_proportions <- self$tidy_starting_proportions(strata_names, requested_proportions)
       self$stratify_compartments(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions)
       self$stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests)
-      self$stratify_flows(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions)
+      self$stratify_transition_flows(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions)
+      self$stratify_entry_flows(stratification_name, strata_names, compartment_types_to_stratify, requested_proportions)
+    },
+    
+    # find the names of the stratifications from a particular user request
+    find_strata_names_from_input = function(strata_request) {
+      if (length(strata_request) == 0) {
+        stop("requested to stratify, but no stratification labels provided")
+      }
+      else if (length(strata_request) == 1 & is.numeric(strata_request)) {
+        if (strata_request%%1 == 0 & strata_request > 1) {
+          strata_names <- seq(strata_request)
+          if (self$report_progress) {
+            writeLines(paste(
+              "Single integer passed as request for strata labels for stratification, hence strata implemented are integers from 1 to", strata_request))
+          }
+        }
+        else {
+          stop("Number passed as request for strata labels, but not an integer greater than one, so unclear what to do")
+        }
+      }
+      else {
+        strata_names <- strata_request
+      }
+      for (name in strata_names) {
+        if (self$report_progress) {
+          writeLines(paste("Stratum to add:", name))
+        }
+      }
+      strata_names
     },
     
     # prepare user inputs for starting proportions as needed
@@ -350,9 +360,6 @@ EpiModel <- R6Class(
     stratify_universal_death_rate = function(stratification_name, strata_names, adjustment_requests) {
       
       # make adjustments to universal death rate parameter if requested
-      if (!"universal_death_rate" %in% self$parameters) {
-        self$parameters$universal_death_rate <- 0
-      }
       for (parameter in names(self$parameters)) {
         if (startsWith(parameter, "universal_death_rate")) {
           for (stratum in strata_names) {
@@ -363,8 +370,7 @@ EpiModel <- R6Class(
     },
     
     # stratify flows depending on whether inflow, outflow or both need replication
-    stratify_flows = function(
-      stratification_name, strata_names, compartments_to_stratify, adjustment_requests, requested_proportions) {
+    stratify_transition_flows = function(stratification_name, strata_names, compartments_to_stratify, adjustment_requests, requested_proportions) {
       for (flow in seq(nrow(self$flows))) {
         
         # both from and to compartments being stratified
@@ -388,12 +394,15 @@ EpiModel <- R6Class(
 
         # if flow is active and stratification is relevant    
         if (any(whether_stratify) & self$flows$implement[flow]) {
-          self$add_stratified_flows(flow, stratification_name, strata_names, 
-                                    whether_stratify[1], whether_stratify[2], adjustment_requests,
-                                    requested_proportions)
+          self$add_stratified_flows(flow, stratification_name, strata_names, whether_stratify[1], whether_stratify[2], 
+                                    adjustment_requests, requested_proportions)
         }
       }
-      
+    },
+    
+    # stratify entry/recruitment/birth flows
+    stratify_entry_flows = function(stratification_name, strata_names, compartments_to_stratify, requested_proportions) {
+    
       # work out parameter values for stratifying the entry proportion adjustments
       if (self$entry_compartment %in% compartments_to_stratify) {
         for (stratum in strata_names) {
