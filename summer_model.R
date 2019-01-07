@@ -289,6 +289,7 @@ EpiModel <- R6Class(
       # stratify the compartments and then the flows
       requested_proportions <- self$tidy_starting_proportions(strata_names, requested_proportions)
       self$stratify_compartments(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions)
+      self$stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests)
       self$stratify_flows(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions)
     },
     
@@ -320,32 +321,38 @@ EpiModel <- R6Class(
     },
     
     # compartment stratification
-    stratify_compartments = function(
-      stratification_name, strata_names, compartments_to_stratify, adjustment_requests, requested_proportions) {
+    stratify_compartments = function(stratification_name, strata_names, compartments_to_stratify, adjustment_requests, requested_proportions) {
       
       # stratify each compartment that needs stratification
       for (compartment in names(self$compartment_values)) {
         if (find_stem(compartment) %in% compartments_to_stratify) {
 
-          # append the additional compartment and remove the original one
+          # append the additional compartment
           for (stratum in strata_names) {
-            self$compartment_values[create_stratified_name(compartment, stratification_name, stratum)] <-
-              self$compartment_values[[compartment]] * as.numeric(requested_proportions[stratum])
+            new_compartment_name <- create_stratified_name(compartment, stratification_name, stratum)
+            self$compartment_values[new_compartment_name] <- self$compartment_values[[compartment]] * as.numeric(requested_proportions[stratum])
+            if (self$report_progress) {
+              writeLines(paste("Adding compartment:", new_compartment_name))
+            }
           }
           
+          # remove the original one
           if (self$report_progress) {
             writeLines(paste("Removing compartment:", compartment))
           }
-          
           self$removed_compartments <- c(self$removed_compartments, compartment)
           self$compartment_values[compartment] <- NULL
         }
       }
+    },
+    
+    # stratify the approach to universal, population-wide deaths (which can vary by stratum)
+    stratify_universal_death_rate = function(stratification_name, strata_names, adjustment_requests) {
       
       # make adjustments to universal death rate parameter if requested
       if (!"universal_death_rate" %in% self$parameters) {
         self$parameters$universal_death_rate <- 0
-      }      
+      }
       for (parameter in names(self$parameters)) {
         if (startsWith(parameter, "universal_death_rate")) {
           for (stratum in strata_names) {
