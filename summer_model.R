@@ -97,6 +97,7 @@ EpiModel <- R6Class(
     infectious_compartment = NULL,
     outputs = NULL,
     report_progress = TRUE,
+    reporting_sigfigs = 3,
 
     # __________
     # general methods that can be required at various stages
@@ -120,16 +121,21 @@ EpiModel <- R6Class(
     # model construction methods
     
     # initialise basic model characteristics from inputs and check appropriately requested
-    initialize = function(parameters, compartment_types, times, initial_conditions, flows,
+    initialize = function(times, compartment_types, initial_conditions, parameters, flows,
                           initial_conditions_sum_to_one=TRUE, infectious_compartment="infectious", 
-                          birth_approach = "no_births", report_progress=TRUE) {
+                          birth_approach="no_births", report_progress=TRUE, reporting_sigfigs=3) {
       
+      # convert some inputs to model attributes
+      self$times <- times
+      self$compartment_types <- compartment_types
+      self$parameters <- parameters
+      self$infectious_compartment <- infectious_compartment
+      self$birth_approach <- birth_approach
       self$report_progress=report_progress
+      self$reporting_sigfigs=reporting_sigfigs
       
       # run basic checks and set attributes to input arguments
-      self$check_and_set_attributes(
-        parameters, compartment_types, infectious_compartment, times, 
-        available_birth_approaches, birth_approach)
+      self$check_and_report_attributes()
       
       # set initial conditions and implement flows (without stratification)
       self$set_initial_conditions(
@@ -141,46 +147,54 @@ EpiModel <- R6Class(
     },
     
     # set basic attributes of model
-    check_and_set_attributes = function(
-      parameters, compartment_types, infectious_compartment, times, available_birth_approaches, birth_approach) {
+    check_and_report_attributes = function() {
       
-      if (self$report_progress) {
-        writeLines("\nUnstratified parameter values are:")
-        for (parameter in names(parameters)) {
-          writeLines(paste(parameter, ": ", as.character(parameters[parameter]), sep=""))
-        }
+      # check input data are in the correct form
+      
+      # times
+      if (!is.numeric(self$times)) {
+        stop("requested integration times are not numeric")
+      }
+      if (is.unsorted(self$times)) {
+        writeLines("requested integration times are not sorted, now sorting")
+        self$times <- sort(self$times)
       }
       
-      self$parameters <- parameters
-      
-      if (!is.character(compartment_types)) {
-        stop("one or more compartment types are not character")
+      # compartment types
+      if (!is.character(self$compartment_types)) {
+        stop("compartment types vector is not numeric")
       }
-      
-      self$compartment_types <- compartment_types
-      if (!is.character(infectious_compartment)) {
+      if (!is.character(self$infectious_compartment)) {
         stop("infectious compartment name is not character")
       }
-      if (!(infectious_compartment %in% compartment_types)) {
+      
+      # infectious compartment
+      if (!self$infectious_compartment %in% self$compartment_types) {
         stop("infectious compartment name is not one of the listed compartment types")
       }
       
-      self$infectious_compartment <- infectious_compartment
-      if (!is.numeric(times)) {
-        stop("time values are not numeric")
-      }
-      
-      self$times <- times
-      
+      # hard coded available birth approaches
       available_birth_approaches <- c("add_crude_birth_rate", "replace_deaths", "no_births")
-      if (!birth_approach %in% available_birth_approaches) {
-        stop("requested birth approach not available")
+      if (!self$birth_approach %in% available_birth_approaches) {
+        stop("requested birth approach unavailable")
       }
-      if (birth_approach == "add_crude_birth_rate" 
-          & !"crude_birth_rate" %in% names(self$parameters)) {
+      if (self$birth_approach == "add_crude_birth_rate" & !"crude_birth_rate" %in% names(self$parameters)) {
         self$parameters <- c(self$parameters, c(crude_birth_rate=0))
       }
-      self$birth_approach <- birth_approach
+      
+      # report on characteristics of inputs
+      if (self$report_progress) {
+        writeLines(paste("\nIntegrating from time ", round(self$times[1], self$reporting_sigfigs), 
+                         " to ", round(tail(self$times, 1), self$reporting_sigfigs), sep=""))
+        writeLines("\nUnstratified parameter values are:")
+        for (parameter in names(self$parameters)) {
+          writeLines(paste(parameter, ": ", as.character(round(as.numeric(self$parameters[parameter]), self$reporting_sigfigs)), sep=""))
+        }
+        writeLines(paste("\nInfectious compartment is called:", self$infectious_compartment))
+        writeLines(paste("\nBirth approach is:", self$birth_approach))
+      }
+      
+      # add any parameters that are essential for stratifications to be performed
       self$parameters[["entry_fractions"]] <- 1
     },
     
