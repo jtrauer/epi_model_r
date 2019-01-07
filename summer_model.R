@@ -401,7 +401,6 @@ EpiModel <- R6Class(
     
     # add additional stratified flow to flow data frame
     add_stratified_flows = function(flow, stratification_name, strata_names, stratify_from, stratify_to, adjustment_requests) {
-      parameter_name <- NULL
       
       # loop over each stratum in the requested stratification structure
       for (stratum in strata_names) {
@@ -409,7 +408,6 @@ EpiModel <- R6Class(
         
         # split the parameter into equal parts by default if to split but from not split
         if (is.null(parameter_name) & !stratify_from & stratify_to) {
-          print('hello')
           parameter_name <- create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)
           self$parameters[parameter_name] <- self$parameters[self$flows$parameter[flow]] / length(strata_names)
         }
@@ -473,8 +471,7 @@ EpiModel <- R6Class(
     
             # populate the parameter adjustment attribute with the new adjustment
             parameter_adjustment_name <- create_stratified_name(unadjusted_parameter, stratification_name, stratum)
-            self$parameters[parameter_adjustment_name] <-
-              adjustment_requests[[parameter_request]][["adjustments"]][stratum]
+            self$parameters[parameter_adjustment_name] <- adjustment_requests[[parameter_request]][["adjustments"]][stratum]
             
             # overwrite parameters higher up the tree by listing which ones to be overwritten
             if (stratum %in% adjustment_requests[parameter_request]["overwrite"]) {
