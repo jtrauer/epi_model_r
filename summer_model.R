@@ -112,7 +112,7 @@ EpiModel <- R6Class(
     # model construction methods
     
     # initialise basic model characteristics from inputs and check appropriately requested
-    initialize = function(times, compartment_types, initial_conditions, parameters, flows,
+    initialize = function(times, compartment_types, initial_conditions, parameters, requested_flows,
                           initial_conditions_sum_to_total=TRUE, infectious_compartment="infectious", 
                           birth_approach="no_births", report_progress=TRUE, reporting_sigfigs=4,
                           entry_compartment="susceptible", starting_population=1, default_starting_compartment="") {
@@ -138,7 +138,7 @@ EpiModel <- R6Class(
       if (initial_conditions_sum_to_total) {
         self$sum_initial_compartments_to_total()
       }
-      self$implement_flows(flows)
+      self$implement_flows(requested_flows)
     },
     
     # set basic attributes of model
@@ -239,6 +239,37 @@ EpiModel <- R6Class(
       self$compartment_values[compartment] <- remaining_population
     },
 
+    # add all flows to create data frames from input lists
+    implement_flows = function(requested_flows) {
+      for (flow in seq(length(requested_flows))) {
+        
+        # check flows have been correctly specified
+        working_flow <- requested_flows[flow][[1]]
+        if(!working_flow[2] %in% names(self$parameters)) {
+          stop("flow parameter not found in parameter list")
+        }
+        if(!working_flow[3] %in% self$compartment_types) {
+          stop("from compartment name not found in compartment types")
+        }
+        if(!working_flow[4] %in% self$compartment_types) {
+          stop("to compartment name not found in compartment types")
+        }
+        self$flows <- rbind(self$flows, data.frame(type=working_flow[1],parameter=as.character(working_flow[2]), from=working_flow[3],
+                                                   to=working_flow[4], implement=TRUE, stringsAsFactors=FALSE))
+        
+        # retain a copy of the original flows for the purposes of graphing, etc.
+        self$unstratified_flows <- self$flows
+        
+        # add quantities that will need to be tracked to the tracked quantities attribute
+        if (grepl("infection", working_flow[1])) {
+          self$tracked_quantities["infectious_population"] <- 0
+        }
+        if (working_flow[1] == "infection_frequency") {
+          self$tracked_quantities["total_population"] <- 0
+        }
+      }
+    },
+    
     # __________
     # stratification methods
     
@@ -430,9 +461,11 @@ EpiModel <- R6Class(
       # loop over each stratum in the requested stratification structure
       for (stratum in strata_names) {
         
+        # find parameter name, will remain as null if no requests have been made by the user
         parameter_name <- self$add_adjusted_parameter(self$flows$parameter[flow], stratification_name, stratum, strata_names, adjustment_requests)
         
-        # split the parameter into equal parts by default if to split but from not split - and otherwise keep the same parameter
+        # default behaviour for parameters not requested is to split the parameter into equal parts to split but from not split
+        # otherwise retain the existing parameter
         if (is.null(parameter_name) & !stratify_from & stratify_to) {
           parameter_name <- create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)
           self$parameters[parameter_name] <- self$parameters[self$flows$parameter[flow]] / length(strata_names)
@@ -455,7 +488,7 @@ EpiModel <- R6Class(
           to_compartment <- self$flows$to[flow]
         }
         
-        # implement new flow
+        # add the new flow
         self$flows <- rbind(self$flows,data.frame(
           parameter=parameter_name, from=from_compartment, to=to_compartment, implement=TRUE, type=self$flows$type[flow]))
       }
@@ -519,10 +552,8 @@ EpiModel <- R6Class(
       if (self$report_progress) {
         writeLines("\nNow integrating")
       }
-      self$outputs <- as.data.frame(
-        ode(func=self$make_model_function(), y=unlist(self$compartment_values), times=self$times)
-      )  
-      
+      self$outputs <- as.data.frame(ode(func=self$make_model_function(), y=unlist(self$compartment_values), times=self$times)
+      )
       if (self$report_progress) {
         writeLines("\nIntegration complete")
       }
@@ -536,8 +567,7 @@ EpiModel <- R6Class(
         self$update_tracked_quantities(compartment_values)
         
         # apply flows
-        self$apply_all_flow_types_to_odes(
-          rep(0, length(self$compartment_values)), compartment_values, time)
+        self$apply_all_flow_types_to_odes(rep(0, length(self$compartment_values)), compartment_values, time)
       }
     },
     
@@ -547,33 +577,6 @@ EpiModel <- R6Class(
       ode_equations <- self$apply_universal_death_flow(ode_equations, compartment_values, time)
       ode_equations <- self$apply_birth_rate(ode_equations, compartment_values, time)
       list(ode_equations)
-    },
-    
-    # add all flows to create data frames from input lists
-    implement_flows = function(flows) {
-      for (flow in seq(length(flows))) {
-        working_flow <- flows[flow][[1]]
-        if(!(working_flow[2] %in% names(self$parameters))) {
-          stop("flow parameter not found in parameter list")
-        }
-        if(!(working_flow[3] %in% self$compartment_types)) {
-          stop("from compartment name not found in compartment types")
-        }
-        if(!(working_flow[4] %in% self$compartment_types)) {
-          stop("to compartment name not found in compartment types")
-        }
-        self$flows <- rbind(
-          self$flows, data.frame(type=working_flow[1],parameter=as.character(working_flow[2]), from=working_flow[3],
-                                 to=working_flow[4], implement=TRUE, stringsAsFactors=FALSE))
-        self$unstratified_flows <- self$flows
-        
-        if (grepl("infection", working_flow[1])) {
-          self$tracked_quantities["infectious_population"] <- 0
-        }
-        if (working_flow[1] == "infection_frequency") {
-          self$tracked_quantities["total_population"] <- 0
-        }
-      }
     },
     
     # add fixed or infection-related flow to odes
@@ -591,16 +594,14 @@ EpiModel <- R6Class(
           # calculate the flow and apply to the odes
           from_compartment <- match(flow$from, names(self$compartment_values))
           net_flow <- adjusted_parameter * compartment_values[from_compartment] * infectious_population
-          ode_equations <- self$increment_compartment(
-            ode_equations, from_compartment, -net_flow)
-          ode_equations <- self$increment_compartment(
-            ode_equations, match(flow$to, names(self$compartment_values)), net_flow)
+          ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
+          ode_equations <- self$increment_compartment(ode_equations, match(flow$to, names(self$compartment_values)), net_flow)
         }
       }
       ode_equations
     },
     
-    # apply a population-wide death rate to all compartments
+    # apply the population-wide death rate to all compartments
     apply_universal_death_flow = function(ode_equations, compartment_values, time) {
       for (compartment in names(self$compartment_values)) {
         adjusted_parameter <- self$adjust_parameter(compartment, parameter_stem_adjustment="universal_death_rate")
@@ -639,14 +640,12 @@ EpiModel <- R6Class(
           x_positions <- c(unlist(gregexpr("X", compartment)), nchar(compartment) + 1)
           if (!x_positions[1] == -1) {
             for (x_instance in seq(length(x_positions) - 1)) {
-              adjustment <- paste("entry_fractionX", 
-                                  substr(compartment, x_positions[x_instance] + 1, x_positions[x_instance + 1] - 1), sep="")
+              adjustment <- paste("entry_fractionX", substr(compartment, x_positions[x_instance] + 1, x_positions[x_instance + 1] - 1), sep="")
               entry_fraction <- entry_fraction * self$parameters[[adjustment]]
             }
           }
           compartment_births <- entry_fraction * total_births
-          ode_equations <- self$increment_compartment(ode_equations, match(compartment, names(self$compartment_values)),
-                                                      compartment_births)
+          ode_equations <- self$increment_compartment(ode_equations, match(compartment, names(self$compartment_values)), compartment_births)
         }
       }
       ode_equations
@@ -737,19 +736,6 @@ EpiModel <- R6Class(
     increment_compartment = function(ode_equations, compartment_number, increment) {
       ode_equations[compartment_number] <- ode_equations[compartment_number] + increment
       ode_equations
-    },
-    
-    # output some information about the model
-    report_model_structure = function() {
-      # describe stratified model
-      writeLines("\ninitial conditions (unstratified):")
-      print(self$unstratified_initial_conditions)
-      writeLines("compartment names:")
-      print(names(self$compartment_values))
-      writeLines("\nall transition flows:")
-      print(self$flows)
-      writeLines("\nunadjusted parameters:")
-      print(self$parameters)
     }
   )
 )
