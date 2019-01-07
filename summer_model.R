@@ -51,8 +51,6 @@ capitalise_compartment_name = function(compartment) {
     str_replace_all('_', ' ') %>% str_to_title()
 }
 
-
-
 # simple function to normalise the values from a list
 normalise_list = function(value_list) {
   # if (!sum(as.numeric(value_list)) == 1) {
