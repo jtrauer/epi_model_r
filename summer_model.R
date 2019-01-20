@@ -56,10 +56,7 @@ capitalise_compartment_name = function(compartment) {
 
 # simple function to normalise the values from a list
 normalise_list = function(value_list) {
-  # if (!sum(as.numeric(value_list)) == 1) {
   value_list <- lapply(value_list, function(value) value / sum(as.numeric(value_list)))
-  # }
-  # value_list
 }
 
 # extract the positions of the capital Xs from a string and join on to a number for the total length of the string
@@ -296,13 +293,13 @@ EpiModel <- R6Class(
       if (length(compartment_types_to_stratify) == 0) {
         compartment_types_to_stratify <- self$compartment_types
         if (report) {
-          writeLines("No compartment names requested for this stratification, so stratification applied to all model compartments")
+          writeLines("No compartment names specified for this stratification, so stratification applied to all model compartments as default behaviour")
         }
       }
       
       # otherwise check all the requested compartments are available and allow model run to proceed
       else if (length(setdiff(compartment_types_to_stratify, self$compartment_types)) != 0) {
-        warning("stratification failed and not applied, requested compartment or compartments to be stratified unavailable")
+        warning("requested stratification not applied, because requested compartment or compartments to be stratified are not implemented in this model")
         return()
       }
       
@@ -310,16 +307,14 @@ EpiModel <- R6Class(
       for (parameter in names(adjustment_requests)) {
         for (requested_stratum in names(adjustment_requests[[parameter]][["adjustments"]])) {
           if (!requested_stratum %in% as.character(strata_names) & report) {
-            writeLines(paste("Stratum '", requested_stratum, "' requested under ", 
-                             stratification_name, " stratification, but unavailable, so ignored", sep=""))
+            warning(paste("stratum '", requested_stratum, "' requested, but unavailable, so ignored", sep=""))
           }
         }
         for (stratum in as.character(strata_names)) {
           if (!stratum %in% names(adjustment_requests[[parameter]][["adjustments"]])) {
             adjustment_requests[[parameter]][["adjustments"]][stratum] <- 1
             if (report) {
-              writeLines(paste("No request made for adjustment to stratum ", stratum, 
-                               " under ", stratification_name, " stratification, so using value of one by default", sep=""))
+              writeLines(paste("No request made for adjustment to stratum", stratum, "stratification, so using value of one by default"))
             }
           }
         }
@@ -346,12 +341,11 @@ EpiModel <- R6Class(
         if (strata_request%%1 == 0 & strata_request > 1) {
           strata_names <- seq(strata_request)
           if (report) {
-            writeLines(paste(
-              "Single integer passed as request for strata labels for stratification, hence strata implemented are integers from 1 to", strata_request))
+            writeLines(paste("Integer provided strata labels for stratification, hence strata implemented are integers from 1 to", strata_request))
           }
         }
         else {
-          stop("Number passed as request for strata labels, but not an integer greater than one, so unclear what to do")
+          stop("number passed as request for strata labels, but not an integer greater than one, unclear what to do, stratification failed")
         }
       }
       else {
@@ -421,11 +415,14 @@ EpiModel <- R6Class(
     # stratify the approach to universal, population-wide deaths (which can vary by stratum)
     stratify_universal_death_rate = function(stratification_name, strata_names, adjustment_requests) {
       
-      # make adjustments to universal death rate parameter if requested
-      for (parameter in names(self$parameters)) {
-        if (startsWith(parameter, "universal_death_rate")) {
-          for (stratum in strata_names) {
-            self$add_adjusted_parameter(parameter, stratification_name, stratum, strata_names, adjustment_requests)
+      if ("universal_death_rate" %in% names(adjustment_requests)) {
+      
+        # make adjustments to universal death rate parameter if requested
+        for (parameter in names(self$parameters)) {
+          if (startsWith(parameter, "universal_death_rate")) {
+            for (stratum in strata_names) {
+              self$add_adjusted_parameter(parameter, stratification_name, stratum, strata_names, adjustment_requests)
+            }
           }
         }
       }
@@ -623,7 +620,7 @@ EpiModel <- R6Class(
     # apply the population-wide death rate to all compartments
     apply_universal_death_flow = function(ode_equations, compartment_values, time) {
       for (compartment in names(self$compartment_values)) {
-        adjusted_parameter <- self$adjust_parameter(compartment, parameter_stem_adjustment="universal_death_rate")
+        adjusted_parameter <- self$adjust_parameter("universal_death_rate")
         from_compartment <- match(compartment, names(self$compartment_values))
         net_flow <- adjusted_parameter * compartment_values[from_compartment]
         
@@ -707,18 +704,10 @@ EpiModel <- R6Class(
     },
 
     # adjust stratified parameter value
-    adjust_parameter = function(flow_or_compartment, parameter_stem_adjustment="") {
-      
-      # if adjusting the stem
-      if (!parameter_stem_adjustment == "") {
-        base_parameter_name <- parameter_stem_adjustment
-      }
-      else {
-        base_parameter_name <- find_stem(flow_or_compartment)
-      }
+    adjust_parameter = function(flow_or_compartment) {
       
       # start from baseline values
-      base_parameter_value <- as.numeric(self$parameters[base_parameter_name])
+      base_parameter_value <- as.numeric(self$parameters[find_stem(flow_or_compartment)])
       parameter_adjustment_value <- 1
 
       # if the parameter is stratified
@@ -731,10 +720,7 @@ EpiModel <- R6Class(
           
           # find the name of the parameter adjustment for the stratum considered
           adjustment <- substr(flow_or_compartment, 1, x_instance - 1)
-          if (!parameter_stem_adjustment == "") {
-            adjustment <- paste(base_parameter_name, find_stratum(adjustment), sep="")
-          }
-          
+
           # if overwrite has been requested at any stage and we can skip the higher strata
           if (adjustment %in% self$overwrite_parameters) {
             parameter_adjustment_value <- as.numeric(self$parameters[adjustment])
