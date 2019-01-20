@@ -323,13 +323,13 @@ EpiModel <- R6Class(
       # stratify the compartments and then the flows
       requested_proportions <- self$tidy_starting_proportions(strata_names, requested_proportions, report)
       self$stratify_compartments(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions, report)
-      self$stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests)
+      self$stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests, report)
       self$stratify_transition_flows(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions, report)
       if (report) {
-        writeLines("\nStratified flows matrix:")
+        writeLines("Stratified flows matrix:")
         print(self$flows)
       }
-      self$stratify_entry_flows(stratification_name, strata_names, compartment_types_to_stratify, requested_proportions)
+      self$stratify_entry_flows(stratification_name, strata_names, compartment_types_to_stratify, requested_proportions, report)
     },
     
     # find the names of the stratifications from a particular user request
@@ -413,15 +413,16 @@ EpiModel <- R6Class(
     },
     
     # stratify the approach to universal, population-wide deaths (which can vary by stratum)
-    stratify_universal_death_rate = function(stratification_name, strata_names, adjustment_requests) {
+    stratify_universal_death_rate = function(stratification_name, strata_names, adjustment_requests, report) {
       
       if ("universal_death_rate" %in% names(adjustment_requests)) {
-      
-        # make adjustments to universal death rate parameter if requested
         for (parameter in names(self$parameters)) {
           if (startsWith(parameter, "universal_death_rate")) {
             for (stratum in strata_names) {
               self$add_adjusted_parameter(parameter, stratification_name, stratum, strata_names, adjustment_requests)
+              if (report) {
+                writeLines(paste("Modifying universal death rate for", stratum, "stratum of", stratification_name))
+              }
             }
           }
         }
@@ -514,7 +515,7 @@ EpiModel <- R6Class(
     },
     
     # stratify entry/recruitment/birth flows
-    stratify_entry_flows = function(stratification_name, strata_names, compartments_to_stratify, requested_proportions) {
+    stratify_entry_flows = function(stratification_name, strata_names, compartments_to_stratify, requested_proportions, report) {
     
       # work out parameter values for stratifying the entry proportion adjustments
       if (self$entry_compartment %in% compartments_to_stratify) {
@@ -522,9 +523,15 @@ EpiModel <- R6Class(
           entry_fraction_name <- create_stratified_name("entry_fraction", stratification_name, stratum)
           if (stratum %in% names(requested_proportions[["adjustments"]])) {
             self$parameters[entry_fraction_name] <- requested_proportions[["adjustments"]][[stratum]]
+            if (report) {
+              writeLines(paste("Assigning specified proportion of starting population to", stratum))
+            }
           }
           else {
             self$parameters[entry_fraction_name] <- 1 / length(strata_names)
+            if (report) {
+              writeLines(paste("Assuming", as.character(1 / length(strata_names)), "of starting population to be assigned to", stratum, "stratum by default"))
+            }
           }
         }
       }
