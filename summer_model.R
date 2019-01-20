@@ -280,22 +280,22 @@ EpiModel <- R6Class(
     # stratification methods
     
     # master stratification method
-    stratify = function(stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests=c(), requested_proportions=c()) {
+    stratify = function(stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests=c(), requested_proportions=c(), report=TRUE) {
 
       # check stratification name is appropriate, report and add to list of strata
       if (!is.character(stratification_name)) {
         stop("requested stratification name is not string")
       }
-      if (self$report_progress) {
+      if (report) {
         writeLines(paste("\nImplementing stratification for:", stratification_name))
       }
       self$strata <- c(self$strata, stratification_name)
-      strata_names <- self$find_strata_names_from_input(strata_request)
+      strata_names <- self$find_strata_names_from_input(strata_request, report)
       
       # if vector of length zero passed, stratify all the compartment types in the model
       if (length(compartment_types_to_stratify) == 0) {
         compartment_types_to_stratify <- self$compartment_types
-        if (self$report_progress) {
+        if (report) {
           writeLines("No compartment names requested for this stratification, so stratification applied to all model compartments")
         }
       }
@@ -309,7 +309,7 @@ EpiModel <- R6Class(
       # check adjustments have been requested appropriately and warn if not
       for (parameter in names(adjustment_requests)) {
         for (requested_stratum in names(adjustment_requests[[parameter]][["adjustments"]])) {
-          if (!requested_stratum %in% as.character(strata_names) & self$report_progress) {
+          if (!requested_stratum %in% as.character(strata_names) & report) {
             writeLines(paste("Stratum '", requested_stratum, "' requested under ", 
                              stratification_name, " stratification, but unavailable, so ignored", sep=""))
           }
@@ -317,7 +317,7 @@ EpiModel <- R6Class(
         for (stratum in as.character(strata_names)) {
           if (!stratum %in% names(adjustment_requests[[parameter]][["adjustments"]])) {
             adjustment_requests[[parameter]][["adjustments"]][stratum] <- 1
-            if (self$report_progress) {
+            if (report) {
               writeLines(paste("No request made for adjustment to stratum ", stratum, 
                                " under ", stratification_name, " stratification, so using value of one by default", sep=""))
             }
@@ -326,11 +326,11 @@ EpiModel <- R6Class(
       }
       
       # stratify the compartments and then the flows
-      requested_proportions <- self$tidy_starting_proportions(strata_names, requested_proportions)
-      self$stratify_compartments(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions)
+      requested_proportions <- self$tidy_starting_proportions(strata_names, requested_proportions, report)
+      self$stratify_compartments(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions, report)
       self$stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests)
-      self$stratify_transition_flows(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions)
-      if (self$report_progress) {
+      self$stratify_transition_flows(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions, report)
+      if (report) {
         writeLines("\nStratified flows matrix:")
         print(self$flows)
       }
@@ -338,14 +338,14 @@ EpiModel <- R6Class(
     },
     
     # find the names of the stratifications from a particular user request
-    find_strata_names_from_input = function(strata_request) {
+    find_strata_names_from_input = function(strata_request, report) {
       if (length(strata_request) == 0) {
         stop("requested to stratify, but no stratification labels provided")
       }
       else if (length(strata_request) == 1 & is.numeric(strata_request)) {
         if (strata_request%%1 == 0 & strata_request > 1) {
           strata_names <- seq(strata_request)
-          if (self$report_progress) {
+          if (report) {
             writeLines(paste(
               "Single integer passed as request for strata labels for stratification, hence strata implemented are integers from 1 to", strata_request))
           }
@@ -358,7 +358,7 @@ EpiModel <- R6Class(
         strata_names <- strata_request
       }
       for (name in strata_names) {
-        if (self$report_progress) {
+        if (report) {
           writeLines(paste("Stratum to add:", name))
         }
       }
@@ -366,14 +366,14 @@ EpiModel <- R6Class(
     },
     
     # prepare user inputs for starting proportions as needed
-    tidy_starting_proportions = function(strata_names, requested_proportions) {
+    tidy_starting_proportions = function(strata_names, requested_proportions, report) {
       
       # assume an equal proportion of the total for the compartment if not otherwise specified
       for (stratum in strata_names) {
         if (!stratum %in% names(requested_proportions)) {
           starting_proportion <- 1 / length(strata_names)
           requested_proportions[stratum] <- starting_proportion
-          if (self$report_progress) {
+          if (report) {
             writeLines(paste("No starting proportion requested for stratum", stratum, 
                              "so allocated", round(as.numeric(starting_proportion), self$reporting_sigfigs), "of total"))
           }
@@ -384,7 +384,7 @@ EpiModel <- R6Class(
       total_starting_proportions <- sum(as.numeric(requested_proportions))
       if (total_starting_proportions != 1) {
         requested_proportions <- normalise_list(requested_proportions)
-        if (self$report_progress) {
+        if (report) {
           writeLines(paste("Total proportions for allocation of starting population sum to", 
                            round(as.numeric(total_starting_proportions), self$reporting_sigfigs), "- therefore normalising"))
         }
@@ -393,7 +393,7 @@ EpiModel <- R6Class(
     },
     
     # compartment stratification
-    stratify_compartments = function(stratification_name, strata_names, compartments_to_stratify, adjustment_requests, requested_proportions) {
+    stratify_compartments = function(stratification_name, strata_names, compartments_to_stratify, adjustment_requests, requested_proportions, report) {
       
       # stratify each compartment that needs stratification
       for (compartment in names(self$compartment_values)) {
@@ -403,13 +403,13 @@ EpiModel <- R6Class(
           for (stratum in strata_names) {
             new_compartment_name <- create_stratified_name(compartment, stratification_name, stratum)
             self$compartment_values[new_compartment_name] <- self$compartment_values[[compartment]] * as.numeric(requested_proportions[stratum])
-            if (self$report_progress) {
+            if (report) {
               writeLines(paste("Adding compartment:", new_compartment_name))
             }
           }
           
           # remove the original one
-          if (self$report_progress) {
+          if (report) {
             writeLines(paste("Removing compartment:", compartment))
           }
           self$removed_compartments <- c(self$removed_compartments, compartment)
@@ -432,7 +432,7 @@ EpiModel <- R6Class(
     },
     
     # stratify flows depending on whether inflow, outflow or both need replication
-    stratify_transition_flows = function(stratification_name, strata_names, compartments_to_stratify, adjustment_requests, requested_proportions) {
+    stratify_transition_flows = function(stratification_name, strata_names, compartments_to_stratify, adjustment_requests, requested_proportions, report) {
       for (flow in seq(nrow(self$flows))) {
         
         # both from and to compartments being stratified
@@ -456,16 +456,20 @@ EpiModel <- R6Class(
 
         # if flow is active and stratification is relevant    
         if (any(whether_stratify) & self$flows$implement[flow]) {
-          self$add_stratified_flows(flow, stratification_name, strata_names, whether_stratify[1], whether_stratify[2], adjustment_requests)
+          self$add_stratified_flows(flow, stratification_name, strata_names, whether_stratify[1], whether_stratify[2], adjustment_requests, report)
         }
       }
     },
     
     # add additional stratified flow to flow data frame
-    add_stratified_flows = function(flow, stratification_name, strata_names, stratify_from, stratify_to, adjustment_requests) {
+    add_stratified_flows = function(flow, stratification_name, strata_names, stratify_from, stratify_to, adjustment_requests, report) {
       
       # loop over each stratum in the requested stratification structure
       for (stratum in strata_names) {
+        
+        if (report) {
+          writeLines(paste("For flow from", self$flows$from[flow], "to", self$flows$to[flow], "in stratum", stratum, "of" , stratification_name))
+        }
         
         # find parameter name, will remain as null if no requests have been made by the user
         parameter_name <- self$add_adjusted_parameter(self$flows$parameter[flow], stratification_name, stratum, strata_names, adjustment_requests)
@@ -475,11 +479,20 @@ EpiModel <- R6Class(
         if (is.null(parameter_name) & !stratify_from & stratify_to) {
           parameter_name <- create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)
           self$parameters[parameter_name] <- self$parameters[self$flows$parameter[flow]] / length(strata_names)
+          if (report) {
+            writeLines(paste("\tSplitting existing parameter value,", parameter_name, "into", length(strata_names), "equal parts"))
+          }
         }
         else if (is.null(parameter_name)) {
           parameter_name <- self$flows$parameter[flow]
+          if (report) {
+            writeLines(paste("\tRetaining existing parameter value,", parameter_name))
+          }
         }
-        
+        else if (report) {
+          writeLines(paste("\tImplementing new parameter,", parameter_name))
+        }
+
         # determine whether to and/or from compartments are stratified
         if (stratify_from) {
           from_compartment <- create_stratified_name(self$flows$from[flow], stratification_name, stratum)

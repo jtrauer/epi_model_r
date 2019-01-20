@@ -16,13 +16,13 @@ sir_model <- EpiModel$new(seq(from=0, to=60/365, by=1/365),
                           list(beta=400, recovery=365/13),
                           list(c("standard_flows", "recovery", "infectious", "recovered"),
                                c("infection_density", "beta", "susceptible", "infectious")),
-                          report_progress = TRUE)
+                          report_progress=FALSE)
 sir_model$stratify("hiv", c("negative", "positive"), c(),
                    list(recovery=list(adjustments=list("negative"=0.7, "positive"=0.5)),
                         universal_death_rate=list(adjustments=list("negative"=1, "positive"=2))),
                    list("negative"=0.6, "positive"=0.4))
 sir_model$stratify("risk", 3, c("recovered"),
-                   list(recovery=list(adjustments=list("1"=1.5, "2"=1, "3"=2)), 
+                   list(recovery=list(adjustments=list("2"=1, "3"=2)), 
                         recoveryXhiv_positive=list(adjustments=list("1"=2, "2"=365/13*.5, "3"=1), overwrite=c("2")),
                         universal_death_rate=list(adjustments=list("1"=3, "2"=2, "3"=7))))
 
