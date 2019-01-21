@@ -22,7 +22,7 @@ sir_model$stratify("hiv", c("negative", "positive"), c(),
                         universal_death_rate=list(adjustments=list("negative"=1, "positive"=2))),
                    list("negative"=0.6, "positive"=0.4), report = FALSE)
 
-sir_model$stratify("age", 3, c(),
+sir_model$stratify("age", c(3, 2, 1), c(),
                    list(recovery=list(adjustments=list("2"=1, "3"=2)), 
                         recoveryXhiv_positive=list(adjustments=list("1"=2, "2"=365/13*.5, "3"=1), overwrite=c("2")),
                         universal_death_rate=list(adjustments=list("1"=1, "2"=2, "3"=3))), report=FALSE)

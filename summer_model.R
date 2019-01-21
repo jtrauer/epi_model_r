@@ -283,17 +283,31 @@ EpiModel <- R6Class(
       if (!is.character(stratification_name)) {
         stop("requested stratification name is not string")
       }
+      
+      # checks and reporting for age stratification
       if (stratification_name == "age") {
         if (report) {
           writeLines(paste("\nImplementing age-specific stratification with pre-specified behaviour for this approach"))
         }
-        # if (length(compartment_types_to_stratify) != 0) {
-        #   stop("requested age stratification, but not applying to all compartments")
-        # }
+        if (length(compartment_types_to_stratify) != 0) {
+          stop("requested age stratification, but not applying to all compartments")
+        }
+        else if (!is.numeric(strata_request)) {
+          stop("inputs for age strata breakpoints are not numeric")
+        }
+        if (is.unsorted(strata_request)) {
+          strata_request <- sort(strata_request)
+          writeLines(paste("Requested strata for age stratification not ordered, so have been sorted to give", 
+                           paste(rep(", ", length(strata_request)), strata_request, collapse=""), sep=""))
+        }
       }
+      
+      # report if not age stratification
       else if (report) {
         writeLines(paste("\nImplementing stratification for:", stratification_name))
       }
+
+      # record stratification as attribute to model and find the names to apply strata
       self$strata <- c(self$strata, stratification_name)
       strata_names <- self$find_strata_names_from_input(stratification_name, strata_request, report)
       
