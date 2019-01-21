@@ -277,17 +277,25 @@ EpiModel <- R6Class(
     # stratification methods
     
     # master stratification method
-    stratify = function(stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests=c(), requested_proportions=c(), report=TRUE) {
+    stratify = function(stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests=c(), requested_proportions=list(), report=TRUE) {
 
       # check stratification name is appropriate, report and add to list of strata
       if (!is.character(stratification_name)) {
         stop("requested stratification name is not string")
       }
-      if (report) {
+      if (stratification_name == "age") {
+        if (report) {
+          writeLines(paste("\nImplementing age-specific stratification with pre-specified behaviour for this approach"))
+        }
+        # if (length(compartment_types_to_stratify) != 0) {
+        #   stop("requested age stratification, but not applying to all compartments")
+        # }
+      }
+      else if (report) {
         writeLines(paste("\nImplementing stratification for:", stratification_name))
       }
       self$strata <- c(self$strata, stratification_name)
-      strata_names <- self$find_strata_names_from_input(strata_request, report)
+      strata_names <- self$find_strata_names_from_input(stratification_name, strata_request, report)
       
       # if vector of length zero passed, stratify all the compartment types in the model
       if (length(compartment_types_to_stratify) == 0) {
@@ -333,7 +341,12 @@ EpiModel <- R6Class(
     },
     
     # find the names of the stratifications from a particular user request
-    find_strata_names_from_input = function(strata_request, report) {
+    find_strata_names_from_input = function(stratification_name, strata_request, report) {
+      
+      if (stratification_name == "age" & !is.numeric(strata_request)) {
+        stop("age stratification requested, but with strata names that are not numeric")
+      }
+      
       if (length(strata_request) == 0) {
         stop("requested to stratify, but no stratification labels provided")
       }
@@ -351,8 +364,8 @@ EpiModel <- R6Class(
       else {
         strata_names <- strata_request
       }
-      for (name in strata_names) {
-        if (report) {
+      if (report) {
+        for (name in strata_names) {
           writeLines(paste("Stratum to add:", name))
         }
       }
@@ -366,7 +379,7 @@ EpiModel <- R6Class(
       for (stratum in strata_names) {
         if (!stratum %in% names(requested_proportions)) {
           starting_proportion <- 1 / length(strata_names)
-          requested_proportions[stratum] <- starting_proportion
+          requested_proportions[as.character(stratum)] <- starting_proportion
           if (report) {
             writeLines(paste("No starting proportion requested for stratum", stratum, 
                              "so allocated", round(as.numeric(starting_proportion), self$reporting_sigfigs), "of total"))
