@@ -280,7 +280,10 @@ EpiModel <- R6Class(
     stratify = function(stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests=c(), requested_proportions=list(), report=TRUE) {
 
       # check stratification name is appropriate, report and add to list of strata
-      if (!is.character(stratification_name)) {
+      if (stratification_name == "age" & "age" %in% self$strata) {
+        stop("requested stratification by age, but this has pre-specified behaviour, can only be applied once and has already been implemented")
+      }
+      else if (!is.character(stratification_name)) {
         stop("requested stratification name is not string")
       }
       
