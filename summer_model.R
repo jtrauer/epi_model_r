@@ -303,13 +303,17 @@ EpiModel <- R6Class(
           writeLines(paste("Requested strata for age stratification not ordered, so have been sorted to give", 
                            paste(rep(", ", length(strata_request)), strata_request, collapse=""), sep=""))
         }
+        if (!0 %in% strata_request) {
+          strata_request <- c(0, strata_request)
+          writeLines(paste("Adding age strata called '0' as not requested, to represent those aged less than", strata_request[2]))
+        }
       }
       
       # report if not age stratification
       else if (report) {
         writeLines(paste("\nImplementing stratification for:", stratification_name))
       }
-
+      
       # record stratification as attribute to model and find the names to apply strata
       self$strata <- c(self$strata, stratification_name)
       strata_names <- self$find_strata_names_from_input(stratification_name, strata_request, report)
@@ -426,7 +430,8 @@ EpiModel <- R6Class(
           # append the additional compartment
           for (stratum in strata_names) {
             new_compartment_name <- create_stratified_name(compartment, stratification_name, stratum)
-            self$compartment_values[new_compartment_name] <- self$compartment_values[[compartment]] * as.numeric(requested_proportions[stratum])
+            self$compartment_values[new_compartment_name] <- 
+              self$compartment_values[[compartment]] * as.numeric(requested_proportions[as.character(stratum)])
             if (report) {
               writeLines(paste("Adding compartment:", new_compartment_name))
             }
@@ -585,7 +590,7 @@ EpiModel <- R6Class(
 
             # populate the parameter adjustment attribute with the new adjustment
             parameter_adjustment_name <- create_stratified_name(unadjusted_parameter, stratification_name, stratum)
-            self$parameters[parameter_adjustment_name] <- adjustment_requests[[parameter_request]][["adjustments"]][stratum]
+            self$parameters[parameter_adjustment_name] <- adjustment_requests[[parameter_request]][["adjustments"]][as.character(stratum)]
             
             # overwrite parameters higher up the tree by listing which ones to be overwritten
             if (stratum %in% adjustment_requests[parameter_request]["overwrite"]) {
