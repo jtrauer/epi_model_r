@@ -300,12 +300,16 @@ EpiModel <- R6Class(
         }
         if (is.unsorted(strata_request)) {
           strata_request <- sort(strata_request)
-          writeLines(paste("Requested strata for age stratification not ordered, so have been sorted to give", 
+          if (report) {
+            writeLines(paste("Requested strata for age stratification not ordered, so have been sorted to give", 
                            paste(rep(", ", length(strata_request)), strata_request, collapse=""), sep=""))
+          }
         }
         if (!0 %in% strata_request) {
           strata_request <- c(0, strata_request)
-          writeLines(paste("Adding age strata called '0' as not requested, to represent those aged less than", strata_request[2]))
+          if (report) {
+            writeLines(paste("Adding age strata called '0' as not requested, to represent those aged less than", strata_request[2]))
+          }
         }
       }
       
@@ -348,6 +352,8 @@ EpiModel <- R6Class(
           }
         }
       }
+      
+      print(strata_names)
       
       # stratify the compartments and then the flows
       requested_proportions <- self$tidy_starting_proportions(strata_names, requested_proportions, report)
@@ -551,12 +557,18 @@ EpiModel <- R6Class(
     
     # stratify entry/recruitment/birth flows
     stratify_entry_flows = function(stratification_name, strata_names, compartments_to_stratify, requested_proportions, report) {
-    
+
       # work out parameter values for stratifying the entry proportion adjustments
       if (self$entry_compartment %in% compartments_to_stratify) {
         for (stratum in strata_names) {
           entry_fraction_name <- create_stratified_name("entry_fraction", stratification_name, stratum)
-          if (stratum %in% names(requested_proportions[["adjustments"]])) {
+          if (stratification_name == "age" & as.character(stratum) == "0") {
+            self$parameters[entry_fraction_name] <- 1
+          }
+          else if (stratification_name == "age") {
+            self$parameters[entry_fraction_name] <- 0
+          }
+          else if (stratum %in% names(requested_proportions[["adjustments"]])) {
             self$parameters[entry_fraction_name] <- requested_proportions[["adjustments"]][[stratum]]
             if (report) {
               writeLines(paste("Assigning specified proportion of starting population to", stratum))
@@ -570,6 +582,9 @@ EpiModel <- R6Class(
           }
         }
       }
+      
+      print(self$parameters)
+      
     },  
     
     # cycle through parameter stratification requests with the last one overwriting earlier ones in the list
