@@ -352,19 +352,45 @@ EpiModel <- R6Class(
           }
         }
       }
-      
-      print(strata_names)
+
+      # work out ageing flows (comes first so that the compartment names are still in the unstratified form)
+      if (stratification_name == "age") {
+        self$set_ageing_rates(strata_names, report)
+      }
       
       # stratify the compartments and then the flows
       requested_proportions <- self$tidy_starting_proportions(strata_names, requested_proportions, report)
       self$stratify_compartments(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions, report)
       self$stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests, report)
       self$stratify_transition_flows(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions, report)
+      
       if (report) {
         writeLines("Stratified flows matrix:")
         print(self$flows)
       }
       self$stratify_entry_flows(stratification_name, strata_names, compartment_types_to_stratify, requested_proportions, report)
+    },
+    
+    # set intercompartmental flows for ageing from one stratum to the next
+    set_ageing_rates = function(strata_names, report) {
+      for (stratum_number in seq(length(strata_names) - 1)) {
+        start_age <- strata_names[stratum_number]
+        end_age <- strata_names[stratum_number + 1]
+        ageing_parameter_name <- paste("ageing", as.character(start_age), "to", as.character(end_age), sep="")
+        ageing_rate <- 1 / (end_age - start_age)
+        self$parameters[ageing_parameter_name] <- ageing_rate
+        for (compartment in names(self$compartment_values)) {
+          self$flows <- 
+            rbind(self$flows, 
+                  data.frame(type="standard_flows", parameter=ageing_parameter_name, 
+                             from=create_stratified_name(compartment, "age", start_age),
+                             to=create_stratified_name(compartment, "age", end_age),
+                             implement=TRUE, stringsAsFactors=FALSE))
+        }
+        if (report) {
+          writeLines(paste("Ageing rate from age group", start_age, "to", end_age, "is", round(ageing_rate, self$reporting_sigfigs)))
+        }
+      }
     },
     
     # find the names of the stratifications from a particular user request
@@ -582,9 +608,6 @@ EpiModel <- R6Class(
           }
         }
       }
-      
-      print(self$parameters)
-      
     },  
     
     # cycle through parameter stratification requests with the last one overwriting earlier ones in the list
