@@ -180,6 +180,10 @@ EpiModel <- R6Class(
         self$parameters <- c(self$parameters, c(crude_birth_rate=0))
       }
       
+      if (self$birth_approach == "replace_deaths") {
+        self$tracked_quantities$total_deaths <- 0
+      }
+      
       # report on characteristics of inputs
       if (self$report_progress) {
         writeLines(paste("\nIntegrating from time ", round(self$times[1], self$reporting_sigfigs), 
@@ -199,7 +203,7 @@ EpiModel <- R6Class(
       
       # add any parameters that are essential for stratifications to be performed
       self$parameters[["entry_fractions"]] <- 1
-      if (!"universal_death_rate" %in% self$parameters) {
+      if (!"universal_death_rate" %in% names(self$parameters)) {
         self$parameters$universal_death_rate <- 0
       }
     },
@@ -481,7 +485,6 @@ EpiModel <- R6Class(
     
     # stratify the approach to universal, population-wide deaths (which can vary by stratum)
     stratify_universal_death_rate = function(stratification_name, strata_names, adjustment_requests, report) {
-      
       if ("universal_death_rate" %in% names(adjustment_requests)) {
         for (parameter in names(self$parameters)) {
           if (startsWith(parameter, "universal_death_rate")) {
@@ -703,9 +706,9 @@ EpiModel <- R6Class(
         adjusted_parameter <- self$adjust_parameter("universal_death_rate")
         from_compartment <- match(compartment, names(self$compartment_values))
         net_flow <- adjusted_parameter * compartment_values[from_compartment]
-        
+
         # track deaths in case births are meant to replace deaths
-        if ("total_deaths" %in% self$tracked_quantities) {
+        if ("total_deaths" %in% names(self$tracked_quantities)) {
           self$tracked_quantities$total_deaths <- self$tracked_quantities$total_deaths + net_flow
         }
         ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
@@ -767,8 +770,9 @@ EpiModel <- R6Class(
       # for each listed quantity in the quantities requested for tracking,
       # except population deaths, which are updated as they are calculated
       for (quantity in names(self$tracked_quantities)) {
+        
+        self$tracked_quantities[[quantity]] <- 0
         if (quantity == "infectious_population") {
-          self$tracked_quantities$infectious_population <- 0
           for (compartment in names(self$compartment_values)) {
             if (find_stem(compartment) == self$infectious_compartment) {
               self$tracked_quantities$infectious_population <- 
