@@ -25,7 +25,7 @@ library(rsvg)
 
 # find the stem of the compartment name as the text leading up to the first occurrence of "X"
 find_stem = function(stratified_string) {
-  str_split(stratified_string, fixed("X"))[[1]][1]
+  strsplit(stratified_string, "X")[[1]][1]
 }
 
 # find the trailing text for the stratum of the compartment
