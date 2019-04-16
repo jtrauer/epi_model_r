@@ -778,10 +778,7 @@ EpiModel <- R6Class(
             if (find_stem(compartment) == self$infectious_compartment) {
               self$tracked_quantities$infectious_population <- 
                 self$tracked_quantities$infectious_population + 
-                compartment_values[match(compartment, names(self$compartment_values))]
-              
-              # print(compartment)
-              
+                as.numeric(compartment_values[match(compartment, names(self$compartment_values))])
             }
           }
         }
