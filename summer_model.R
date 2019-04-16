@@ -532,12 +532,12 @@ EpiModel <- R6Class(
     # add additional stratified flow to flow data frame
     add_stratified_flows = function(flow, stratification_name, strata_names, stratify_from, stratify_to, adjustment_requests, report) {
       
+      if (report) {
+        writeLines(paste("For flow from", self$flows$from[flow], "to", self$flows$to[flow], "in stratification", stratification_name))
+      }
+            
       # loop over each stratum in the requested stratification structure
       for (stratum in strata_names) {
-        
-        if (report) {
-          writeLines(paste("For flow from", self$flows$from[flow], "to", self$flows$to[flow], "in stratum", stratum, "of" , stratification_name))
-        }
         
         # find parameter name, will remain as null if no requests have been made by the user
         parameter_name <- self$add_adjusted_parameter(self$flows$parameter[flow], stratification_name, stratum, strata_names, adjustment_requests)
@@ -545,20 +545,21 @@ EpiModel <- R6Class(
         # default behaviour for parameters not requested is to split the parameter into equal parts to split but from not split
         # otherwise retain the existing parameter
         if (is.null(parameter_name) & !stratify_from & stratify_to) {
+          old_parameter_name <- self$flows$parameter[flow]
           parameter_name <- create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)
-          self$parameters[parameter_name] <- as.numeric(self$parameters[self$flows$parameter[flow]]) / length(strata_names)
-          if (report) {
-            writeLines(paste("\tSplitting existing parameter value,", parameter_name, "into", length(strata_names), "equal parts"))
+          self$parameters[parameter_name] <- as.numeric(self$parameters[old_parameter_name]) / length(strata_names)
+          if (report & stratum == strata_names[1]) {
+            writeLines(paste("\tSplitting existing parameter value", old_parameter_name, "into", length(strata_names), "equal parts"))
           }
         }
         else if (is.null(parameter_name)) {
           parameter_name <- self$flows$parameter[flow]
-          if (report) {
-            writeLines(paste("\tRetaining existing parameter value,", parameter_name))
+          if (report & stratum == strata_names[1]) {
+            writeLines(paste("\tRetaining existing parameter value", parameter_name))
           }
         }
-        else if (report) {
-          writeLines(paste("\tImplementing new parameter,", parameter_name))
+        else if (report & stratum == strata_names[1]) {
+          writeLines(paste("\tImplementing new parameter", parameter_name))
         }
 
         # determine whether to and/or from compartments are stratified
@@ -778,6 +779,9 @@ EpiModel <- R6Class(
               self$tracked_quantities$infectious_population <- 
                 self$tracked_quantities$infectious_population + 
                 compartment_values[match(compartment, names(self$compartment_values))]
+              
+              # print(compartment)
+              
             }
           }
         }
