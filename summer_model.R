@@ -546,7 +546,7 @@ EpiModel <- R6Class(
         # otherwise retain the existing parameter
         if (is.null(parameter_name) & !stratify_from & stratify_to) {
           parameter_name <- create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)
-          self$parameters[parameter_name] <- self$parameters[self$flows$parameter[flow]] / length(strata_names)
+          self$parameters[parameter_name] <- as.numeric(self$parameters[self$flows$parameter[flow]]) / length(strata_names)
           if (report) {
             writeLines(paste("\tSplitting existing parameter value,", parameter_name, "into", length(strata_names), "equal parts"))
           }
