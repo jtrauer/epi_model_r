@@ -262,7 +262,7 @@ EpiModel <- R6Class(
           stop("to compartment name not found in compartment types")
         }
         
-        self$add_single_flow_to_model(working_flow)
+        self$add_single_flow(working_flow)
         # self$flows <- rbind(self$flows, data.frame(type=working_flow[1], parameter=as.character(working_flow[2]), from=working_flow[3],
                                                    # to=working_flow[4], implement=TRUE, stringsAsFactors=FALSE))
         
@@ -279,7 +279,7 @@ EpiModel <- R6Class(
       }
     },
     
-    add_single_flow_to_model = function(flow) {
+    add_single_flow = function(flow) {
       self$flows <- rbind(self$flows, data.frame(type=flow[1], parameter=as.character(flow[2]), from=flow[3], to=flow[4], 
                                                  implement=TRUE, stringsAsFactors=FALSE))
     },
