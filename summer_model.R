@@ -261,8 +261,10 @@ EpiModel <- R6Class(
         if(!working_flow[4] %in% self$compartment_types) {
           stop("to compartment name not found in compartment types")
         }
-        self$flows <- rbind(self$flows, data.frame(type=working_flow[1],parameter=as.character(working_flow[2]), from=working_flow[3],
-                                                   to=working_flow[4], implement=TRUE, stringsAsFactors=FALSE))
+        
+        self$add_single_flow_to_model(working_flow)
+        # self$flows <- rbind(self$flows, data.frame(type=working_flow[1], parameter=as.character(working_flow[2]), from=working_flow[3],
+                                                   # to=working_flow[4], implement=TRUE, stringsAsFactors=FALSE))
         
         # retain a copy of the original flows for the purposes of graphing, etc.
         self$unstratified_flows <- self$flows
@@ -275,6 +277,11 @@ EpiModel <- R6Class(
           self$tracked_quantities["total_population"] <- 0
         }
       }
+    },
+    
+    add_single_flow_to_model = function(flow) {
+      self$flows <- rbind(self$flows, data.frame(type=flow[1], parameter=as.character(flow[2]), from=flow[3], to=flow[4], 
+                                                 implement=TRUE, stringsAsFactors=FALSE))
     },
     
     # __________
