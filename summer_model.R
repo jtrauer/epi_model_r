@@ -683,17 +683,15 @@ EpiModel <- R6Class(
     apply_transition_flows = function(ode_equations, compartment_values, time) {
       for (f in seq(nrow(self$flows))) {
         flow <- self$flows[f,]
+
         if (flow$implement) {
-          
-          # calculate adjustment to original stem parameter
-          adjusted_parameter <- self$adjust_parameter(flow$parameter)
-          
+
           # find from compartment and "infectious population", which is 1 for standard flows
           infectious_population <- self$find_infectious_multiplier(flow$type)
           
           # calculate the flow and apply to the odes
           from_compartment <- match(flow$from, names(self$compartment_values))
-          net_flow <- adjusted_parameter * compartment_values[from_compartment] * infectious_population
+          net_flow <- self$parameters[[flow$parameter]] * compartment_values[from_compartment] * infectious_population
           ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
           ode_equations <- self$increment_compartment(ode_equations, match(flow$to, names(self$compartment_values)), net_flow)
         }
