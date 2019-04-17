@@ -388,7 +388,9 @@ EpiModel <- R6Class(
       self$stratify_compartments(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions, report)
       self$stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests, report)
       self$stratify_transition_flows(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, report)
-      self$stratify_death_flows(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, report)
+      if (nrow(self$death_flows) > 0) {
+        self$stratify_death_flows(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, report)
+      }
       
       if (report) {
         writeLines("Stratified flows matrix:")
