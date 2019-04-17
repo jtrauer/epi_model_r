@@ -547,7 +547,7 @@ EpiModel <- R6Class(
         if (is.null(parameter_name) & !stratify_from & stratify_to) {
           old_parameter_name <- self$flows$parameter[flow]
           parameter_name <- create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)
-          self$parameters[parameter_name] <- as.numeric(self$parameters[old_parameter_name]) / length(strata_names)
+          self$parameters[parameter_name] <- 1 / length(strata_names)
           if (report & stratum == strata_names[1]) {
             writeLines(paste("\tSplitting existing parameter value", old_parameter_name, "into", length(strata_names), "equal parts"))
           }
@@ -684,6 +684,9 @@ EpiModel <- R6Class(
       for (f in seq(nrow(self$flows))) {
         flow <- self$flows[f,]
 
+        # find adjsuted parameter value
+        adjusted_parameter <- self$adjust_parameter(flow$parameter)
+
         if (flow$implement) {
 
           # find from compartment and "infectious population", which is 1 for standard flows
@@ -691,7 +694,7 @@ EpiModel <- R6Class(
           
           # calculate the flow and apply to the odes
           from_compartment <- match(flow$from, names(self$compartment_values))
-          net_flow <- self$parameters[[flow$parameter]] * compartment_values[from_compartment] * infectious_population
+          net_flow <- as.numeric(adjusted_parameter) * compartment_values[from_compartment] * infectious_population
           ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
           ode_equations <- self$increment_compartment(ode_equations, match(flow$to, names(self$compartment_values)), net_flow)
         }
@@ -792,13 +795,14 @@ EpiModel <- R6Class(
       # start from baseline values
       base_parameter_value <- as.numeric(self$parameters[find_stem(flow_or_compartment)])
       parameter_adjustment_value <- 1
-
+      
       # if the parameter is stratified
       if (grepl("X", flow_or_compartment)) {
-        
+
         # cycle through the parameter adjustments by finding the Xs in the strings,
         # starting from the most stratified parameter (longest string)
         x_positions <- extract_x_positions(flow_or_compartment)
+        
         for (x_instance in rev(x_positions[2:length(x_positions)])) {
           
           # find the name of the parameter adjustment for the stratum considered
