@@ -674,7 +674,7 @@ EpiModel <- R6Class(
         self$update_tracked_quantities(compartment_values)
         
         # apply flows
-        self$apply_all_flow_types_to_odes(rep(0, length(self$compartment_values)), compartment_values, time)
+        self$apply_all_flow_types_to_odes(rep(0, length(compartment_values)), compartment_values, time)
       }
     },
     
@@ -782,16 +782,21 @@ EpiModel <- R6Class(
         
         self$tracked_quantities[[quantity]] <- 0
         if (quantity == "infectious_population") {
-          for (compartment in names(self$compartment_values)) {
-            if (find_stem(compartment) == self$infectious_compartment) {
-              self$tracked_quantities$infectious_population <- 
-                self$tracked_quantities$infectious_population + 
-                as.numeric(compartment_values[match(compartment, names(self$compartment_values))])
-            }
-          }
+          self$find_infectious_population(compartment_values)
         }
         else if (quantity == "total_population") {
           self$tracked_quantities$total_population <- sum(compartment_values)
+        }
+      }
+    },
+    
+    # calculations to find the effective infectious population
+    find_infectious_population = function(compartment_values) {
+      for (compartment in names(self$compartment_values)) {
+        if (find_stem(compartment) == self$infectious_compartment) {
+          self$tracked_quantities$infectious_population <- 
+            self$tracked_quantities$infectious_population + 
+            as.numeric(compartment_values[match(compartment, names(self$compartment_values))])
         }
       }
     },
