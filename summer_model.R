@@ -93,6 +93,7 @@ EpiModel <- R6Class(
     report_progress = TRUE,
     reporting_sigfigs = 3,
     infectiousness_adjustments = c(),
+    heterogeneous_infectiousness = FALSE,
 
     # __________
     # general methods that can be required at various stages
@@ -388,6 +389,7 @@ EpiModel <- R6Class(
         stop("request for infectiousness adjustments passed, but stratification doesn't apply to the infectious compartment")
       }
       else if (length(infectiousness_adjustments) > 0) {
+        self$heterogeneous_infectiousness <- TRUE
         for (stratum in names(infectiousness_adjustments)) {
           if (stratum %in% strata_request) {
             adjustment_name <- create_stratified_name("", stratification_name, stratum)
@@ -810,11 +812,27 @@ EpiModel <- R6Class(
     
     # calculations to find the effective infectious population
     find_infectious_population = function(compartment_values) {
+      
+      # loop through all compartments and find the ones representing active infectious disease
       for (compartment in names(self$compartment_values)) {
         if (find_stem(compartment) == self$infectious_compartment) {
-          self$tracked_quantities$infectious_population <- 
-            self$tracked_quantities$infectious_population + 
-            as.numeric(compartment_values[match(compartment, names(self$compartment_values))])
+          
+          # assume homogeneous infectiousness until requested otherwise
+          infectiousness_modifier <- 1
+          
+          # heterogeneous infectiousness adjustment
+          if (self$heterogeneous_infectiousness) {
+            for (adjustment in names(self$infectiousness_adjustments)) {
+              if (grepl(adjustment, compartment)) {
+                infectiousness_modifier <- self$infectiousness_adjustments[[adjustment]]
+              }
+            }
+          }
+          
+          # increment infectious population
+          self$tracked_quantities$infectious_population <-
+            self$tracked_quantities$infectious_population +
+            compartment_values[match(compartment, names(self$compartment_values))] * infectiousness_modifier
         }
       }
     },
