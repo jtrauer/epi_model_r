@@ -81,7 +81,8 @@ EpiModel <- R6Class(
     default_starting_compartment = "",
     birth_approach = "",
     unstratified_flows = data.frame(),
-    flows = data.frame(),
+    transition_flows = data.frame(),
+    death_flows = data.frame(),
     parameters = list(),
     time_variants = list(),
     tracked_quantities = list(),
@@ -260,16 +261,19 @@ EpiModel <- R6Class(
         if(!working_flow[3] %in% self$compartment_types) {
           stop("from compartment name not found in compartment types")
         }
-        if(!working_flow[4] %in% self$compartment_types) {
+        if(!working_flow[4] %in% self$compartment_types & working_flow[1] != "compartment_death") {
           stop("to compartment name not found in compartment types")
         }
         
-        self$add_single_flow(working_flow)
-        # self$flows <- rbind(self$flows, data.frame(type=working_flow[1], parameter=as.character(working_flow[2]), from=working_flow[3],
-                                                   # to=working_flow[4], implement=TRUE, stringsAsFactors=FALSE))
-        
+        if (working_flow[1] == "compartment_death") {
+          self$add_death_flow(working_flow)
+        }
+        else {
+          self$add_transition_flow(working_flow)
+        }
+
         # retain a copy of the original flows for the purposes of graphing, etc.
-        self$unstratified_flows <- self$flows
+        self$unstratified_flows <- self$transition_flows
         
         # add quantities that will need to be tracked to the tracked quantities attribute
         if (grepl("infection", working_flow[1])) {
@@ -281,9 +285,16 @@ EpiModel <- R6Class(
       }
     },
     
-    add_single_flow = function(flow) {
-      self$flows <- rbind(self$flows, data.frame(type=flow[1], parameter=as.character(flow[2]), from=flow[3], to=flow[4], 
-                                                 implement=TRUE, stringsAsFactors=FALSE))
+    # simply add a flow to the data frame storing the flows
+    add_transition_flow = function(flow) {
+      self$transition_flows <- rbind(self$transition_flows, data.frame(type=flow[1], parameter=as.character(flow[2]), from=flow[3], to=flow[4], 
+                                                                       implement=TRUE, stringsAsFactors=FALSE))
+    },
+
+    # similarly for compartment-specific death flows    
+    add_death_flow = function(flow) {
+      self$death_flows <- rbind(self$death_flows, data.frame(type=flow[1], parameter=as.character(flow[2]), from=flow[3],
+                                                             implement=TRUE, stringsAsFactors=FALSE))
     },
     
     # __________
@@ -376,11 +387,12 @@ EpiModel <- R6Class(
       requested_proportions <- self$tidy_starting_proportions(strata_names, requested_proportions, report)
       self$stratify_compartments(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions, report)
       self$stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests, report)
-      self$stratify_transition_flows(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions, report)
+      self$stratify_transition_flows(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, report)
+      self$stratify_death_flows(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, report)
       
       if (report) {
         writeLines("Stratified flows matrix:")
-        print(self$flows)
+        print(self$transition_flows)
       }
       self$stratify_entry_flows(stratification_name, strata_names, compartment_types_to_stratify, requested_proportions, report)
 
@@ -411,8 +423,8 @@ EpiModel <- R6Class(
         ageing_rate <- 1 / (end_age - start_age)
         self$parameters[ageing_parameter_name] <- ageing_rate
         for (compartment in names(self$compartment_values)) {
-          self$flows <- 
-            rbind(self$flows, 
+          self$transition_flows <- 
+            rbind(self$transition_flows, 
                   data.frame(type="standard_flows", parameter=ageing_parameter_name, 
                              from=create_stratified_name(compartment, "age", start_age),
                              to=create_stratified_name(compartment, "age", end_age),
@@ -527,22 +539,22 @@ EpiModel <- R6Class(
     },
     
     # stratify flows depending on whether inflow, outflow or both need replication
-    stratify_transition_flows = function(stratification_name, strata_names, compartments_to_stratify, adjustment_requests, requested_proportions, report) {
-      for (flow in seq(nrow(self$flows))) {
+    stratify_transition_flows = function(stratification_name, strata_names, compartments_to_stratify, adjustment_requests, report) {
+      for (flow in seq(nrow(self$transition_flows))) {
         
         # both from and to compartments being stratified
-        if (find_stem(self$flows$from[flow]) %in% compartments_to_stratify &
-            find_stem(self$flows$to[flow]) %in% compartments_to_stratify) {
+        if (find_stem(self$transition_flows$from[flow]) %in% compartments_to_stratify &
+            find_stem(self$transition_flows$to[flow]) %in% compartments_to_stratify) {
           whether_stratify <- c(TRUE, TRUE)
         }
         
         # from compartment being stratified but not to compartment
-        else if (find_stem(self$flows$from[flow]) %in% compartments_to_stratify) {
+        else if (find_stem(self$transition_flows$from[flow]) %in% compartments_to_stratify) {
           whether_stratify <- c(TRUE, FALSE)
         }
         
         # to compartment being stratified but not from compartment
-        else if (find_stem(self$flows$to[flow]) %in% compartments_to_stratify) {
+        else if (find_stem(self$transition_flows$to[flow]) %in% compartments_to_stratify) {
           whether_stratify <- c(FALSE, TRUE)
         }
         else {
@@ -550,37 +562,46 @@ EpiModel <- R6Class(
         }
 
         # if flow is active and stratification is relevant    
-        if (any(whether_stratify) & self$flows$implement[flow]) {
+        if (any(whether_stratify) & self$transition_flows$implement[flow]) {
           self$add_stratified_flows(flow, stratification_name, strata_names, whether_stratify[1], whether_stratify[2], adjustment_requests, report)
         }
       }
     },
     
+    stratify_death_flows = function(stratification_name, strata_names, compartments_to_stratify, adjustment_requests, report) {
+
+      for (flow in seq(nrow(self$transition_flows))) {
+        if (find_stem(self$death_flows$from[flow]) %in% compartments_to_stratify) {
+          print("hello")
+        }
+      }
+    },    
+    
     # add additional stratified flow to flow data frame
     add_stratified_flows = function(flow, stratification_name, strata_names, stratify_from, stratify_to, adjustment_requests, report) {
       
       if (report) {
-        writeLines(paste("For flow from", self$flows$from[flow], "to", self$flows$to[flow], "in stratification", stratification_name))
+        writeLines(paste("For flow from", self$transition_flows$from[flow], "to", self$transition_flows$to[flow], "in stratification", stratification_name))
       }
             
       # loop over each stratum in the requested stratification structure
       for (stratum in strata_names) {
         
         # find parameter name, will remain as null if no requests have been made by the user
-        parameter_name <- self$add_adjusted_parameter(self$flows$parameter[flow], stratification_name, stratum, strata_names, adjustment_requests)
+        parameter_name <- self$add_adjusted_parameter(self$transition_flows$parameter[flow], stratification_name, stratum, strata_names, adjustment_requests)
         
         # default behaviour for parameters not requested is to split the parameter into equal parts to split but from not split
         # otherwise retain the existing parameter
         if (is.null(parameter_name) & !stratify_from & stratify_to) {
-          old_parameter_name <- self$flows$parameter[flow]
-          parameter_name <- create_stratified_name(self$flows$parameter[flow], stratification_name, stratum)
+          old_parameter_name <- self$transition_flows$parameter[flow]
+          parameter_name <- create_stratified_name(self$transition_flows$parameter[flow], stratification_name, stratum)
           self$parameters[parameter_name] <- 1 / length(strata_names)
           if (report & stratum == strata_names[1]) {
             writeLines(paste("\tSplitting existing parameter value", old_parameter_name, "into", length(strata_names), "equal parts"))
           }
         }
         else if (is.null(parameter_name)) {
-          parameter_name <- self$flows$parameter[flow]
+          parameter_name <- self$transition_flows$parameter[flow]
           if (report & stratum == strata_names[1]) {
             writeLines(paste("\tRetaining existing parameter value", parameter_name))
           }
@@ -591,25 +612,25 @@ EpiModel <- R6Class(
 
         # determine whether to and/or from compartments are stratified
         if (stratify_from) {
-          from_compartment <- create_stratified_name(self$flows$from[flow], stratification_name, stratum)
+          from_compartment <- create_stratified_name(self$transition_flows$from[flow], stratification_name, stratum)
         }
         else {
-          from_compartment <- self$flows$from[flow]
+          from_compartment <- self$transition_flows$from[flow]
         }
         if (stratify_to) {
-          to_compartment <- create_stratified_name(self$flows$to[flow], stratification_name, stratum)
+          to_compartment <- create_stratified_name(self$transition_flows$to[flow], stratification_name, stratum)
         }
         else {
-          to_compartment <- self$flows$to[flow]
+          to_compartment <- self$transition_flows$to[flow]
         }
         
         # add the new flow
-        self$flows <- rbind(self$flows,data.frame(
-          parameter=parameter_name, from=from_compartment, to=to_compartment, implement=TRUE, type=self$flows$type[flow]))
+        self$transition_flows <- rbind(self$transition_flows,data.frame(
+          parameter=parameter_name, from=from_compartment, to=to_compartment, implement=TRUE, type=self$transition_flows$type[flow]))
       }
       
       # remove old flow
-      self$flows$implement[flow] <- FALSE
+      self$transition_flows$implement[flow] <- FALSE
     },
     
     # stratify entry/recruitment/birth flows
@@ -701,6 +722,9 @@ EpiModel <- R6Class(
     # apply all flow types to a vector of zeros (deaths must come before births in case births replace deaths)
     apply_all_flow_types_to_odes = function(ode_equations, compartment_values, time) {
       ode_equations <- self$apply_transition_flows(ode_equations, compartment_values, time)
+      if (nrow(self$death_flows) > 0) {
+        ode_equations <- self$apply_compartment_death_flows(ode_equations, compartment_values, time)
+      }
       ode_equations <- self$apply_universal_death_flow(ode_equations, compartment_values, time)
       ode_equations <- self$apply_birth_rate(ode_equations, compartment_values, time)
       list(ode_equations)
@@ -708,10 +732,10 @@ EpiModel <- R6Class(
     
     # add fixed or infection-related flow to odes
     apply_transition_flows = function(ode_equations, compartment_values, time) {
-      for (f in seq(nrow(self$flows))) {
-        flow <- self$flows[f,]
+      for (f in seq(nrow(self$transition_flows))) {
+        flow <- self$transition_flows[f,]
 
-        # find adjsuted parameter value
+        # find adjusted parameter value
         adjusted_parameter <- self$adjust_parameter(flow$parameter)
 
         if (flow$implement) {
@@ -721,9 +745,26 @@ EpiModel <- R6Class(
           
           # calculate the flow and apply to the odes
           from_compartment <- match(flow$from, names(self$compartment_values))
-          net_flow <- as.numeric(adjusted_parameter) * compartment_values[from_compartment] * infectious_population
+          net_flow <- adjusted_parameter * compartment_values[from_compartment] * infectious_population
           ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
           ode_equations <- self$increment_compartment(ode_equations, match(flow$to, names(self$compartment_values)), net_flow)
+        }
+      }
+      ode_equations
+    },
+    
+    # equivalent method to for transition flows above, but for deaths
+    apply_compartment_death_flows = function(ode_equations, compartment_values, time) {
+      
+      for (f in seq(nrow(self$death_flows))) {
+        flow <- self$death_flows[f,]
+        
+        adjusted_parameter <- self$adjust_parameter(flow$parameter)
+
+        if (flow$implement) {
+          from_compartment <- match(flow$from, names(self$compartment_values))
+          net_flow <- adjusted_parameter * compartment_values[from_compartment]
+          ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
         }
       }
       ode_equations
