@@ -570,7 +570,6 @@ EpiModel <- R6Class(
     
     # add compartment-specific death flows to death data frame
     stratify_death_flows = function(stratification_name, strata_names, compartments_to_stratify, report) {
-      report = TRUE
       for (flow in seq(nrow(self$death_flows))) {
         if (find_stem(self$death_flows$from[flow]) %in% compartments_to_stratify) {
           for (stratum in strata_names) {
@@ -769,12 +768,9 @@ EpiModel <- R6Class(
       
       for (f in seq(nrow(self$death_flows))) {
         flow <- self$death_flows[f,]
-        
-        adjusted_parameter <- self$adjust_parameter(flow$parameter)
-
         if (flow$implement) {
           from_compartment <- match(flow$from, names(self$compartment_values))
-          net_flow <- adjusted_parameter * compartment_values[from_compartment]
+          net_flow <- self$parameters[[flow$parameter]] * compartment_values[from_compartment]
           ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
         }
       }
