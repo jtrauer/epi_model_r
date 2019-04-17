@@ -92,6 +92,7 @@ EpiModel <- R6Class(
     outputs = NULL,
     report_progress = TRUE,
     reporting_sigfigs = 3,
+    infectiousness_adjustments = c(),
 
     # __________
     # general methods that can be required at various stages
@@ -288,7 +289,8 @@ EpiModel <- R6Class(
     # stratification methods
     
     # master stratification method
-    stratify = function(stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests=c(), requested_proportions=list(), report=TRUE) {
+    stratify = function(stratification_name, strata_request, compartment_types_to_stratify, 
+                        adjustment_requests=c(), requested_proportions=list(), infectiousness_adjustments=c(), report=TRUE) {
 
       # check stratification name is appropriate, report and add to list of strata
       if (stratification_name == "age" & "age" %in% self$strata) {
@@ -332,7 +334,7 @@ EpiModel <- R6Class(
       # record stratification as attribute to model and find the names to apply strata
       self$strata <- c(self$strata, stratification_name)
       strata_names <- self$find_strata_names_from_input(stratification_name, strata_request, report)
-      
+
       # if vector of length zero passed, stratify all the compartment types in the model
       if (length(compartment_types_to_stratify) == 0) {
         compartment_types_to_stratify <- self$compartment_types
@@ -380,6 +382,22 @@ EpiModel <- R6Class(
         print(self$flows)
       }
       self$stratify_entry_flows(stratification_name, strata_names, compartment_types_to_stratify, requested_proportions, report)
+
+      # work out infectiousness adjustments and set as model attributes      
+      if (length(infectiousness_adjustments) > 0 & !self$infectious_compartment %in% compartment_types_to_stratify) {
+        stop("request for infectiousness adjustments passed, but stratification doesn't apply to the infectious compartment")
+      }
+      else if (length(infectiousness_adjustments) > 0) {
+        for (stratum in names(infectiousness_adjustments)) {
+          if (stratum %in% strata_request) {
+            adjustment_name <- create_stratified_name("", stratification_name, stratum)
+            self$infectiousness_adjustments[[adjustment_name]] <- infectiousness_adjustments[[stratum]]
+          }
+          else {
+            stop("stratum to have infectiousness modified not found within requested strata")
+          }
+        }
+      }
     },
     
     # set intercompartmental flows for ageing from one stratum to the next
