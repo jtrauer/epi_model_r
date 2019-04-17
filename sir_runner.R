@@ -19,7 +19,8 @@ sir_model <- EpiModel$new(seq(from=0, to=60/365, by=1/365),
                                c("compartment_death", "infect_death", "infectious")),
                           report_progress=FALSE)
 sir_model$stratify("hiv", c("negative", "positive"), c(),
-                   list(recovery=list(adjustments=list("negative"=0.7, "positive"=0.5))),
+                   list(recovery=list(adjustments=list("negative"=0.7, "positive"=0.5)),
+                        infect_death=list(adjustments=list("negative"=0.5))),
                    list("negative"=0.6, "positive"=0.4), report = FALSE)
 # 
 # sir_model$stratify("age", c(3, 2, 1), c(),

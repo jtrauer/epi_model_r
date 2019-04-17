@@ -388,7 +388,7 @@ EpiModel <- R6Class(
       self$stratify_compartments(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions, report)
       self$stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests, report)
       self$stratify_transition_flows(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, report)
-      self$stratify_death_flows(stratification_name, strata_names, compartment_types_to_stratify, report)
+      self$stratify_death_flows(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, report)
       
       if (report) {
         writeLines("Stratified flows matrix:")
@@ -569,12 +569,13 @@ EpiModel <- R6Class(
     },
     
     # add compartment-specific death flows to death data frame
-    stratify_death_flows = function(stratification_name, strata_names, compartments_to_stratify, report) {
+    stratify_death_flows = function(stratification_name, strata_names, compartments_to_stratify, adjustment_requests, report) {
       for (flow in seq(nrow(self$death_flows))) {
         if (find_stem(self$death_flows$from[flow]) %in% compartments_to_stratify) {
           for (stratum in strata_names) {
+            parameter_name <- self$add_adjusted_parameter(self$death_flows$parameter[flow], stratification_name, stratum, strata_names, adjustment_requests)
             self$death_flows <- rbind(self$death_flows,data.frame(
-              parameter=self$death_flows$parameter[flow],
+              parameter=parameter_name,
               from=create_stratified_name(self$death_flows$from[flow], stratification_name, stratum), 
               implement=TRUE, type=self$death_flows$type[flow]))
             if (report) {
@@ -768,9 +769,12 @@ EpiModel <- R6Class(
       
       for (f in seq(nrow(self$death_flows))) {
         flow <- self$death_flows[f,]
+
+        adjusted_parameter <- self$adjust_parameter(flow$parameter)
+        
         if (flow$implement) {
           from_compartment <- match(flow$from, names(self$compartment_values))
-          net_flow <- self$parameters[[flow$parameter]] * compartment_values[from_compartment]
+          net_flow <- adjusted_parameter * compartment_values[from_compartment]
           ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
         }
       }
