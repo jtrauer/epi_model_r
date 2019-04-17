@@ -388,7 +388,7 @@ EpiModel <- R6Class(
       self$stratify_compartments(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, requested_proportions, report)
       self$stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests, report)
       self$stratify_transition_flows(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, report)
-      self$stratify_death_flows(stratification_name, strata_names, compartment_types_to_stratify, adjustment_requests, report)
+      self$stratify_death_flows(stratification_name, strata_names, compartment_types_to_stratify, report)
       
       if (report) {
         writeLines("Stratified flows matrix:")
@@ -568,11 +568,22 @@ EpiModel <- R6Class(
       }
     },
     
-    stratify_death_flows = function(stratification_name, strata_names, compartments_to_stratify, adjustment_requests, report) {
-
-      for (flow in seq(nrow(self$transition_flows))) {
+    # add compartment-specific death flows to death data frame
+    stratify_death_flows = function(stratification_name, strata_names, compartments_to_stratify, report) {
+      report = TRUE
+      for (flow in seq(nrow(self$death_flows))) {
         if (find_stem(self$death_flows$from[flow]) %in% compartments_to_stratify) {
-          print("hello")
+          for (stratum in strata_names) {
+            self$death_flows <- rbind(self$death_flows,data.frame(
+              parameter=self$death_flows$parameter[flow],
+              from=create_stratified_name(self$death_flows$from[flow], stratification_name, stratum), 
+              implement=TRUE, type=self$death_flows$type[flow]))
+            if (report) {
+              writeLines(paste("\tRetaining existing death parameter value", self$death_flows$parameter[flow], "for new", 
+                               create_stratified_name(self$death_flows$from[flow], stratification_name, stratum), "compartment"))
+            }
+          self$death_flows$implement[flow] <- FALSE
+          }
         }
       }
     },    

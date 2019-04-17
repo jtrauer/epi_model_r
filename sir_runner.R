@@ -19,8 +19,7 @@ sir_model <- EpiModel$new(seq(from=0, to=60/365, by=1/365),
                                c("compartment_death", "r_death", "recovered")),
                           report_progress=FALSE)
 sir_model$stratify("hiv", c("negative", "positive"), c(),
-                   list(recovery=list(adjustments=list("negative"=0.7, "positive"=0.5)),
-                        universal_death_rate=list(adjustments=list("negative"=1, "positive"=2))),
+                   list(recovery=list(adjustments=list("negative"=0.7, "positive"=0.5))),
                    list("negative"=0.6, "positive"=0.4), report = FALSE)
 # 
 # sir_model$stratify("age", c(3, 2, 1), c(),
@@ -32,7 +31,7 @@ sir_model$stratify("hiv", c("negative", "positive"), c(),
 
 sir_model$run_model()
 
-
+print(sir_model$death_flows)
 
 interpreter <- ModelInterpreter$new(sir_model)
 interpreter$plot_compartment("infectious")
