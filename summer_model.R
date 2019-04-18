@@ -783,6 +783,9 @@ EpiModel <- R6Class(
           from_compartment <- match(flow$from, names(self$compartment_values))
           net_flow <- adjusted_parameter * compartment_values[from_compartment]
           ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
+          if ("total_deaths" %in% names(self$tracked_quantities)) {
+            self$tracked_quantities$total_deaths <- self$tracked_quantities$total_deaths + net_flow
+          }
         }
       }
       ode_equations
