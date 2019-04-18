@@ -576,10 +576,15 @@ EpiModel <- R6Class(
         if (find_stem(self$death_flows$from[flow]) %in% compartments_to_stratify) {
           for (stratum in strata_names) {
             parameter_name <- self$add_adjusted_parameter(self$death_flows$parameter[flow], stratification_name, stratum, strata_names, adjustment_requests)
-            self$death_flows <- rbind(self$death_flows,data.frame(
-              parameter=parameter_name,
-              from=create_stratified_name(self$death_flows$from[flow], stratification_name, stratum), 
-              implement=TRUE, type=self$death_flows$type[flow]))
+            if (is.null(parameter_name)) {
+              parameter_name <- self$death_flows$parameter[flow]
+            }
+            
+            self$death_flows <- rbind(self$death_flows, 
+                                      data.frame(type=self$death_flows$type[flow], 
+                                                 parameter=parameter_name, 
+                                                 from=create_stratified_name(self$death_flows$from[flow], stratification_name, stratum), 
+                                                 implement=TRUE, stringsAsFactors=FALSE))
             if (report) {
               writeLines(paste("\tRetaining existing death parameter value", self$death_flows$parameter[flow], "for new", 
                                create_stratified_name(self$death_flows$from[flow], stratification_name, stratum), "compartment"))
