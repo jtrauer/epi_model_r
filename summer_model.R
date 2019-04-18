@@ -702,7 +702,7 @@ EpiModel <- R6Class(
             self$parameters[parameter_adjustment_name] <- adjustment_requests[[parameter_request]][["adjustments"]][as.character(stratum)]
             
             # overwrite parameters higher up the tree by listing which ones to be overwritten
-            if (stratum %in% adjustment_requests[parameter_request]["overwrite"]) {
+            if (stratum %in% adjustment_requests[[parameter_request]]$overwrite) {
               self$overwrite_parameters <- c(self$overwrite_parameters, parameter_adjustment_name)
             }
           }
