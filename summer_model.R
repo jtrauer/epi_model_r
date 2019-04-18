@@ -13,6 +13,7 @@ library(tidyverse)
 library(DiagrammeR)
 library(DiagrammeRsvg)
 library(rsvg)
+library(stringr)
 # this file contains the main model builder function, that is intended to be agnostic
 # to the type and complexity of model that the user wants to build
 # all instructions for what the characteristics of the model are are separated out to a file that calls/sources this one
