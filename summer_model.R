@@ -9,9 +9,9 @@
 
 library(deSolve)
 library(R6)
-library(tidyverse)
-library(DiagrammeR)
-library(DiagrammeRsvg)
+# library(tidyverse)
+# library(DiagrammeR)
+# library(DiagrammeRsvg)
 library(rsvg)
 library(stringr)
 # this file contains the main model builder function, that is intended to be agnostic
@@ -719,8 +719,7 @@ EpiModel <- R6Class(
       if (self$report_progress) {
         writeLines("\nNow integrating")
       }
-      self$outputs <- as.data.frame(ode(func=self$make_model_function(), y=unlist(self$compartment_values), times=self$times)
-      )
+      self$outputs <- as.data.frame(lsodar(unlist(self$compartment_values), self$times, self$make_model_function()))
       if (self$report_progress) {
         writeLines("\nIntegration complete")
       }
