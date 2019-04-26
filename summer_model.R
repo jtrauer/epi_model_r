@@ -97,6 +97,8 @@ EpiModel <- R6Class(
     infectiousness_adjustments = c(),
     heterogeneous_infectiousness = FALSE,
     equilibrium_stopping_tolerance = NULL,
+    track_incidence = FALSE,
+    incidence = list(times = c(), incidence = c()),
 
     # __________
     # general methods that can be required at various stages
@@ -124,7 +126,7 @@ EpiModel <- R6Class(
                           initial_conditions_sum_to_total=TRUE, infectious_compartment="infectious", 
                           birth_approach="no_births", report_progress=TRUE, reporting_sigfigs=4,
                           entry_compartment="susceptible", starting_population=1, default_starting_compartment="",
-                          equilibrium_stopping_tolerance=NULL) {
+                          equilibrium_stopping_tolerance=NULL, track_incidence=FALSE) {
       
       # convert some inputs to model attributes
       self$times <- times
@@ -139,6 +141,7 @@ EpiModel <- R6Class(
       self$starting_population <- starting_population
       self$default_starting_compartment <- default_starting_compartment
       self$equilibrium_stopping_tolerance <- equilibrium_stopping_tolerance
+      self$track_incidence <- track_incidence
       
       # run basic checks and set attributes to input arguments
       self$check_and_report_attributes()
@@ -189,6 +192,10 @@ EpiModel <- R6Class(
       
       if (self$birth_approach == "replace_deaths") {
         self$tracked_quantities$total_deaths <- 0
+      }
+      
+      if (self$track_incidence) {
+        self$tracked_quantities$incidence <- 0
       }
       
       # report on characteristics of inputs
@@ -281,10 +288,10 @@ EpiModel <- R6Class(
         
         # add quantities that will need to be tracked to the tracked quantities attribute
         if (grepl("infection", working_flow[1])) {
-          self$tracked_quantities["infectious_population"] <- 0
+          self$tracked_quantities$infectious_population <- 0
         }
         if (working_flow[1] == "infection_frequency") {
-          self$tracked_quantities["total_population"] <- 0
+          self$tracked_quantities$total_population <- 0
         }
       }
     },
@@ -786,13 +793,23 @@ EpiModel <- R6Class(
           # calculate the flow and apply to the odes
           from_compartment <- match(flow$from, names(self$compartment_values))
           net_flow <- adjusted_parameter * compartment_values[from_compartment] * infectious_population
+          
+          if ("incidence" %in% names(self$tracked_quantities) & grepl(self$infectious_compartment, flow$to)) {
+            self$tracked_quantities$incidence <- self$tracked_quantities$incidence + as.numeric(net_flow)
+          }
+          
           ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
           ode_equations <- self$increment_compartment(ode_equations, match(flow$to, names(self$compartment_values)), net_flow)
         }
       }
+
+      if ("incidence" %in% names(self$tracked_quantities)) {
+        self$incidence$times <- c(self$incidence$times, time)
+        self$incidence$incidence <- c(self$incidence$incidence, self$tracked_quantities$incidence)
+      }
       ode_equations
     },
-    
+
     # equivalent method to for transition flows above, but for deaths
     apply_compartment_death_flows = function(ode_equations, compartment_values, time) {
       
