@@ -96,6 +96,7 @@ EpiModel <- R6Class(
     reporting_sigfigs = 3,
     infectiousness_adjustments = c(),
     heterogeneous_infectiousness = FALSE,
+    equilibrium_stopping_tolerance = NULL,
 
     # __________
     # general methods that can be required at various stages
@@ -122,7 +123,8 @@ EpiModel <- R6Class(
     initialize = function(times, compartment_types, initial_conditions, parameters, requested_flows,
                           initial_conditions_sum_to_total=TRUE, infectious_compartment="infectious", 
                           birth_approach="no_births", report_progress=TRUE, reporting_sigfigs=4,
-                          entry_compartment="susceptible", starting_population=1, default_starting_compartment="") {
+                          entry_compartment="susceptible", starting_population=1, default_starting_compartment="",
+                          equilibrium_stopping_tolerance=NULL) {
       
       # convert some inputs to model attributes
       self$times <- times
@@ -131,11 +133,12 @@ EpiModel <- R6Class(
       self$parameters <- parameters
       self$infectious_compartment <- infectious_compartment
       self$birth_approach <- birth_approach
-      self$report_progress=report_progress
-      self$reporting_sigfigs=reporting_sigfigs
-      self$entry_compartment=entry_compartment
-      self$starting_population=starting_population
-      self$default_starting_compartment=default_starting_compartment
+      self$report_progress <- report_progress
+      self$reporting_sigfigs <- reporting_sigfigs
+      self$entry_compartment <- entry_compartment
+      self$starting_population <- starting_population
+      self$default_starting_compartment <- default_starting_compartment
+      self$equilibrium_stopping_tolerance <- equilibrium_stopping_tolerance
       
       # run basic checks and set attributes to input arguments
       self$check_and_report_attributes()
@@ -719,7 +722,8 @@ EpiModel <- R6Class(
       if (self$report_progress) {
         writeLines("\nNow integrating")
       }
-      self$outputs <- as.data.frame(lsodar(unlist(self$compartment_values), self$times, self$make_model_function()))
+      self$outputs <- as.data.frame(lsodar(unlist(self$compartment_values), self$times, self$make_model_function(),
+                                           rootfunc = self$set_stopping_conditions()))
       if (self$report_progress) {
         writeLines("\nIntegration complete")
       }
@@ -734,6 +738,24 @@ EpiModel <- R6Class(
         
         # apply flows
         self$apply_all_flow_types_to_odes(rep(0, length(compartment_values)), compartment_values, time)
+      }
+    },
+    
+    # if requested to stop when equilibrium is reached
+    set_stopping_conditions = function() {
+      
+      # never stop because impossible to find root
+      if (is.null(self$equilibrium_stopping_tolerance)) {
+        epi_model_function <- function(time, compartment_values, parameters) {1}
+      }
+      
+      # stop once largest net compartment change falls below specified threshold
+      else {
+        epi_model_function <- function(time, compartment_values, parameters) {
+          self$update_tracked_quantities(compartment_values)
+          net_flows <- unlist(self$apply_all_flow_types_to_odes(rep(0, length(compartment_values)), compartment_values, time))
+          max(abs(net_flows)) - self$equilibrium_stopping_tolerance
+        }
       }
     },
     
