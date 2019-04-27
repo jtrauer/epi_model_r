@@ -803,11 +803,8 @@ EpiModel <- R6Class(
         }
       }
       
-      # record the quantities being tracked
-      self$derived_outputs$times <- c(self$derived_outputs$times, time)
-      for (output_type in names(self$output_connections)) {
-        self$derived_outputs[[output_type]] <- c(self$derived_outputs[[output_type]], self$tracked_quantities[[output_type]])
-      }
+      # add another element to the derived outputs vector
+      self$extend_derived_outputs(time)
       
       # return flow rates
       ode_equations
@@ -820,6 +817,14 @@ EpiModel <- R6Class(
             grepl(self$output_connections[[output_type]]["to"], flow$to)){
           self$tracked_quantities[[output_type]] <- self$tracked_quantities[[output_type]] + as.numeric(net_flow)
         }
+      }
+    },
+
+    # add the derived quantities being tracked to the end of the tracking vector
+    extend_derived_outputs = function(time) {
+      self$derived_outputs$times <- c(self$derived_outputs$times, time)
+      for (output_type in names(self$output_connections)) {
+        self$derived_outputs[[output_type]] <- c(self$derived_outputs[[output_type]], self$tracked_quantities[[output_type]])
       }
     },
     
