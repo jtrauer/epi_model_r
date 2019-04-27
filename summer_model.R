@@ -97,8 +97,8 @@ EpiModel <- R6Class(
     infectiousness_adjustments = c(),
     heterogeneous_infectiousness = FALSE,
     equilibrium_stopping_tolerance = NULL,
-    track_incidence = FALSE,
-    incidence = list(times = c(), incidence = c()),
+    tracked_flows = list(),
+    flows_to_track = c("times"),
 
     # __________
     # general methods that can be required at various stages
@@ -126,7 +126,7 @@ EpiModel <- R6Class(
                           initial_conditions_sum_to_total=TRUE, infectious_compartment="infectious", 
                           birth_approach="no_births", report_progress=TRUE, reporting_sigfigs=4,
                           entry_compartment="susceptible", starting_population=1, default_starting_compartment="",
-                          equilibrium_stopping_tolerance=NULL, track_incidence=FALSE) {
+                          equilibrium_stopping_tolerance=NULL, flows_to_track=c("times")) {
       
       # convert some inputs to model attributes
       self$times <- times
@@ -141,8 +141,8 @@ EpiModel <- R6Class(
       self$starting_population <- starting_population
       self$default_starting_compartment <- default_starting_compartment
       self$equilibrium_stopping_tolerance <- equilibrium_stopping_tolerance
-      self$track_incidence <- track_incidence
-      
+      self$flows_to_track <- flows_to_track
+
       # run basic checks and set attributes to input arguments
       self$check_and_report_attributes()
       
@@ -194,7 +194,7 @@ EpiModel <- R6Class(
         self$tracked_quantities$total_deaths <- 0
       }
       
-      if (self$track_incidence) {
+      if ("incidence" %in% self$flows_to_track) {
         self$tracked_quantities$incidence <- 0
       }
       
@@ -804,8 +804,8 @@ EpiModel <- R6Class(
       }
 
       if ("incidence" %in% names(self$tracked_quantities)) {
-        self$incidence$times <- c(self$incidence$times, time)
-        self$incidence$incidence <- c(self$incidence$incidence, self$tracked_quantities$incidence)
+        self$tracked_flows$times <- c(self$tracked_flows$times, time)
+        self$tracked_flows$incidence <- c(self$tracked_flows$incidence, self$tracked_quantities$incidence)
       }
       ode_equations
     },
