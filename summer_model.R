@@ -97,8 +97,9 @@ EpiModel <- R6Class(
     infectiousness_adjustments = c(),
     heterogeneous_infectiousness = FALSE,
     equilibrium_stopping_tolerance = NULL,
-    tracked_flows = list(),
-    flows_to_track = c("times"),
+    derived_outputs = list(),
+    flows_to_track = c(),
+    output_connections = list(),
 
     # __________
     # general methods that can be required at various stages
@@ -126,7 +127,7 @@ EpiModel <- R6Class(
                           initial_conditions_sum_to_total=TRUE, infectious_compartment="infectious", 
                           birth_approach="no_births", report_progress=TRUE, reporting_sigfigs=4,
                           entry_compartment="susceptible", starting_population=1, default_starting_compartment="",
-                          equilibrium_stopping_tolerance=NULL, flows_to_track=c("times")) {
+                          equilibrium_stopping_tolerance=NULL, output_connections=list()) {
       
       # convert some inputs to model attributes
       self$times <- times
@@ -141,7 +142,7 @@ EpiModel <- R6Class(
       self$starting_population <- starting_population
       self$default_starting_compartment <- default_starting_compartment
       self$equilibrium_stopping_tolerance <- equilibrium_stopping_tolerance
-      self$flows_to_track <- flows_to_track
+      self$output_connections <- output_connections
 
       # run basic checks and set attributes to input arguments
       self$check_and_report_attributes()
@@ -193,11 +194,12 @@ EpiModel <- R6Class(
       if (self$birth_approach == "replace_deaths") {
         self$tracked_quantities$total_deaths <- 0
       }
-      
-      if ("incidence" %in% self$flows_to_track) {
-        self$tracked_quantities$incidence <- 0
+
+      # for each derived output to be recorded, initialise a tracked quantities key to zero      
+      for (output in names(self$output_connections)) {
+        self$tracked_quantities[[output]] <- 0
       }
-      
+
       # report on characteristics of inputs
       if (self$report_progress) {
         writeLines(paste("\nIntegrating from time ", round(self$times[1], self$reporting_sigfigs), 
@@ -793,23 +795,34 @@ EpiModel <- R6Class(
           # calculate the flow and apply to the odes
           from_compartment <- match(flow$from, names(self$compartment_values))
           net_flow <- adjusted_parameter * compartment_values[from_compartment] * infectious_population
-          
-          if ("incidence" %in% names(self$tracked_quantities) & grepl(self$infectious_compartment, flow$to)) {
-            self$tracked_quantities$incidence <- self$tracked_quantities$incidence + as.numeric(net_flow)
-          }
-          
           ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
           ode_equations <- self$increment_compartment(ode_equations, match(flow$to, names(self$compartment_values)), net_flow)
+          
+          # track any quantities dependent on flow rates
+          self$track_derived_outputs(flow, net_flow)
         }
       }
-
-      if ("incidence" %in% names(self$tracked_quantities)) {
-        self$tracked_flows$times <- c(self$tracked_flows$times, time)
-        self$tracked_flows$incidence <- c(self$tracked_flows$incidence, self$tracked_quantities$incidence)
+      
+      # record the quantities being tracked
+      self$derived_outputs$times <- c(self$derived_outputs$times, time)
+      for (output_type in names(self$output_connections)) {
+        self$derived_outputs[[output_type]] <- c(self$derived_outputs[[output_type]], self$tracked_quantities[[output_type]])
       }
+      
+      # return flow rates
       ode_equations
     },
 
+    # calculate derived quantities to be tracked
+    track_derived_outputs = function(flow, net_flow) {
+      for (output_type in names(self$output_connections)) {
+        if (grepl(self$output_connections[[output_type]]["from"], flow$from) &
+            grepl(self$output_connections[[output_type]]["to"], flow$to)){
+          self$tracked_quantities[[output_type]] <- self$tracked_quantities[[output_type]] + as.numeric(net_flow)
+        }
+      }
+    },
+    
     # equivalent method to for transition flows above, but for deaths
     apply_compartment_death_flows = function(ode_equations, compartment_values, time) {
       
