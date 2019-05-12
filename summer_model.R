@@ -139,7 +139,8 @@ EpiModel <- R6Class(
       for (attribute_to_assign in c(
         "times", "compartment_types", "unstratified_initial_conditions", "parameters", "infectious_compartment", 
         "birth_approach", "report_progress", "reporting_sigfigs", "entry_compartment", "starting_population",
-        "default_starting_compartment", "infectious_compartment", "equilibrium_stopping_tolerance", "output_connections")) {
+        "default_starting_compartment", "infectious_compartment", "equilibrium_stopping_tolerance", "output_connections", 
+        "tracked_quantities")) {
         self[[attribute_to_assign]] <- get(attribute_to_assign)
       }
       
@@ -153,7 +154,21 @@ EpiModel <- R6Class(
       if (!"universal_death_rate" %in% names(self$parameters)) {
         self$parameters$universal_death_rate <- 0
       }
-      
+      parameters[["entry_fractions"]] <- 1
+      if (is.unsorted(self$times)) {
+        writeLines("requested integration times are not sorted, now sorting")
+        self$times <- sort(self$times)
+      }   
+      if (birth_approach == "add_crude_birth_rate" & !"crude_birth_rate" %in% names(self$parameters)) {
+        self$parameters <- c(self$parameters, c(crude_birth_rate = 0))
+      }
+      if (birth_approach == "replace_deaths") {
+        self$tracked_quantities[["total_deaths"]] <- 0
+      }
+      # for each derived output to be recorded, initialise a tracked quantities key to zero      
+      for (output in names(self$output_connections)) {
+        self$tracked_quantities[[output]] <- 0
+      }
     },
     
     # check all input data are in the correct form
@@ -165,10 +180,6 @@ EpiModel <- R6Class(
       if (!is.numeric(times)) {
         stop("requested integration times are not numeric")
       }
-      else if (is.unsorted(times)) {
-        writeLines("requested integration times are not sorted, now sorting")
-        self$times <- sort(times)
-      }     
       
       # compartment types
       if (!is.character(compartment_types)) {
@@ -187,19 +198,7 @@ EpiModel <- R6Class(
       if (!birth_approach %in% private$available_birth_approaches) {
         stop("requested birth approach unavailable")
       }
-      if (birth_approach == "add_crude_birth_rate" & !"crude_birth_rate" %in% names(parameters)) {
-        parameters <- c(parameters, c(crude_birth_rate = 0))
-      }
-      
-      if (birth_approach == "replace_deaths") {
-        tracked_quantities$total_deaths <- 0
-      }
-      
-      # for each derived output to be recorded, initialise a tracked quantities key to zero      
-      for (output in names(output_connections)) {
-        tracked_quantities[[output]] <- 0
-      }
-      
+
       # report on characteristics of inputs
       if (report_progress) {
         writeLines(paste("\nIntegrating from time ", round(times[1], reporting_sigfigs), 
@@ -210,13 +209,12 @@ EpiModel <- R6Class(
                            as.character(round(as.numeric(unstratified_initial_conditions[compartment]), reporting_sigfigs)), sep=""))
         }
         writeLines("\nUnstratified parameter values are:")
-        for (parameter in names(self$parameters)) {
+        for (parameter in names(parameters)) {
           writeLines(paste(parameter, ": ", as.character(round(as.numeric(parameters[parameter]), reporting_sigfigs)), sep=""))
         }
         writeLines(paste("\nInfectious compartment is called:", infectious_compartment))
         writeLines(paste("\nBirth approach is:", birth_approach))
       }
-      parameters[["entry_fractions"]] <- 1
     },
 
     # set starting values to requested value or zero if no value requested
