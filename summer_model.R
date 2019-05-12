@@ -70,6 +70,8 @@ extract_x_positions = function(input_string) {
 # main epidemiological model object
 EpiModel <- R6Class(
   "EpiModel",
+  private = list(
+    available_birth_approaches = c("add_crude_birth_rate", "replace_deaths", "no_births")),
   public = list(
     times = NULL,
     compartment_types = c(),
@@ -127,7 +129,11 @@ EpiModel <- R6Class(
                           initial_conditions_to_total=TRUE, infectious_compartment="infectious", 
                           birth_approach="no_births", report_progress=TRUE, reporting_sigfigs=4,
                           entry_compartment="susceptible", starting_population=1, default_starting_compartment="",
-                          equilibrium_stopping_tolerance=NULL, output_connections=list()) {
+                          equilibrium_stopping_tolerance=NULL, output_connections=list(), tracked_quantities=list()) {
+      
+      self$check_and_report_attributes(
+        times, compartment_types, infectious_compartment, birth_approach, parameters, tracked_quantities, output_connections, 
+        report_progress, reporting_sigfigs, unstratified_initial_conditions)
       
       # convert input arguments to model attributes
       for (attribute_to_assign in c(
@@ -136,86 +142,83 @@ EpiModel <- R6Class(
         "default_starting_compartment", "infectious_compartment", "equilibrium_stopping_tolerance", "output_connections")) {
         self[[attribute_to_assign]] <- get(attribute_to_assign)
       }
-
-      # run basic checks and set attributes to input arguments
-      self$check_and_report_attributes()
       
       # set initial conditions and implement flows
       self$set_initial_conditions(initial_conditions_to_total)
       
       # implement unstratified flows
       self$implement_flows(requested_flows)
+      
+      # add any parameters that are essential for stratifications to be performed
+      if (!"universal_death_rate" %in% names(self$parameters)) {
+        self$parameters$universal_death_rate <- 0
+      }
+      
     },
     
-    # set basic attributes of model
-    check_and_report_attributes = function() {
-      
-      # check all input data are in the correct form
+    # check all input data are in the correct form
+    check_and_report_attributes = function(
+      times, compartment_types, infectious_compartment, birth_approach, parameters, tracked_quantities, output_connections, 
+      report_progress, reporting_sigfigs, unstratified_initial_conditions) {
       
       # times
-      if (!is.numeric(self$times)) {
+      if (!is.numeric(times)) {
         stop("requested integration times are not numeric")
       }
-      else if (is.unsorted(self$times)) {
+      else if (is.unsorted(times)) {
         writeLines("requested integration times are not sorted, now sorting")
-        self$times <- sort(self$times)
-      }
+        self$times <- sort(times)
+      }     
       
       # compartment types
-      if (!is.character(self$compartment_types)) {
+      if (!is.character(compartment_types)) {
         stop("compartment types vector is not numeric")
       }
-      if (!is.character(self$infectious_compartment)) {
+
+      # infectious compartment
+      if (!is.character(infectious_compartment)) {
         stop("infectious compartment name is not character")
       }
-      
-      # infectious compartment
-      if (!self$infectious_compartment %in% self$compartment_types) {
+      else if (!infectious_compartment %in% compartment_types) {
         stop("infectious compartment name is not one of the listed compartment types")
       }
       
       # hard coded available birth approaches
-      available_birth_approaches <- c("add_crude_birth_rate", "replace_deaths", "no_births")
-      if (!self$birth_approach %in% available_birth_approaches) {
+      if (!birth_approach %in% private$available_birth_approaches) {
         stop("requested birth approach unavailable")
       }
-      if (self$birth_approach == "add_crude_birth_rate" & !"crude_birth_rate" %in% names(self$parameters)) {
-        self$parameters <- c(self$parameters, c(crude_birth_rate=0))
+      if (birth_approach == "add_crude_birth_rate" & !"crude_birth_rate" %in% names(parameters)) {
+        parameters <- c(parameters, c(crude_birth_rate = 0))
       }
       
-      if (self$birth_approach == "replace_deaths") {
-        self$tracked_quantities$total_deaths <- 0
+      if (birth_approach == "replace_deaths") {
+        tracked_quantities$total_deaths <- 0
       }
-
+      
       # for each derived output to be recorded, initialise a tracked quantities key to zero      
-      for (output in names(self$output_connections)) {
-        self$tracked_quantities[[output]] <- 0
+      for (output in names(output_connections)) {
+        tracked_quantities[[output]] <- 0
       }
-
+      
       # report on characteristics of inputs
-      if (self$report_progress) {
-        writeLines(paste("\nIntegrating from time ", round(self$times[1], self$reporting_sigfigs), 
-                         " to ", round(tail(self$times, 1), self$reporting_sigfigs), sep=""))
+      if (report_progress) {
+        writeLines(paste("\nIntegrating from time ", round(times[1], reporting_sigfigs), 
+                         " to ", round(tail(times, 1), reporting_sigfigs), sep=""))
         writeLines("\nUnstratified requested initial conditions are:")
-        for (compartment in names(self$unstratified_initial_conditions)) {
+        for (compartment in names(unstratified_initial_conditions)) {
           writeLines(paste(compartment, ": ", 
-                           as.character(round(as.numeric(self$unstratified_initial_conditions[compartment]), self$reporting_sigfigs)), sep=""))
+                           as.character(round(as.numeric(unstratified_initial_conditions[compartment]), reporting_sigfigs)), sep=""))
         }
         writeLines("\nUnstratified parameter values are:")
         for (parameter in names(self$parameters)) {
-          writeLines(paste(parameter, ": ", as.character(round(as.numeric(self$parameters[parameter]), self$reporting_sigfigs)), sep=""))
+          writeLines(paste(parameter, ": ", as.character(round(as.numeric(parameters[parameter]), reporting_sigfigs)), sep=""))
         }
-        writeLines(paste("\nInfectious compartment is called:", self$infectious_compartment))
-        writeLines(paste("\nBirth approach is:", self$birth_approach))
+        writeLines(paste("\nInfectious compartment is called:", infectious_compartment))
+        writeLines(paste("\nBirth approach is:", birth_approach))
       }
-      
-      # add any parameters that are essential for stratifications to be performed
-      self$parameters[["entry_fractions"]] <- 1
-      if (!"universal_death_rate" %in% names(self$parameters)) {
-        self$parameters$universal_death_rate <- 0
-      }
+      parameters[["entry_fractions"]] <- 1
     },
-    
+
     # set starting values to requested value or zero if no value requested
     set_initial_conditions = function(initial_conditions_to_total) {
       for (compartment in self$compartment_types) {
