@@ -76,7 +76,7 @@ EpiModel <- R6Class(
     compartment_values = list(),
     initial_conditions = list(),
     unstratified_initial_conditions = list(),
-    initial_conditions_sum_to_total = TRUE,
+    initial_conditions_to_total = TRUE,
     starting_population = 1,
     entry_compartment = "",
     default_starting_compartment = "",
@@ -104,7 +104,7 @@ EpiModel <- R6Class(
     # __________
     # general methods that can be required at various stages
     
-    # find the value of a parameter either from time-variant or from constant values
+    # find the value of a parameter with time-variant values trumping constant ones
     find_parameter_value = function(parameter_name, time) {
       if (parameter_name %in% names(self$time_variants)) {
         self$time_variants[parameter_name](time)
@@ -123,48 +123,40 @@ EpiModel <- R6Class(
     # model construction methods
     
     # initialise basic model characteristics from inputs and check appropriately requested
-    initialize = function(times, compartment_types, initial_conditions, parameters, requested_flows,
-                          initial_conditions_sum_to_total=TRUE, infectious_compartment="infectious", 
+    initialize = function(times, compartment_types, unstratified_initial_conditions, parameters, requested_flows,
+                          initial_conditions_to_total=TRUE, infectious_compartment="infectious", 
                           birth_approach="no_births", report_progress=TRUE, reporting_sigfigs=4,
                           entry_compartment="susceptible", starting_population=1, default_starting_compartment="",
                           equilibrium_stopping_tolerance=NULL, output_connections=list()) {
       
-      # convert some inputs to model attributes
-      self$times <- times
-      self$compartment_types <- compartment_types
-      self$unstratified_initial_conditions <- initial_conditions
-      self$parameters <- parameters
-      self$infectious_compartment <- infectious_compartment
-      self$birth_approach <- birth_approach
-      self$report_progress <- report_progress
-      self$reporting_sigfigs <- reporting_sigfigs
-      self$entry_compartment <- entry_compartment
-      self$starting_population <- starting_population
-      self$default_starting_compartment <- default_starting_compartment
-      self$equilibrium_stopping_tolerance <- equilibrium_stopping_tolerance
-      self$output_connections <- output_connections
+      # convert input arguments to model attributes
+      for (attribute_to_assign in c(
+        "times", "compartment_types", "unstratified_initial_conditions", "parameters", "infectious_compartment", 
+        "birth_approach", "report_progress", "reporting_sigfigs", "entry_compartment", "starting_population",
+        "default_starting_compartment", "infectious_compartment", "equilibrium_stopping_tolerance", "output_connections")) {
+        self[[attribute_to_assign]] <- get(attribute_to_assign)
+      }
 
       # run basic checks and set attributes to input arguments
       self$check_and_report_attributes()
       
-      # set initial conditions and implement flows (without stratification)
-      self$set_initial_conditions()
-      if (initial_conditions_sum_to_total) {
-        self$sum_initial_compartments_to_total()
-      }
+      # set initial conditions and implement flows
+      self$set_initial_conditions(initial_conditions_to_total)
+      
+      # implement unstratified flows
       self$implement_flows(requested_flows)
     },
     
     # set basic attributes of model
     check_and_report_attributes = function() {
       
-      # check input data are in the correct form
+      # check all input data are in the correct form
       
       # times
       if (!is.numeric(self$times)) {
         stop("requested integration times are not numeric")
       }
-      if (is.unsorted(self$times)) {
+      else if (is.unsorted(self$times)) {
         writeLines("requested integration times are not sorted, now sorting")
         self$times <- sort(self$times)
       }
@@ -225,7 +217,7 @@ EpiModel <- R6Class(
     },
     
     # set starting values to requested value or zero if no value requested
-    set_initial_conditions = function() {
+    set_initial_conditions = function(initial_conditions_to_total) {
       for (compartment in self$compartment_types) {
         if (compartment %in% names(self$unstratified_initial_conditions)) {
           self$compartment_values[compartment] <- self$unstratified_initial_conditions[compartment]
@@ -233,6 +225,9 @@ EpiModel <- R6Class(
         else {
           self$compartment_values[compartment] <- 0
         }
+      }
+      if (initial_conditions_to_total) {
+        self$sum_initial_compartments_to_total()
       }
     },
     
