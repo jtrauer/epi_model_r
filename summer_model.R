@@ -132,8 +132,9 @@ EpiModel <- R6Class(
                           equilibrium_stopping_tolerance=NULL, output_connections=list(), tracked_quantities=list()) {
       
       self$check_and_report_attributes(
-        times, compartment_types, infectious_compartment, birth_approach, parameters, tracked_quantities, output_connections, 
-        report_progress, reporting_sigfigs, unstratified_initial_conditions)
+        times, compartment_types, unstratified_initial_conditions, parameters, requested_flows, initial_conditions_to_total,
+        infectious_compartment, birth_approach, report_progress, reporting_sigfigs, entry_compartment, starting_population,
+        default_starting_compartment, equilibrium_stopping_tolerance, output_connections, tracked_quantities)
       
       # convert input arguments to model attributes
       for (attribute_to_assign in c(
@@ -169,28 +170,46 @@ EpiModel <- R6Class(
       for (output in names(self$output_connections)) {
         self$tracked_quantities[[output]] <- 0
       }
+      
     },
     
     # check all input data are in the correct form
     check_and_report_attributes = function(
-      times, compartment_types, infectious_compartment, birth_approach, parameters, tracked_quantities, output_connections, 
-      report_progress, reporting_sigfigs, unstratified_initial_conditions) {
+      times, compartment_types, unstratified_initial_conditions, parameters, requested_flows, initial_conditions_to_total,
+      infectious_compartment, birth_approach, report_progress, reporting_sigfigs, entry_compartment, starting_population,
+      default_starting_compartment, equilibrium_stopping_tolerance, output_connections, tracked_quantities) {
       
-      # times
-      if (!is.numeric(times)) {
-        stop("requested integration times are not numeric")
-      }
-      
-      # compartment types
-      if (!is.character(compartment_types)) {
-        stop("compartment types vector is not numeric")
+      # check that variables expected to be numeric are numeric
+      for (expected_numeric_variable in c("times", "reporting_sigfigs", "starting_population")) {
+        if (!is.numeric(get(expected_numeric_variable))) {
+          stop(c(expected_numeric_variable, " is not numeric"))
+        }
       }
 
-      # infectious compartment
-      if (!is.character(infectious_compartment)) {
-        stop("infectious compartment name is not character")
+      # check that variables expected to be string are character
+      for (expected_string_variable in c("compartment_types", "infectious_compartment", "birth_approach", "entry_compartment",
+                                         "default_starting_compartment")) {
+        if (!is.character(get(expected_string_variable))) {
+          stop(c(expected_string_variable, " is not character"))
+        }
       }
-      else if (!infectious_compartment %in% compartment_types) {
+      
+      # check that variables expected to be boolean are logical
+      for (expected_boolean_variable in c("initial_conditions_to_total", "report_progress")) {
+        if (!is.logical(get(expected_boolean_variable))) {
+          stop(c(expected_boolean_variable, " is not boolean"))
+        }
+      }
+      
+      for (expected_list_variable in c("requested_flows", "output_connections", "tracked_quantities")) {
+        if (!is.list(get(expected_list_variable))) {
+          stop(c(expected_list_variable, " is not list"))
+        }
+      }
+      
+
+      # infectious compartment
+      if (!infectious_compartment %in% compartment_types) {
         stop("infectious compartment name is not one of the listed compartment types")
       }
       
