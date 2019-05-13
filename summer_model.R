@@ -70,38 +70,44 @@ extract_x_positions = function(input_string) {
 # main epidemiological model object
 EpiModel <- R6Class(
   "EpiModel",
+  
+  # attributes that shouldn't be changed by the user
   private = list(
     available_birth_approaches = c("add_crude_birth_rate", "replace_deaths", "no_births")),
   public = list(
+    
+    # attributes that are fed in as inputs (so defaults can be set as arguments to the initialisation method)
     times = NULL,
-    compartment_types = c(),
+    compartment_types = NULL,
+    unstratified_initial_conditions = NULL,
+    parameters = NULL,
+    initial_conditions_to_total = NULL,
+    infectious_compartment = NULL,
+    birth_approach = NULL,
+    report_progress = NULL,
+    reporting_sigfigs = NULL,
+    entry_compartment = NULL,
+    starting_population = NULL,
+    default_starting_compartment = NULL,
+    equilibrium_stopping_tolerance = NULL,
+    output_connections = NULL,
+    tracked_quantities = NULL,
+    
+    # other required attributes
     compartment_values = list(),
     initial_conditions = list(),
-    unstratified_initial_conditions = list(),
-    initial_conditions_to_total = TRUE,
-    starting_population = 1,
-    entry_compartment = "",
-    default_starting_compartment = "",
-    birth_approach = "",
     unstratified_flows = data.frame(),
     transition_flows = data.frame(),
     death_flows = data.frame(),
-    parameters = list(),
     time_variants = list(),
-    tracked_quantities = list(),
     overwrite_parameters = c(),
     strata = c(),
     removed_compartments = c(),
-    infectious_compartment = NULL,
     outputs = NULL,
-    report_progress = TRUE,
-    reporting_sigfigs = 3,
     infectiousness_adjustments = c(),
     heterogeneous_infectiousness = FALSE,
-    equilibrium_stopping_tolerance = NULL,
     derived_outputs = list(),
     flows_to_track = c(),
-    output_connections = list(),
 
     # __________
     # general methods that can be required at various stages
