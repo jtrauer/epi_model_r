@@ -131,10 +131,15 @@ EpiModel <- R6Class(
                           entry_compartment="susceptible", starting_population=1, default_starting_compartment="",
                           equilibrium_stopping_tolerance=NULL, output_connections=list(), tracked_quantities=list()) {
       
+      # ensure requests are fed in correctly
       self$check_and_report_attributes(
         times, compartment_types, unstratified_initial_conditions, parameters, requested_flows, initial_conditions_to_total,
         infectious_compartment, birth_approach, report_progress, reporting_sigfigs, entry_compartment, starting_population,
         default_starting_compartment, equilibrium_stopping_tolerance, output_connections, tracked_quantities)
+      if (is.unsorted(self$times)) {
+        writeLines("requested integration times are not sorted, now sorting")
+        self$times <- sort(self$times)
+      }
       
       # convert input arguments to model attributes
       for (attribute_to_assign in c(
@@ -151,26 +156,8 @@ EpiModel <- R6Class(
       # implement unstratified flows
       self$implement_flows(requested_flows)
       
-      # add any parameters that are essential for stratifications to be performed
-      if (!"universal_death_rate" %in% names(self$parameters)) {
-        self$parameters$universal_death_rate <- 0
-      }
-      parameters[["entry_fractions"]] <- 1
-      if (is.unsorted(self$times)) {
-        writeLines("requested integration times are not sorted, now sorting")
-        self$times <- sort(self$times)
-      }   
-      if (birth_approach == "add_crude_birth_rate" & !"crude_birth_rate" %in% names(self$parameters)) {
-        self$parameters <- c(self$parameters, c(crude_birth_rate = 0))
-      }
-      if (birth_approach == "replace_deaths") {
-        self$tracked_quantities[["total_deaths"]] <- 0
-      }
-      # for each derived output to be recorded, initialise a tracked quantities key to zero      
-      for (output in names(self$output_connections)) {
-        self$tracked_quantities[[output]] <- 0
-      }
-      
+      # add any missing quantities that will be needed
+      self$add_default_quantities()
     },
     
     # check all input data are in the correct form
@@ -311,6 +298,31 @@ EpiModel <- R6Class(
           self$tracked_quantities$total_population <- 0
         }
       }
+    },
+    
+    # add parameters and tracked quantities that weren't requested but will be needed
+    add_default_quantities = function() {
+      
+      # universal death rate
+      if (!"universal_death_rate" %in% names(self$parameters)) {
+        self$parameters$universal_death_rate <- 0
+      }
+      
+      # birth approach-specific parameters
+      if (self$birth_approach == "add_crude_birth_rate" & !"crude_birth_rate" %in% names(self$parameters)) {
+        self$parameters <- c(self$parameters, c(crude_birth_rate = 0))
+      }
+      else if (self$birth_approach == "replace_deaths") {
+        self$tracked_quantities$total_deaths <- 0
+      }
+
+      # for each derived output to be recorded, initialise a tracked quantities key to zero      
+      for (output in names(self$output_connections)) {
+        self$tracked_quantities[[output]] <- 0
+      }
+      
+      # parameters essential for stratification
+      self$parameters$entry_fractions <- 1
     },
     
     # simply add a flow to the data frame storing the flows
