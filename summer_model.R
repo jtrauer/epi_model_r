@@ -121,12 +121,7 @@ EpiModel <- R6Class(
         self$parameters[parameter_name]
       }
     },
-    
-    # add a time-variant function
-    add_time_variant = function(function_name, time_function) {
-      self$time_variants[function_name] <- time_function
-    },
-        
+
     # __________
     # model construction methods
     
@@ -229,7 +224,7 @@ EpiModel <- R6Class(
       }
     },
 
-    # set starting values to requested value or zero if no value requested
+    # set starting values of unstratified compartments to requested value, or zero if no value requested
     set_initial_conditions = function(initial_conditions_to_total) {
       for (compartment in self$compartment_types) {
         if (compartment %in% names(self$unstratified_initial_conditions)) {
@@ -237,6 +232,9 @@ EpiModel <- R6Class(
         }
         else {
           self$compartment_values[compartment] <- 0
+          if (self$report_progress) {
+            writeLines(paste("\nNo starting value requested for", compartment, "compartment, so set to zero"))
+          }
         }
       }
       if (initial_conditions_to_total) {
@@ -244,21 +242,34 @@ EpiModel <- R6Class(
       }
     },
     
-    # make initial conditions sum to a certain value    
-    sum_initial_compartments_to_total = function() {
-      if (!self$default_starting_compartment == "") {
-        compartment <- self$default_starting_compartment
-      }
-      else {
-        compartment <- self$entry_compartment
-        if (self$report_progress) {
-          writeLines("\nNo default starting compartment requested for unallocated population, so will be allocated to entry compartment")
-        }
-      }
-      if (!compartment %in% names(self$compartment_values)) {
+    # find the compartment to put the remaining population that hasn't been assigned yet when summing to total
+    find_remainder_compartment = function() {
+      
+      # error if requested starting compartment not available
+      if (nchar(self$default_starting_compartment) > 0 & !self$default_starting_compartment %in% names(self$compartment_values)) {
         stop("starting compartment to populate with initial values not found in available compartments")
       }
-      else if (Reduce("+", self$compartment_values) > self$starting_population) {
+      
+      # use request if requested starting compartemnt is available
+      else if (nchar(self$default_starting_compartment) > 0) {
+        return(self$default_starting_compartment)
+      }
+      
+      # otherwise use the entry compartment and report
+      else {
+        if (self$report_progress) {
+          writeLines(paste("\nNo default starting compartment requested for unallocated population, so will be allocated to entry compartment,", compartment))
+        }
+        return(self$entry_compartment)
+      }
+    },
+    
+    # make initial conditions sum to a certain value    
+    sum_initial_compartments_to_total = function() {
+      
+      compartment <- self$find_remainder_compartment()
+      
+      if (Reduce("+", self$compartment_values) > self$starting_population) {
         stop("requested a total value for starting compartments, but total of requested compartment values is greater than this")
       }
       remaining_population <- self$starting_population - Reduce("+", self$compartment_values)
