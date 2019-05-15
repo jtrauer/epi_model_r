@@ -12,7 +12,7 @@ create_arbitrary_time_variant_function = function(time) {
 
 sir_model <- EpiModel$new(seq(from=0, to=60/365, by=1/365),
                           c("susceptible", "infectious", "recovered"),
-                          list("infectious"=0.001),
+                          c("infectious"=0.001),
                           list(beta=400, recovery=365/13, infect_death=1),
                           list(c("standard_flows", "recovery", "infectious", "recovered"),
                                c("infection_density", "beta", "susceptible", "infectious"),
