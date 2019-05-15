@@ -94,7 +94,7 @@ EpiModel <- R6Class(
     tracked_quantities = NULL,
     
     # other required attributes
-    compartment_values = list(),
+    compartment_values = c(),
     initial_conditions = list(),
     unstratified_flows = data.frame(),
     transition_flows = data.frame(),
@@ -224,8 +224,10 @@ EpiModel <- R6Class(
       }
     },
 
-    # set starting values of unstratified compartments to requested value, or zero if no value requested
+    # set starting compartment values
     set_initial_conditions = function(initial_conditions_to_total) {
+      
+      # set starting values of unstratified compartments to requested value, or zero if no value requested
       for (compartment in self$compartment_types) {
         if (compartment %in% names(self$unstratified_initial_conditions)) {
           self$compartment_values[compartment] <- self$unstratified_initial_conditions[compartment]
@@ -237,9 +239,31 @@ EpiModel <- R6Class(
           }
         }
       }
+      
+      # sum to a total value if requested
       if (initial_conditions_to_total) {
         self$sum_initial_compartments_to_total()
       }
+    },
+    
+    # make initial conditions sum to a certain value    
+    sum_initial_compartments_to_total = function() {
+      
+      compartment <- self$find_remainder_compartment()
+      
+      print(self$compartment_values)
+      print(sum(self$compartment_values))
+      
+      if (Reduce("+", self$compartment_values) > self$starting_population) {
+        stop("total of requested compartment values is greater than the requested starting population")
+      }
+      remaining_population <- self$starting_population - Reduce("+", self$compartment_values)
+      if (self$report_progress) {
+        writeLines(paste("\nRequested that total population sum to", self$starting_population))
+        writeLines(paste("Remaining population of ", as.character(round(remaining_population, self$reporting_sigfigs)), 
+                         " allocated to ", compartment, " compartment", sep=""))
+      }
+      self$compartment_values[compartment] <- remaining_population
     },
     
     # find the compartment to put the remaining population that hasn't been assigned yet when summing to total
@@ -262,23 +286,6 @@ EpiModel <- R6Class(
         }
         return(self$entry_compartment)
       }
-    },
-    
-    # make initial conditions sum to a certain value    
-    sum_initial_compartments_to_total = function() {
-      
-      compartment <- self$find_remainder_compartment()
-      
-      if (Reduce("+", self$compartment_values) > self$starting_population) {
-        stop("requested a total value for starting compartments, but total of requested compartment values is greater than this")
-      }
-      remaining_population <- self$starting_population - Reduce("+", self$compartment_values)
-      if (self$report_progress) {
-        writeLines(paste("\nRequested that total population sum to", self$starting_population))
-        writeLines(paste("Remaining population of ", as.character(round(remaining_population, self$reporting_sigfigs)), 
-                         " allocated to ", compartment, " compartment", sep=""))
-      }
-      self$compartment_values[compartment] <- remaining_population
     },
 
     # add all flows to create data frames from input lists
@@ -576,7 +583,7 @@ EpiModel <- R6Class(
             writeLines(paste("Removing compartment:", compartment))
           }
           self$removed_compartments <- c(self$removed_compartments, compartment)
-          self$compartment_values[compartment] <- NULL
+          self$compartment_values[compartment] <- 0
         }
       }
     },
@@ -775,7 +782,7 @@ EpiModel <- R6Class(
       if (self$report_progress) {
         writeLines("\nNow integrating")
       }
-      self$outputs <- as.data.frame(lsodar(unlist(self$compartment_values), self$times, self$make_model_function(),
+      self$outputs <- as.data.frame(lsodar(self$compartment_values, self$times, self$make_model_function(),
                                            rootfunc = self$set_stopping_conditions()))
       if (self$report_progress) {
         writeLines("\nIntegration complete")
@@ -806,8 +813,8 @@ EpiModel <- R6Class(
       else {
         epi_model_function <- function(time, compartment_values, parameters) {
           self$update_tracked_quantities(compartment_values)
-          net_flows <- unlist(self$apply_all_flow_types_to_odes(rep(0, length(compartment_values)), compartment_values, time))
-          max(abs(net_flows)) - self$equilibrium_stopping_tolerance
+          net_flows <- self$apply_all_flow_types_to_odes(rep(0, length(compartment_values)), compartment_values, time)
+          max(abs(unlist(net_flows))) - self$equilibrium_stopping_tolerance
         }
       }
     },
