@@ -287,25 +287,8 @@ EpiModel <- R6Class(
 
     # add all flows to create data frames from input lists
     implement_flows = function(requested_flows) {
-      for (flow in seq(length(requested_flows))) {
-        working_flow <- requested_flows[[flow]]
-        
-        # check flows have been correctly specified
-        if (grepl("_death", working_flow[1]) & length(working_flow) != 3) {
-          stop("death flow requested, but length of request vector incorrect (not three)")
-        }
-        else if (!grepl("_death", working_flow[1]) & length(working_flow) != 4) {
-          stop("transition flow requested, but length of request vector incorrect (not four)")
-        }
-        if(!working_flow[2] %in% names(self$parameters)) {
-          stop("flow parameter not found in parameter list")
-        }
-        if(!working_flow[3] %in% self$compartment_types) {
-          stop("from compartment name not found in compartment types")
-        }
-        if(length(working_flow) > 3 & !working_flow[4] %in% self$compartment_types) {
-          stop("to compartment name not found in compartment types")
-        }
+      for (working_flow in requested_flows) {
+        self$check_flow_inputs(working_flow)
         
         # set flows in the model object's data frames
         if (working_flow[1] == "compartment_death") {
@@ -325,6 +308,25 @@ EpiModel <- R6Class(
         if (working_flow[1] == "infection_frequency") {
           self$tracked_quantities$total_population <- 0
         }
+      }
+    },
+    
+    # check model flows have been correctly specified
+    check_flow_inputs = function(flow_request) {
+      if (grepl("_death", flow_request[1]) & length(flow_request) != 3) {
+        stop("death flow requested, but length of request vector incorrect (not three)")
+      }
+      else if (!grepl("_death", flow_request[1]) & length(flow_request) != 4) {
+        stop("transition flow requested, but length of request vector incorrect (not four)")
+      }
+      if(!flow_request[2] %in% names(self$parameters)) {
+        stop("flow parameter not found in parameter list")
+      }
+      if(!flow_request[3] %in% self$compartment_types) {
+        stop("from compartment name not found in compartment types")
+      }
+      if(length(flow_request) > 3 & !flow_request[4] %in% self$compartment_types) {
+        stop("to compartment name not found in compartment types")
       }
     },
     
