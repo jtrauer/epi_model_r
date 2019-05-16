@@ -251,9 +251,6 @@ EpiModel <- R6Class(
       
       compartment <- self$find_remainder_compartment()
       
-      print(self$compartment_values)
-      print(sum(self$compartment_values))
-      
       if (Reduce("+", self$compartment_values) > self$starting_population) {
         stop("total of requested compartment values is greater than the requested starting population")
       }
@@ -821,6 +818,9 @@ EpiModel <- R6Class(
     
     # apply all flow types to a vector of zeros (deaths must come before births in case births replace deaths)
     apply_all_flow_types_to_odes = function(ode_equations, compartment_values, time) {
+      
+      names(ode_equations) <- names(compartment_values)
+      
       ode_equations <- self$apply_transition_flows(ode_equations, compartment_values, time)
       if (nrow(self$death_flows) > 0) {
         ode_equations <- self$apply_compartment_death_flows(ode_equations, compartment_values, time)
@@ -844,10 +844,11 @@ EpiModel <- R6Class(
           infectious_population <- self$find_infectious_multiplier(flow$type)
           
           # calculate the flow and apply to the odes
-          from_compartment <- match(flow$from, names(self$compartment_values))
-          net_flow <- adjusted_parameter * compartment_values[from_compartment] * infectious_population
-          ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
-          ode_equations <- self$increment_compartment(ode_equations, match(flow$to, names(self$compartment_values)), net_flow)
+          # from_compartment <- match(flow$from, names(self$compartment_values))
+          net_flow <- adjusted_parameter * compartment_values[[flow$from]] * infectious_population
+          
+          ode_equations <- self$alternative_increment_compartment(ode_equations, flow$from, -net_flow)
+          ode_equations <- self$alternative_increment_compartment(ode_equations, flow$to, net_flow)
           
           # track any quantities dependent on flow rates
           self$track_derived_outputs(flow, net_flow)
@@ -1046,6 +1047,11 @@ EpiModel <- R6Class(
     # general method to increment the odes by a value specified as an argument
     increment_compartment = function(ode_equations, compartment_number, increment) {
       ode_equations[compartment_number] <- ode_equations[compartment_number] + increment
+      ode_equations
+    },
+    
+    alternative_increment_compartment = function(ode_equations, compartment_name, increment) {
+      ode_equations[[compartment_name]] <- ode_equations[[compartment_name]] + increment
       ode_equations
     }
   )
