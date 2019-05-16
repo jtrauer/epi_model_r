@@ -226,12 +226,14 @@ EpiModel <- R6Class(
 
     # set starting compartment values
     set_initial_conditions = function(initial_conditions_to_total) {
-      
-      # set starting values of unstratified compartments to requested value, or zero if no value requested
       for (compartment in self$compartment_types) {
+
+        # set starting values of unstratified compartments if value requested
         if (compartment %in% names(self$unstratified_initial_conditions)) {
           self$compartment_values[compartment] <- self$unstratified_initial_conditions[compartment]
         }
+        
+        # otherwise set to zero
         else {
           self$compartment_values[compartment] <- 0
           if (self$report_progress) {
@@ -248,19 +250,17 @@ EpiModel <- R6Class(
     
     # make initial conditions sum to a certain value    
     sum_initial_compartments_to_total = function() {
-      
-      compartment <- self$find_remainder_compartment()
-      
-      if (Reduce("+", self$compartment_values) > self$starting_population) {
+      remainder_compartment <- self$find_remainder_compartment()
+      remaining_population <- self$starting_population - sum(self$compartment_values)
+      if (remaining_population < 0) {
         stop("total of requested compartment values is greater than the requested starting population")
       }
-      remaining_population <- self$starting_population - Reduce("+", self$compartment_values)
       if (self$report_progress) {
         writeLines(paste("\nRequested that total population sum to", self$starting_population))
         writeLines(paste("Remaining population of ", as.character(round(remaining_population, self$reporting_sigfigs)), 
-                         " allocated to ", compartment, " compartment", sep=""))
+                         " allocated to ", remainder_compartment, " compartment", sep=""))
       }
-      self$compartment_values[compartment] <- remaining_population
+      self$compartment_values[remainder_compartment] <- remaining_population
     },
     
     # find the compartment to put the remaining population that hasn't been assigned yet when summing to total
@@ -844,11 +844,9 @@ EpiModel <- R6Class(
           infectious_population <- self$find_infectious_multiplier(flow$type)
           
           # calculate the flow and apply to the odes
-          # from_compartment <- match(flow$from, names(self$compartment_values))
           net_flow <- adjusted_parameter * compartment_values[[flow$from]] * infectious_population
-          
-          ode_equations <- self$alternative_increment_compartment(ode_equations, flow$from, -net_flow)
-          ode_equations <- self$alternative_increment_compartment(ode_equations, flow$to, net_flow)
+          ode_equations <- self$increment_compartment(ode_equations, flow$from, -net_flow)
+          ode_equations <- self$increment_compartment(ode_equations, flow$to, net_flow)
           
           # track any quantities dependent on flow rates
           self$track_derived_outputs(flow, net_flow)
@@ -885,13 +883,12 @@ EpiModel <- R6Class(
       
       for (f in seq(nrow(self$death_flows))) {
         flow <- self$death_flows[f,]
-
         adjusted_parameter <- self$adjust_parameter(flow$parameter)
         
         if (flow$implement) {
-          from_compartment <- match(flow$from, names(self$compartment_values))
-          net_flow <- adjusted_parameter * compartment_values[from_compartment]
-          ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
+          net_flow <- adjusted_parameter * compartment_values[flow$from]
+          ode_equations <- self$increment_compartment(ode_equations, flow$from, -net_flow)
+          
           if ("total_deaths" %in% names(self$tracked_quantities)) {
             self$tracked_quantities$total_deaths <- self$tracked_quantities$total_deaths + net_flow
           }
@@ -904,14 +901,13 @@ EpiModel <- R6Class(
     apply_universal_death_flow = function(ode_equations, compartment_values, time) {
       for (compartment in names(self$compartment_values)) {
         adjusted_parameter <- self$adjust_parameter("universal_death_rate")
-        from_compartment <- match(compartment, names(self$compartment_values))
-        net_flow <- adjusted_parameter * compartment_values[from_compartment]
+        net_flow <- adjusted_parameter * compartment_values[compartment]
 
         # track deaths in case births are meant to replace deaths
         if ("total_deaths" %in% names(self$tracked_quantities)) {
           self$tracked_quantities$total_deaths <- self$tracked_quantities$total_deaths + net_flow
         }
-        ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
+        ode_equations <- self$increment_compartment(ode_equations, compartment, -net_flow)
       }
       ode_equations
     },
@@ -938,14 +934,14 @@ EpiModel <- R6Class(
           entry_fraction <- 1
           x_positions <- extract_x_positions(compartment)
 
-          if (!x_positions[1] == -1) {
+          if (x_positions[1] != -1) {
             for (x_instance in seq(length(x_positions) - 1)) {
               adjustment <- paste("entry_fractionX", substr(compartment, x_positions[x_instance] + 1, x_positions[x_instance + 1] - 1), sep="")
               entry_fraction <- entry_fraction * self$parameters[[adjustment]]
             }
           }
           compartment_births <- entry_fraction * total_births
-          ode_equations <- self$increment_compartment(ode_equations, match(compartment, names(self$compartment_values)), compartment_births)
+          ode_equations <- self$increment_compartment(ode_equations, compartment, compartment_births)
         }
       }
       ode_equations
@@ -1045,13 +1041,8 @@ EpiModel <- R6Class(
     },
     
     # general method to increment the odes by a value specified as an argument
-    increment_compartment = function(ode_equations, compartment_number, increment) {
-      ode_equations[compartment_number] <- ode_equations[compartment_number] + increment
-      ode_equations
-    },
-    
-    alternative_increment_compartment = function(ode_equations, compartment_name, increment) {
-      ode_equations[[compartment_name]] <- ode_equations[[compartment_name]] + increment
+    increment_compartment = function(ode_equations, compartment_name, increment) {
+      ode_equations[compartment_name] <- ode_equations[compartment_name] + increment
       ode_equations
     }
   )
