@@ -341,6 +341,9 @@ EpiModel <- R6Class(
       # birth approach-specific parameters
       if (self$birth_approach == "add_crude_birth_rate" & !"crude_birth_rate" %in% names(self$parameters)) {
         self$parameters <- c(self$parameters, c(crude_birth_rate = 0))
+        if (self$report_progress) {
+          writeLines("requested crude birth rate as birth approach, but no crude_birth_rate parameter specified, so set to zero")
+        }
       }
       else if (self$birth_approach == "replace_deaths") {
         self$tracked_quantities$total_deaths <- 0
@@ -357,14 +360,14 @@ EpiModel <- R6Class(
     
     # simply add a flow to the data frame storing the flows
     add_transition_flow = function(flow) {
-      self$transition_flows <- rbind(self$transition_flows, data.frame(type=flow[1], parameter=as.character(flow[2]), from=flow[3], to=flow[4], 
-                                                                       implement=TRUE, stringsAsFactors=FALSE))
+      self$transition_flows <- rbind(
+        self$transition_flows, data.frame(type=flow[1], parameter=flow[2], from=flow[3], to=flow[4], implement=TRUE, stringsAsFactors=FALSE))
     },
 
     # similarly for compartment-specific death flows    
     add_death_flow = function(flow) {
-      self$death_flows <- rbind(self$death_flows, data.frame(type=flow[1], parameter=as.character(flow[2]), from=flow[3],
-                                                             implement=TRUE, stringsAsFactors=FALSE))
+      self$death_flows <- rbind(
+        self$death_flows, data.frame(type=flow[1], parameter=flow[2], from=flow[3], implement=TRUE, stringsAsFactors=FALSE))
     },
     
     # __________
@@ -788,8 +791,8 @@ EpiModel <- R6Class(
       if (self$report_progress) {
         writeLines("\nNow integrating")
       }
-      self$outputs <- as.data.frame(lsodar(self$compartment_values, self$times, self$make_model_function(),
-                                           rootfunc = self$set_stopping_conditions()))
+      self$outputs <- as.data.frame(
+        lsodar(self$compartment_values, self$times, self$make_model_function(), rootfunc = self$set_stopping_conditions()))
       if (self$report_progress) {
         writeLines("\nIntegration complete")
       }
@@ -803,7 +806,9 @@ EpiModel <- R6Class(
         self$update_tracked_quantities(compartment_values)
         
         # apply flows
-        self$apply_all_flow_types_to_odes(rep(0, length(compartment_values)), compartment_values, time)
+        # print(compartment_values)
+        
+        self$apply_all_flow_types_to_odes(setNames(rep(0, length(compartment_values)), names(compartment_values)), compartment_values, time)
       }
     },
     
@@ -828,7 +833,7 @@ EpiModel <- R6Class(
     # apply all flow types to a vector of zeros (deaths must come before births in case births replace deaths)
     apply_all_flow_types_to_odes = function(ode_equations, compartment_values, time) {
       
-      names(ode_equations) <- names(compartment_values)
+      # names(ode_equations) <- names(compartment_values)
       
       ode_equations <- self$apply_transition_flows(ode_equations, compartment_values, time)
       if (nrow(self$death_flows) > 0) {
