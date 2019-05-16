@@ -288,19 +288,26 @@ EpiModel <- R6Class(
     # add all flows to create data frames from input lists
     implement_flows = function(requested_flows) {
       for (flow in seq(length(requested_flows))) {
+        working_flow <- requested_flows[[flow]]
         
         # check flows have been correctly specified
-        working_flow <- requested_flows[flow][[1]]
+        if (grepl("_death", working_flow[1]) & length(working_flow) != 3) {
+          stop("death flow requested, but length of request vector incorrect (not three)")
+        }
+        else if (!grepl("_death", working_flow[1]) & length(working_flow) != 4) {
+          stop("transition flow requested, but length of request vector incorrect (not four)")
+        }
         if(!working_flow[2] %in% names(self$parameters)) {
           stop("flow parameter not found in parameter list")
         }
         if(!working_flow[3] %in% self$compartment_types) {
           stop("from compartment name not found in compartment types")
         }
-        if(!working_flow[4] %in% self$compartment_types & working_flow[1] != "compartment_death") {
+        if(length(working_flow) > 3 & !working_flow[4] %in% self$compartment_types) {
           stop("to compartment name not found in compartment types")
         }
         
+        # set flows in the model object's data frames
         if (working_flow[1] == "compartment_death") {
           self$add_death_flow(working_flow)
         }
