@@ -801,18 +801,13 @@ EpiModel <- R6Class(
     # create derivative function
     make_model_function = function() {
       epi_model_function <- function(time, compartment_values, parameters) {
-        self$calculate_odes(time, compartment_values, parameters)
+        
+        # update all the emergent model quantities needed for integration
+        self$update_tracked_quantities(compartment_values)
+        
+        # apply flows
+        self$apply_all_flow_types_to_odes(setNames(rep(0, length(compartment_values)), names(compartment_values)), compartment_values, time)
       }
-    },
-    
-    # calculate the flow rates, separated out for call from derivate function and stopping conditions function
-    calculate_odes = function(time, compartment_values, parameters) {
-      
-      # update all the emergent model quantities needed for integration
-      self$update_tracked_quantities(compartment_values)
-      
-      # apply flows
-      self$apply_all_flow_types_to_odes(setNames(rep(0, length(compartment_values)), names(compartment_values)), compartment_values, time)
     },
     
     # if requested to stop when equilibrium is reached
@@ -825,15 +820,18 @@ EpiModel <- R6Class(
       
       # stop once largest net compartment change falls below specified threshold
       else {
-        return(function(time, compartment_values, parameters) {
-          self$calculate_odes()
+        epi_model_function <- function(time, compartment_values, parameters) {
+          self$update_tracked_quantities(compartment_values)
+          net_flows <- self$apply_all_flow_types_to_odes(setNames(rep(0, length(compartment_values)), names(compartment_values)), compartment_values, time)
           max(abs(unlist(net_flows))) - self$equilibrium_stopping_tolerance
-          })
+        }
       }
     },
     
     # apply all flow types to a vector of zeros (deaths must come before births in case births replace deaths)
     apply_all_flow_types_to_odes = function(ode_equations, compartment_values, time) {
+      
+      # names(ode_equations) <- names(compartment_values)
       
       ode_equations <- self$apply_transition_flows(ode_equations, compartment_values, time)
       if (nrow(self$death_flows) > 0) {
