@@ -792,7 +792,7 @@ EpiModel <- R6Class(
         writeLines("\nNow integrating")
       }
       self$outputs <- as.data.frame(
-        lsodar(self$compartment_values, self$times, self$make_model_function(), rootfunc = self$set_stopping_conditions()))
+        lsodar(self$compartment_values, self$times, self$make_model_function(), rootfunc=self$set_stopping_conditions()))
       if (self$report_progress) {
         writeLines("\nIntegration complete")
       }
@@ -801,39 +801,39 @@ EpiModel <- R6Class(
     # create derivative function
     make_model_function = function() {
       epi_model_function <- function(time, compartment_values, parameters) {
-        
-        # update all the emergent model quantities needed for integration
-        self$update_tracked_quantities(compartment_values)
-        
-        # apply flows
-        # print(compartment_values)
-        
-        self$apply_all_flow_types_to_odes(setNames(rep(0, length(compartment_values)), names(compartment_values)), compartment_values, time)
+        self$calculate_odes(time, compartment_values, parameters)
       }
+    },
+    
+    # calculate the flow rates, separated out for call from derivate function and stopping conditions function
+    calculate_odes = function(time, compartment_values, parameters) {
+      
+      # update all the emergent model quantities needed for integration
+      self$update_tracked_quantities(compartment_values)
+      
+      # apply flows
+      self$apply_all_flow_types_to_odes(setNames(rep(0, length(compartment_values)), names(compartment_values)), compartment_values, time)
     },
     
     # if requested to stop when equilibrium is reached
     set_stopping_conditions = function() {
       
-      # never stop because impossible to find root
+      # never stop with null root function argument
       if (is.null(self$equilibrium_stopping_tolerance)) {
-        epi_model_function <- function(time, compartment_values, parameters) {1}
+        return(NULL)
       }
       
       # stop once largest net compartment change falls below specified threshold
       else {
-        epi_model_function <- function(time, compartment_values, parameters) {
-          self$update_tracked_quantities(compartment_values)
-          net_flows <- self$apply_all_flow_types_to_odes(rep(0, length(compartment_values)), compartment_values, time)
+        return(function(time, compartment_values, parameters) {
+          self$calculate_odes()
           max(abs(unlist(net_flows))) - self$equilibrium_stopping_tolerance
-        }
+          })
       }
     },
     
     # apply all flow types to a vector of zeros (deaths must come before births in case births replace deaths)
     apply_all_flow_types_to_odes = function(ode_equations, compartment_values, time) {
-      
-      # names(ode_equations) <- names(compartment_values)
       
       ode_equations <- self$apply_transition_flows(ode_equations, compartment_values, time)
       if (nrow(self$death_flows) > 0) {
