@@ -801,12 +801,7 @@ EpiModel <- R6Class(
     # create derivative function
     make_model_function = function() {
       epi_model_function <- function(time, compartment_values, parameters) {
-        
-        # update all the emergent model quantities needed for integration
-        self$update_tracked_quantities(compartment_values)
-        
-        # apply flows
-        self$apply_all_flow_types_to_odes(setNames(rep(0, length(compartment_values)), names(compartment_values)), compartment_values, time)
+        self$update_odes(time, compartment_values)
       }
     },
     
@@ -821,42 +816,38 @@ EpiModel <- R6Class(
       # stop once largest net compartment change falls below specified threshold
       else {
         epi_model_function <- function(time, compartment_values, parameters) {
-          self$update_tracked_quantities(compartment_values)
-          net_flows <- self$apply_all_flow_types_to_odes(setNames(rep(0, length(compartment_values)), names(compartment_values)), compartment_values, time)
-          max(abs(unlist(net_flows))) - self$equilibrium_stopping_tolerance
+          max(abs(unlist(self$update_odes(time, compartment_values)))) - self$equilibrium_stopping_tolerance
         }
       }
     },
     
+    # separate out the short section of code called by both model function and root function
+    update_odes = function(time, compartment_values) {
+      
+      # update all the emergent model quantities needed for integration
+      self$update_tracked_quantities(compartment_values)
+      
+      # apply flows
+      self$apply_all_flow_types_to_odes(setNames(rep(0, length(compartment_values)), names(compartment_values)), compartment_values, time)
+    },
+    
     # apply all flow types to a vector of zeros (deaths must come before births in case births replace deaths)
     apply_all_flow_types_to_odes = function(ode_equations, compartment_values, time) {
-      
-      # names(ode_equations) <- names(compartment_values)
-      
       ode_equations <- self$apply_transition_flows(ode_equations, compartment_values, time)
-      if (nrow(self$death_flows) > 0) {
-        ode_equations <- self$apply_compartment_death_flows(ode_equations, compartment_values, time)
-      }
+      ode_equations <- self$apply_compartment_death_flows(ode_equations, compartment_values, time)
       ode_equations <- self$apply_universal_death_flow(ode_equations, compartment_values, time)
-      ode_equations <- self$apply_birth_rate(ode_equations, compartment_values, time)
-      list(ode_equations)
+      ode_equations <- list(self$apply_birth_rate(ode_equations, compartment_values, time))
     },
     
     # add fixed or infection-related flow to odes
     apply_transition_flows = function(ode_equations, compartment_values, time) {
-      for (f in seq(nrow(self$transition_flows))) {
+      for (f in 1: nrow(self$transition_flows)) {
         flow <- self$transition_flows[f,]
 
-        # find adjusted parameter value
-        adjusted_parameter <- self$adjust_parameter(flow$parameter)
-
         if (flow$implement) {
-
-          # find from compartment and "infectious population", which is 1 for standard flows
-          infectious_population <- self$find_infectious_multiplier(flow$type)
           
-          # calculate the flow and apply to the odes
-          net_flow <- adjusted_parameter * compartment_values[[flow$from]] * infectious_population
+          # calculate the parameter, flow, effective infectious population and apply to the odes
+          net_flow <- self$adjust_parameter(flow$parameter) * compartment_values[[flow$from]] * self$find_infectious_multiplier(flow$type)
           ode_equations <- self$increment_compartment(ode_equations, flow$from, -net_flow)
           ode_equations <- self$increment_compartment(ode_equations, flow$to, net_flow)
           
@@ -872,12 +863,12 @@ EpiModel <- R6Class(
       ode_equations
     },
 
-    # calculate derived quantities to be tracked
+    # calculate derived quantities to be tracked based on transitions between compartments
     track_derived_outputs = function(flow, net_flow) {
       for (output_type in names(self$output_connections)) {
         if (grepl(self$output_connections[[output_type]]["from"], flow$from) &
             grepl(self$output_connections[[output_type]]["to"], flow$to)){
-          self$tracked_quantities[[output_type]] <- self$tracked_quantities[[output_type]] + as.numeric(net_flow)
+          self$tracked_quantities[[output_type]] <- self$tracked_quantities[[output_type]] + net_flow
         }
       }
     },
@@ -892,17 +883,17 @@ EpiModel <- R6Class(
     
     # equivalent method to for transition flows above, but for deaths
     apply_compartment_death_flows = function(ode_equations, compartment_values, time) {
-      
-      for (f in seq(nrow(self$death_flows))) {
-        flow <- self$death_flows[f,]
-        adjusted_parameter <- self$adjust_parameter(flow$parameter)
-        
-        if (flow$implement) {
-          net_flow <- adjusted_parameter * compartment_values[flow$from]
-          ode_equations <- self$increment_compartment(ode_equations, flow$from, -net_flow)
-          
-          if ("total_deaths" %in% names(self$tracked_quantities)) {
-            self$tracked_quantities$total_deaths <- self$tracked_quantities$total_deaths + net_flow
+      if (nrow(self$death_flows) > 0) {
+        for (f in 1: nrow(self$death_flows)) {
+          flow <- self$death_flows[f,]
+          if (flow$implement) {
+            net_flow <- self$adjust_parameter(flow$parameter) * compartment_values[flow$from]
+            ode_equations <- self$increment_compartment(ode_equations, flow$from, -net_flow)
+            
+            # increment tracking of total deaths
+            if ("total_deaths" %in% names(self$tracked_quantities)) {
+              self$tracked_quantities$total_deaths <- self$tracked_quantities$total_deaths + net_flow
+            }
           }
         }
       }
@@ -912,31 +903,20 @@ EpiModel <- R6Class(
     # apply the population-wide death rate to all compartments
     apply_universal_death_flow = function(ode_equations, compartment_values, time) {
       for (compartment in names(self$compartment_values)) {
-        adjusted_parameter <- self$adjust_parameter("universal_death_rate")
-        net_flow <- adjusted_parameter * compartment_values[compartment]
-
+        net_flow <- self$adjust_parameter("universal_death_rate") * compartment_values[compartment]
+        ode_equations <- self$increment_compartment(ode_equations, compartment, -net_flow)
+        
         # track deaths in case births are meant to replace deaths
         if ("total_deaths" %in% names(self$tracked_quantities)) {
           self$tracked_quantities$total_deaths <- self$tracked_quantities$total_deaths + net_flow
         }
-        ode_equations <- self$increment_compartment(ode_equations, compartment, -net_flow)
       }
       ode_equations
     },
     
     # apply a population-wide death rate to all compartments
     apply_birth_rate = function(ode_equations, compartment_values, time) {
-      
-      # work out the total births to apply dependent on the approach requested
-      if (self$birth_approach == "add_crude_birth_rate") {
-        total_births <- self$parameters[["crude_birth_rate"]] * sum(compartment_values)
-      }
-      else if (self$birth_approach == "replace_deaths") {
-        total_births <- self$tracked_quantities$total_deaths
-      }
-      else {
-        total_births <- 0
-      }
+      total_births <- self$find_total_births(compartment_values)
       
       # split the total births across entry compartments
       for (compartment in names(compartment_values)) {
@@ -959,16 +939,31 @@ EpiModel <- R6Class(
       ode_equations
     },
     
+    # find the total births needing to be added to the model
+    find_total_births = function(compartment_values) {
+      
+      # work out the total births to apply dependent on the approach requested
+      if (self$birth_approach == "add_crude_birth_rate") {
+        self$parameters$crude_birth_rate * sum(compartment_values)
+      }
+      else if (self$birth_approach == "replace_deaths") {
+        self$tracked_quantities$total_deaths
+      }
+      else {
+        0
+      }      
+    },
+    
     # find the multiplier to account for the infectious population in dynamic flows
     find_infectious_multiplier = function(flow_type) {
       if (flow_type == "infection_density") {
-        infectious_population <- self$tracked_quantities$infectious_population
+        self$tracked_quantities$infectious_population
       }
       else if (flow_type == "infection_frequency") {
-        infectious_population <- self$tracked_quantities$infectious_population / self$tracked_quantities$total_population
+        self$tracked_quantities$infectious_population / self$tracked_quantities$total_population
       }
       else {
-        infectious_population <- 1
+        1
       }
     },
     
