@@ -924,9 +924,9 @@ EpiModel <- R6Class(
           
           # calculate adjustment to original stem entry rate
           entry_fraction <- 1
-          x_positions <- extract_x_positions(compartment)
 
-          if (x_positions[1] != -1) {
+          if (grepl("X", compartment)) {
+            x_positions <- extract_x_positions(compartment)
             for (x_instance in seq(length(x_positions) - 1)) {
               adjustment <- paste("entry_fractionX", substr(compartment, x_positions[x_instance] + 1, x_positions[x_instance + 1] - 1), sep="")
               entry_fraction <- entry_fraction * self$parameters[[adjustment]]
@@ -967,13 +967,9 @@ EpiModel <- R6Class(
       }
     },
     
-    # update quantities that emerge during model running (not pre-defined functions of time)
+    # update quantities that emerge during model running, but not pre-defined functions of time or population deaths, which are updated as they are calculated
     update_tracked_quantities = function(compartment_values) {
-      
-      # for each listed quantity in the quantities requested for tracking,
-      # except population deaths, which are updated as they are calculated
       for (quantity in names(self$tracked_quantities)) {
-        
         self$tracked_quantities[[quantity]] <- 0
         if (quantity == "infectious_population") {
           self$find_infectious_population(compartment_values)
