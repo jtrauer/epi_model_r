@@ -372,89 +372,13 @@ EpiModel <- R6Class(
     
     # __________
     # stratification methods
-    
+
     # master stratification method
     stratify = function(stratification_name, strata_request, compartment_types_to_stratify, 
                         adjustment_requests=c(), requested_proportions=list(), infectiousness_adjustments=c(), report=TRUE) {
 
-      # check stratification name is appropriate, report and add to list of strata
-      if (stratification_name == "age" & "age" %in% self$strata) {
-        stop("requested stratification by age, but this has pre-specified behaviour, can only be applied once and has already been implemented")
-      }
-      else if (!is.character(stratification_name)) {
-        stop("requested stratification name is not string")
-      }
-      
-      # checks and reporting for age stratification
-      if (stratification_name == "age") {
-        if (report) {
-          writeLines(paste("\nImplementing age-specific stratification with pre-specified behaviour for this approach"))
-        }
-        if (length(compartment_types_to_stratify) != 0) {
-          stop("requested age stratification, but not applying to all compartments")
-        }
-        else if (!is.numeric(strata_request)) {
-          stop("inputs for age strata breakpoints are not numeric")
-        }
-        if (is.unsorted(strata_request)) {
-          strata_request <- sort(strata_request)
-          if (report) {
-            writeLines(paste("Requested strata for age stratification not ordered, so have been sorted to give", 
-                           paste(rep(", ", length(strata_request)), strata_request, collapse=""), sep=""))
-          }
-        }
-        if (!0 %in% strata_request) {
-          strata_request <- c(0, strata_request)
-          if (report) {
-            writeLines(paste("Adding age strata called '0' as not requested, to represent those aged less than", strata_request[2]))
-          }
-        }
-      }
-      
-      # report if not age stratification
-      else if (report) {
-        writeLines(paste("\nImplementing stratification for:", stratification_name))
-      }
-      
-      # record stratification as attribute to model and find the names to apply strata
-      self$strata <- c(self$strata, stratification_name)
-      strata_names <- self$find_strata_names_from_input(stratification_name, strata_request, report)
-
-      # if vector of length zero passed, stratify all the compartment types in the model
-      if (length(compartment_types_to_stratify) == 0) {
-        compartment_types_to_stratify <- self$compartment_types
-        if (report) {
-          writeLines("No compartment names specified for this stratification, so stratification applied to all model compartments as default behaviour")
-        }
-      }
-      
-      # otherwise check all the requested compartments are available and allow model run to proceed
-      else if (length(setdiff(compartment_types_to_stratify, self$compartment_types)) != 0) {
-        warning("requested stratification not applied, because requested compartment or compartments to be stratified are not implemented in this model")
-        return()
-      }
-      
-      # check adjustments have been requested appropriately and warn if not
-      for (parameter in names(adjustment_requests)) {
-        for (requested_stratum in names(adjustment_requests[[parameter]][["adjustments"]])) {
-          if (!requested_stratum %in% as.character(strata_names) & report) {
-            warning(paste("stratum '", requested_stratum, "' requested, but unavailable, so ignored", sep=""))
-          }
-        }
-        for (stratum in as.character(strata_names)) {
-          if (!stratum %in% names(adjustment_requests[[parameter]][["adjustments"]])) {
-            adjustment_requests[[parameter]][["adjustments"]][stratum] <- 1
-            if (report) {
-              writeLines(paste("No request made for adjustment to stratum", stratum, "stratification, so using value of one by default"))
-            }
-          }
-        }
-      }
-
-      # work out ageing flows (comes first so that the compartment names are still in the unstratified form)
-      if (stratification_name == "age") {
-        self$set_ageing_rates(strata_names, report)
-      }
+      strata_names <- 
+        self$check_and_complete_stratification_request(stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests, report)
       
       # stratify the compartments and then the flows
       requested_proportions <- self$tidy_starting_proportions(strata_names, requested_proportions, report)
@@ -485,6 +409,90 @@ EpiModel <- R6Class(
           else {
             stop("stratum to have infectiousness modified not found within requested strata")
           }
+        }
+      }
+    },
+    
+    # checks and reporting
+    check_and_complete_stratification_request = function(stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests, report) {
+      
+      if (!is.character(stratification_name)) {
+        writeLines("converting stratification name to character")
+        stratification_name <- as.character(stratification_name)
+      }
+      if (stratification_name == "age") {
+        self$check_age_stratification_request()
+      }
+      else if (report) {
+        writeLines(paste("\nimplementing stratification for:", stratification_name))
+      }
+      
+      # record stratification as attribute to model and find the names to apply strata
+      self$strata <- c(self$strata, stratification_name)
+      strata_names <- self$find_strata_names_from_input(stratification_name, strata_request, report)
+      
+      # if vector of length zero passed, stratify all the compartment types in the model
+      if (length(compartment_types_to_stratify) == 0) {
+        compartment_types_to_stratify <- self$compartment_types
+        if (report) {
+          writeLines("no compartment names specified for this stratification, so stratification applied to all model compartments as default behaviour")
+        }
+      }
+      
+      # otherwise check all the requested compartments are available and allow model run to proceed
+      else if (length(setdiff(compartment_types_to_stratify, self$compartment_types)) != 0) {
+        stop("requested compartment or compartments to be stratified are not implemented in this model")
+      }
+      
+      # check adjustments have been requested appropriately and warn if not
+      for (parameter in names(adjustment_requests)) {
+        for (requested_stratum in names(adjustment_requests[[parameter]]$adjustments)) {
+          if (!requested_stratum %in% as.character(strata_names) & report) {
+            stop(paste("stratum", requested_stratum, "requested, but unavailable"))
+          }
+        }
+        for (stratum in as.character(strata_names)) {
+          if (!stratum %in% names(adjustment_requests[[parameter]]$adjustments)) {
+            adjustment_requests[[parameter]]$adjustments[stratum] <- 1
+            if (report) {
+              writeLines(paste("no request made for adjustment to", stratum, "stratum, so using value of one by default"))
+            }
+          }
+        }
+      }
+      
+      # work out ageing flows (comes first so that the compartment names are still in the unstratified form)
+      if (stratification_name == "age") {
+        self$set_ageing_rates(strata_names, report)
+      }
+      strata_names
+    },
+    
+    # specific method for checking stratification request for age stratification
+    check_age_stratification_request = function (strata_request, compartment_types_to_stratify, report) {
+      if (length(compartment_types_to_stratify) != 0) {
+        stop("requested age stratification, but not applying to all compartments")
+      }
+      else if (!is.numeric(strata_request)) {
+        stop("inputs for age strata breakpoints are not numeric")
+      }
+      else if (report) {
+        writeLines(paste("\nimplementing age-specific stratification with pre-specified behaviour for this approach"))
+      }
+      else if ("age" %in% self$strata) {
+        stop("requested stratification by age, but this has pre-specified behaviour, can only be applied once and has already been implemented")
+      }
+      if (is.unsorted(strata_request)) {
+        strata_request <- sort(strata_request)
+        if (report) {
+          writeLines(paste("requested strata for age stratification not ordered, so have been sorted to give", 
+                           paste(rep(", ", length(strata_request)), strata_request, collapse=""), sep=""))
+        }
+      }
+      if (!0 %in% strata_request) {
+        strata_request <- c(0, strata_request)
+        if (report) {
+          writeLines(paste("adding age strata called '0' as not requested, to represent those aged less than", strata_request[2]))
         }
       }
     },
