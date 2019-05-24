@@ -10,7 +10,7 @@ create_arbitrary_time_variant_function = function(time) {
 # an example script to call the generic model builder file that constructs a compartmental model
 # from the instructions contained in this file
 
-sir_model <- EpiModel$new(seq(from=0, to=60/365, by=1/365),
+sir_model <- StratifiedModel$new(seq(from=0, to=60/365, by=1/365),
                           c("susceptible", "infectious", "recovered"),
                           c("infectious"=0.001),
                           list(beta=400, recovery=365/13, infect_death=1),

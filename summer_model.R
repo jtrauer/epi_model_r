@@ -79,7 +79,7 @@ EpiModel <- R6Class(
     # attributes that are fed in as inputs (so defaults can be set as arguments to the initialisation method)
     times = NULL,
     compartment_types = NULL,
-    unstratified_initial_conditions = NULL,
+    initial_conditions = NULL,
     parameters = NULL,
     initial_conditions_to_total = NULL,
     infectious_compartment = NULL,
@@ -95,20 +95,16 @@ EpiModel <- R6Class(
     
     # other required attributes
     compartment_values = c(),
-    initial_conditions = list(),
     unstratified_flows = data.frame(),
     transition_flows = data.frame(),
     death_flows = data.frame(),
     time_variants = list(),
-    overwrite_parameters = c(),
-    strata = c(),
-    removed_compartments = c(),
     outputs = NULL,
     infectiousness_adjustments = c(),
     heterogeneous_infectiousness = FALSE,
     derived_outputs = list(),
     flows_to_track = c(),
-
+    
     # __________
     # general methods that can be required at various stages
     
@@ -121,12 +117,12 @@ EpiModel <- R6Class(
         self$parameters[parameter_name]
       }
     },
-
+    
     # __________
     # model construction methods
     
     # initialise basic model characteristics from inputs and check appropriately requested
-    initialize = function(times, compartment_types, unstratified_initial_conditions, parameters, requested_flows,
+    initialize = function(times, compartment_types, initial_conditions, parameters, requested_flows,
                           initial_conditions_to_total=TRUE, infectious_compartment="infectious", 
                           birth_approach="no_births", report_progress=TRUE, reporting_sigfigs=4,
                           entry_compartment="susceptible", starting_population=1, default_starting_compartment="",
@@ -134,7 +130,7 @@ EpiModel <- R6Class(
       
       # ensure requests are fed in correctly
       self$check_and_report_attributes(
-        times, compartment_types, unstratified_initial_conditions, parameters, requested_flows, initial_conditions_to_total,
+        times, compartment_types, initial_conditions, parameters, requested_flows, initial_conditions_to_total,
         infectious_compartment, birth_approach, report_progress, reporting_sigfigs, entry_compartment, starting_population,
         default_starting_compartment, equilibrium_stopping_tolerance, output_connections, tracked_quantities)
       if (is.unsorted(self$times)) {
@@ -144,7 +140,7 @@ EpiModel <- R6Class(
       
       # convert input arguments to model attributes
       for (attribute_to_assign in c(
-        "times", "compartment_types", "unstratified_initial_conditions", "parameters", "infectious_compartment", 
+        "times", "compartment_types", "initial_conditions", "parameters", "infectious_compartment", 
         "birth_approach", "report_progress", "reporting_sigfigs", "entry_compartment", "starting_population",
         "default_starting_compartment", "infectious_compartment", "equilibrium_stopping_tolerance", "output_connections", 
         "tracked_quantities")) {
@@ -163,7 +159,7 @@ EpiModel <- R6Class(
     
     # check all input data are in the correct form
     check_and_report_attributes = function(
-      times, compartment_types, unstratified_initial_conditions, parameters, requested_flows, initial_conditions_to_total,
+      times, compartment_types, initial_conditions, parameters, requested_flows, initial_conditions_to_total,
       infectious_compartment, birth_approach, report_progress, reporting_sigfigs, entry_compartment, starting_population,
       default_starting_compartment, equilibrium_stopping_tolerance, output_connections, tracked_quantities) {
       
@@ -173,7 +169,7 @@ EpiModel <- R6Class(
           stop(c(expected_numeric_variable, " is not numeric"))
         }
       }
-
+      
       # check that variables expected to be string are character
       for (expected_string_variable in c("compartment_types", "infectious_compartment", "birth_approach", "entry_compartment",
                                          "default_starting_compartment")) {
@@ -195,7 +191,7 @@ EpiModel <- R6Class(
         }
       }
       
-
+      
       # infectious compartment
       if (!infectious_compartment %in% compartment_types) {
         stop("infectious compartment name is not one of the listed compartment types")
@@ -205,15 +201,15 @@ EpiModel <- R6Class(
       if (!birth_approach %in% private$available_birth_approaches) {
         stop("requested birth approach unavailable")
       }
-
+      
       # report on characteristics of inputs
       if (report_progress) {
         writeLines(paste("\nIntegrating from time ", round(times[1], reporting_sigfigs), 
                          " to ", round(tail(times, 1), reporting_sigfigs), sep=""))
         writeLines("\nUnstratified requested initial conditions are:")
-        for (compartment in names(unstratified_initial_conditions)) {
+        for (compartment in names(initial_conditions)) {
           writeLines(paste(compartment, ": ", 
-                           as.character(round(as.numeric(unstratified_initial_conditions[compartment]), reporting_sigfigs)), sep=""))
+                           as.character(round(as.numeric(initial_conditions[compartment]), reporting_sigfigs)), sep=""))
         }
         writeLines("\nUnstratified parameter values are:")
         for (parameter in names(parameters)) {
@@ -223,17 +219,15 @@ EpiModel <- R6Class(
         writeLines(paste("\nBirth approach is:", birth_approach))
       }
     },
-
+    
     # set starting compartment values
     set_initial_conditions = function(initial_conditions_to_total) {
+      
+      # set starting values of unstratified compartments to requested value, or zero if no value requested
       for (compartment in self$compartment_types) {
-
-        # set starting values of unstratified compartments if value requested
-        if (compartment %in% names(self$unstratified_initial_conditions)) {
-          self$compartment_values[compartment] <- self$unstratified_initial_conditions[compartment]
+        if (compartment %in% names(self$initial_conditions)) {
+          self$compartment_values[compartment] <- self$initial_conditions[compartment]
         }
-        
-        # otherwise set to zero
         else {
           self$compartment_values[compartment] <- 0
           if (self$report_progress) {
@@ -250,17 +244,19 @@ EpiModel <- R6Class(
     
     # make initial conditions sum to a certain value    
     sum_initial_compartments_to_total = function() {
-      remainder_compartment <- self$find_remainder_compartment()
-      remaining_population <- self$starting_population - sum(self$compartment_values)
-      if (remaining_population < 0) {
+      
+      compartment <- self$find_remainder_compartment()
+      
+      if (Reduce("+", self$compartment_values) > self$starting_population) {
         stop("total of requested compartment values is greater than the requested starting population")
       }
+      remaining_population <- self$starting_population - Reduce("+", self$compartment_values)
       if (self$report_progress) {
         writeLines(paste("\nRequested that total population sum to", self$starting_population))
         writeLines(paste("Remaining population of ", as.character(round(remaining_population, self$reporting_sigfigs)), 
-                         " allocated to ", remainder_compartment, " compartment", sep=""))
+                         " allocated to ", compartment, " compartment", sep=""))
       }
-      self$compartment_values[remainder_compartment] <- remaining_population
+      self$compartment_values[compartment] <- remaining_population
     },
     
     # find the compartment to put the remaining population that hasn't been assigned yet when summing to total
@@ -284,20 +280,30 @@ EpiModel <- R6Class(
         return(self$entry_compartment)
       }
     },
-
+    
     # add all flows to create data frames from input lists
     implement_flows = function(requested_flows) {
-      for (working_flow in requested_flows) {
-        self$check_flow_inputs(working_flow)
+      for (flow in seq(length(requested_flows))) {
         
-        # set flows in the model object's data frames
+        # check flows have been correctly specified
+        working_flow <- requested_flows[flow][[1]]
+        if(!working_flow[2] %in% names(self$parameters)) {
+          stop("flow parameter not found in parameter list")
+        }
+        if(!working_flow[3] %in% self$compartment_types) {
+          stop("from compartment name not found in compartment types")
+        }
+        if(!working_flow[4] %in% self$compartment_types & working_flow[1] != "compartment_death") {
+          stop("to compartment name not found in compartment types")
+        }
+        
         if (working_flow[1] == "compartment_death") {
           self$add_death_flow(working_flow)
         }
         else {
           self$add_transition_flow(working_flow)
         }
-
+        
         # retain a copy of the original flows for the purposes of graphing, etc.
         self$unstratified_flows <- self$transition_flows
         
@@ -308,25 +314,6 @@ EpiModel <- R6Class(
         if (working_flow[1] == "infection_frequency") {
           self$tracked_quantities$total_population <- 0
         }
-      }
-    },
-    
-    # check model flows have been correctly specified
-    check_flow_inputs = function(flow_request) {
-      if (grepl("_death", flow_request[1]) & length(flow_request) != 3) {
-        stop("death flow requested, but length of request vector incorrect (not three)")
-      }
-      else if (!grepl("_death", flow_request[1]) & length(flow_request) != 4) {
-        stop("transition flow requested, but length of request vector incorrect (not four)")
-      }
-      if(!flow_request[2] %in% names(self$parameters)) {
-        stop("flow parameter not found in parameter list")
-      }
-      if(!flow_request[3] %in% self$compartment_types) {
-        stop("from compartment name not found in compartment types")
-      }
-      if(length(flow_request) > 3 & !flow_request[4] %in% self$compartment_types) {
-        stop("to compartment name not found in compartment types")
       }
     },
     
@@ -341,14 +328,11 @@ EpiModel <- R6Class(
       # birth approach-specific parameters
       if (self$birth_approach == "add_crude_birth_rate" & !"crude_birth_rate" %in% names(self$parameters)) {
         self$parameters <- c(self$parameters, c(crude_birth_rate = 0))
-        if (self$report_progress) {
-          writeLines("requested crude birth rate as birth approach, but no crude_birth_rate parameter specified, so set to zero")
-        }
       }
       else if (self$birth_approach == "replace_deaths") {
         self$tracked_quantities$total_deaths <- 0
       }
-
+      
       # for each derived output to be recorded, initialise a tracked quantities key to zero      
       for (output in names(self$output_connections)) {
         self$tracked_quantities[[output]] <- 0
@@ -360,25 +344,341 @@ EpiModel <- R6Class(
     
     # simply add a flow to the data frame storing the flows
     add_transition_flow = function(flow) {
-      self$transition_flows <- rbind(
-        self$transition_flows, data.frame(type=flow[1], parameter=flow[2], from=flow[3], to=flow[4], implement=TRUE, stringsAsFactors=FALSE))
+      self$transition_flows <- rbind(self$transition_flows, data.frame(type=flow[1], parameter=as.character(flow[2]), from=flow[3], to=flow[4], 
+                                                                       implement=TRUE, stringsAsFactors=FALSE))
     },
-
+    
     # similarly for compartment-specific death flows    
     add_death_flow = function(flow) {
-      self$death_flows <- rbind(
-        self$death_flows, data.frame(type=flow[1], parameter=flow[2], from=flow[3], implement=TRUE, stringsAsFactors=FALSE))
+      self$death_flows <- rbind(self$death_flows, data.frame(type=flow[1], parameter=as.character(flow[2]), from=flow[3],
+                                                             implement=TRUE, stringsAsFactors=FALSE))
     },
     
     # __________
-    # stratification methods
+    # methods for running the model
+    
+    # integrate model odes  
+    run_model = function () {
+      if (self$report_progress) {
+        writeLines("\nNow integrating")
+      }
+      self$outputs <- as.data.frame(lsodar(self$compartment_values, self$times, self$make_model_function(),
+                                           rootfunc = self$set_stopping_conditions()))
+      if (self$report_progress) {
+        writeLines("\nIntegration complete")
+      }
+    },   
+    
+    # create derivative function
+    make_model_function = function() {
+      epi_model_function <- function(time, compartment_values, parameters) {
+        
+        # update all the emergent model quantities needed for integration
+        self$update_tracked_quantities(compartment_values)
+        
+        # apply flows
+        self$apply_all_flow_types_to_odes(rep(0, length(compartment_values)), compartment_values, time)
+      }
+    },
+    
+    # if requested to stop when equilibrium is reached
+    set_stopping_conditions = function() {
+      
+      # never stop because impossible to find root
+      if (is.null(self$equilibrium_stopping_tolerance)) {
+        epi_model_function <- function(time, compartment_values, parameters) {1}
+      }
+      
+      # stop once largest net compartment change falls below specified threshold
+      else {
+        epi_model_function <- function(time, compartment_values, parameters) {
+          self$update_tracked_quantities(compartment_values)
+          net_flows <- self$apply_all_flow_types_to_odes(rep(0, length(compartment_values)), compartment_values, time)
+          max(abs(unlist(net_flows))) - self$equilibrium_stopping_tolerance
+        }
+      }
+    },
+    
+    # apply all flow types to a vector of zeros (deaths must come before births in case births replace deaths)
+    apply_all_flow_types_to_odes = function(ode_equations, compartment_values, time) {
+      ode_equations <- self$apply_transition_flows(ode_equations, compartment_values, time)
+      if (nrow(self$death_flows) > 0) {
+        ode_equations <- self$apply_compartment_death_flows(ode_equations, compartment_values, time)
+      }
+      ode_equations <- self$apply_universal_death_flow(ode_equations, compartment_values, time)
+      ode_equations <- self$apply_birth_rate(ode_equations, compartment_values, time)
+      list(ode_equations)
+    },
+    
+    # add fixed or infection-related flow to odes
+    apply_transition_flows = function(ode_equations, compartment_values, time) {
+      for (f in seq(nrow(self$transition_flows))) {
+        flow <- self$transition_flows[f,]
+        
+        # find adjusted parameter value
+        adjusted_parameter <- self$adjust_parameter(flow$parameter)
+        
+        if (flow$implement) {
+          
+          # find from compartment and "infectious population", which is 1 for standard flows
+          infectious_population <- self$find_infectious_multiplier(flow$type)
+          
+          # calculate the flow and apply to the odes
+          from_compartment <- match(flow$from, names(self$compartment_values))
+          net_flow <- adjusted_parameter * compartment_values[from_compartment] * infectious_population
+          ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
+          ode_equations <- self$increment_compartment(ode_equations, match(flow$to, names(self$compartment_values)), net_flow)
+          
+          # track any quantities dependent on flow rates
+          self$track_derived_outputs(flow, net_flow)
+        }
+      }
+      
+      # add another element to the derived outputs vector
+      self$extend_derived_outputs(time)
+      
+      # return flow rates
+      ode_equations
+    },
+    
+    # calculate derived quantities to be tracked
+    track_derived_outputs = function(flow, net_flow) {
+      for (output_type in names(self$output_connections)) {
+        if (grepl(self$output_connections[[output_type]]["from"], flow$from) &
+            grepl(self$output_connections[[output_type]]["to"], flow$to)){
+          self$tracked_quantities[[output_type]] <- self$tracked_quantities[[output_type]] + as.numeric(net_flow)
+        }
+      }
+    },
+    
+    # add the derived quantities being tracked to the end of the tracking vector
+    extend_derived_outputs = function(time) {
+      self$derived_outputs$times <- c(self$derived_outputs$times, time)
+      for (output_type in names(self$output_connections)) {
+        self$derived_outputs[[output_type]] <- c(self$derived_outputs[[output_type]], self$tracked_quantities[[output_type]])
+      }
+    },
+    
+    # equivalent method to for transition flows above, but for deaths
+    apply_compartment_death_flows = function(ode_equations, compartment_values, time) {
+      
+      for (f in seq(nrow(self$death_flows))) {
+        flow <- self$death_flows[f,]
+        
+        adjusted_parameter <- self$adjust_parameter(flow$parameter)
+        
+        if (flow$implement) {
+          from_compartment <- match(flow$from, names(self$compartment_values))
+          net_flow <- adjusted_parameter * compartment_values[from_compartment]
+          ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
+          if ("total_deaths" %in% names(self$tracked_quantities)) {
+            self$tracked_quantities$total_deaths <- self$tracked_quantities$total_deaths + net_flow
+          }
+        }
+      }
+      ode_equations
+    },
+    
+    # apply the population-wide death rate to all compartments
+    apply_universal_death_flow = function(ode_equations, compartment_values, time) {
+      for (compartment in names(self$compartment_values)) {
+        adjusted_parameter <- self$adjust_parameter("universal_death_rate")
+        from_compartment <- match(compartment, names(self$compartment_values))
+        net_flow <- adjusted_parameter * compartment_values[from_compartment]
+        
+        # track deaths in case births are meant to replace deaths
+        if ("total_deaths" %in% names(self$tracked_quantities)) {
+          self$tracked_quantities$total_deaths <- self$tracked_quantities$total_deaths + net_flow
+        }
+        ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
+      }
+      ode_equations
+    },
+    
+    # apply a population-wide death rate to all compartments
+    apply_birth_rate = function(ode_equations, compartment_values, time) {
+      
+      # work out the total births to apply dependent on the approach requested
+      if (self$birth_approach == "add_crude_birth_rate") {
+        total_births <- self$parameters[["crude_birth_rate"]] * sum(compartment_values)
+      }
+      else if (self$birth_approach == "replace_deaths") {
+        total_births <- self$tracked_quantities$total_deaths
+      }
+      else {
+        total_births <- 0
+      }
+      
+      # split the total births across entry compartments
+      for (compartment in names(compartment_values)) {
+        if (find_stem(compartment) == self$entry_compartment) {
+          
+          # calculate adjustment to original stem entry rate
+          entry_fraction <- 1
+          x_positions <- extract_x_positions(compartment)
+          
+          if (!x_positions[1] == -1) {
+            for (x_instance in seq(length(x_positions) - 1)) {
+              adjustment <- paste("entry_fractionX", substr(compartment, x_positions[x_instance] + 1, x_positions[x_instance + 1] - 1), sep="")
+              entry_fraction <- entry_fraction * self$parameters[[adjustment]]
+            }
+          }
+          compartment_births <- entry_fraction * total_births
+          ode_equations <- self$increment_compartment(ode_equations, match(compartment, names(self$compartment_values)), compartment_births)
+        }
+      }
+      ode_equations
+    },
+    
+    # find the multiplier to account for the infectious population in dynamic flows
+    find_infectious_multiplier = function(flow_type) {
+      if (flow_type == "infection_density") {
+        infectious_population <- self$tracked_quantities$infectious_population
+      }
+      else if (flow_type == "infection_frequency") {
+        infectious_population <- self$tracked_quantities$infectious_population / self$tracked_quantities$total_population
+      }
+      else {
+        infectious_population <- 1
+      }
+    },
+    
+    # update quantities that emerge during model running (not pre-defined functions of time)
+    update_tracked_quantities = function(compartment_values) {
+      
+      # for each listed quantity in the quantities requested for tracking,
+      # except population deaths, which are updated as they are calculated
+      for (quantity in names(self$tracked_quantities)) {
+        
+        self$tracked_quantities[[quantity]] <- 0
+        if (quantity == "infectious_population") {
+          self$find_infectious_population(compartment_values)
+        }
+        else if (quantity == "total_population") {
+          self$tracked_quantities$total_population <- sum(compartment_values)
+        }
+      }
+    },
+    
+    # calculations to find the effective infectious population
+    find_infectious_population = function(compartment_values) {
+      
+      # loop through all compartments and find the ones representing active infectious disease
+      for (compartment in names(self$compartment_values)) {
+        if (find_stem(compartment) == self$infectious_compartment) {
+          
+          # increment infectious population
+          self$tracked_quantities$infectious_population <-
+            self$tracked_quantities$infectious_population +
+            compartment_values[match(compartment, names(self$compartment_values))]
+        }
+      }      
+    },
+    
+    # placeholder function to allow for stratification
+    adjust_parameter = function(flow_or_compartment) {
+      as.numeric(self$parameters[find_stem(flow_or_compartment)])
+    },
+    
+    # general method to increment the odes by a value specified as an argument
+    increment_compartment = function(ode_equations, compartment_number, increment) {
+      ode_equations[compartment_number] <- ode_equations[compartment_number] + increment
+      ode_equations
+    }
+  )
+)
 
+
+
+StratifiedModel <- R6Class(
+  inherit = EpiModel,
+  public = list(
+    strata = c(),
+    removed_compartments = c(),
+    overwrite_parameters = c(),
+    
     # master stratification method
     stratify = function(stratification_name, strata_request, compartment_types_to_stratify, 
                         adjustment_requests=c(), requested_proportions=list(), infectiousness_adjustments=c(), report=TRUE) {
-
-      strata_names <- 
-        self$check_and_complete_stratification_request(stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests, report)
+      
+      # check stratification name is appropriate, report and add to list of strata
+      if (stratification_name == "age" & "age" %in% self$strata) {
+        stop("requested stratification by age, but this has pre-specified behaviour, can only be applied once and has already been implemented")
+      }
+      else if (!is.character(stratification_name)) {
+        stop("requested stratification name is not string")
+      }
+      
+      # checks and reporting for age stratification
+      if (stratification_name == "age") {
+        if (report) {
+          writeLines(paste("\nImplementing age-specific stratification with pre-specified behaviour for this approach"))
+        }
+        if (length(compartment_types_to_stratify) != 0) {
+          stop("requested age stratification, but not applying to all compartments")
+        }
+        else if (!is.numeric(strata_request)) {
+          stop("inputs for age strata breakpoints are not numeric")
+        }
+        if (is.unsorted(strata_request)) {
+          strata_request <- sort(strata_request)
+          if (report) {
+            writeLines(paste("Requested strata for age stratification not ordered, so have been sorted to give", 
+                             paste(rep(", ", length(strata_request)), strata_request, collapse=""), sep=""))
+          }
+        }
+        if (!0 %in% strata_request) {
+          strata_request <- c(0, strata_request)
+          if (report) {
+            writeLines(paste("Adding age strata called '0' as not requested, to represent those aged less than", strata_request[2]))
+          }
+        }
+      }
+      
+      # report if not age stratification
+      else if (report) {
+        writeLines(paste("\nImplementing stratification for:", stratification_name))
+      }
+      
+      # record stratification as attribute to model and find the names to apply strata
+      self$strata <- c(self$strata, stratification_name)
+      strata_names <- self$find_strata_names_from_input(stratification_name, strata_request, report)
+      
+      # if vector of length zero passed, stratify all the compartment types in the model
+      if (length(compartment_types_to_stratify) == 0) {
+        compartment_types_to_stratify <- self$compartment_types
+        if (report) {
+          writeLines("No compartment names specified for this stratification, so stratification applied to all model compartments as default behaviour")
+        }
+      }
+      
+      # otherwise check all the requested compartments are available and allow model run to proceed
+      else if (length(setdiff(compartment_types_to_stratify, self$compartment_types)) != 0) {
+        warning("requested stratification not applied, because requested compartment or compartments to be stratified are not implemented in this model")
+        return()
+      }
+      
+      # check adjustments have been requested appropriately and warn if not
+      for (parameter in names(adjustment_requests)) {
+        for (requested_stratum in names(adjustment_requests[[parameter]][["adjustments"]])) {
+          if (!requested_stratum %in% as.character(strata_names) & report) {
+            warning(paste("stratum '", requested_stratum, "' requested, but unavailable, so ignored", sep=""))
+          }
+        }
+        for (stratum in as.character(strata_names)) {
+          if (!stratum %in% names(adjustment_requests[[parameter]][["adjustments"]])) {
+            adjustment_requests[[parameter]][["adjustments"]][stratum] <- 1
+            if (report) {
+              writeLines(paste("No request made for adjustment to stratum", stratum, "stratification, so using value of one by default"))
+            }
+          }
+        }
+      }
+      
+      # work out ageing flows (comes first so that the compartment names are still in the unstratified form)
+      if (stratification_name == "age") {
+        self$set_ageing_rates(strata_names, report)
+      }
       
       # stratify the compartments and then the flows
       requested_proportions <- self$tidy_starting_proportions(strata_names, requested_proportions, report)
@@ -394,7 +694,7 @@ EpiModel <- R6Class(
         print(self$transition_flows)
       }
       self$stratify_entry_flows(stratification_name, strata_names, compartment_types_to_stratify, requested_proportions, report)
-
+      
       # work out infectiousness adjustments and set as model attributes      
       if (length(infectiousness_adjustments) > 0 & !self$infectious_compartment %in% compartment_types_to_stratify) {
         stop("request for infectiousness adjustments passed, but stratification doesn't apply to the infectious compartment")
@@ -409,90 +709,6 @@ EpiModel <- R6Class(
           else {
             stop("stratum to have infectiousness modified not found within requested strata")
           }
-        }
-      }
-    },
-    
-    # checks and reporting
-    check_and_complete_stratification_request = function(stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests, report) {
-      
-      if (!is.character(stratification_name)) {
-        writeLines("converting stratification name to character")
-        stratification_name <- as.character(stratification_name)
-      }
-      if (stratification_name == "age") {
-        self$check_age_stratification_request()
-      }
-      else if (report) {
-        writeLines(paste("\nimplementing stratification for:", stratification_name))
-      }
-      
-      # record stratification as attribute to model and find the names to apply strata
-      self$strata <- c(self$strata, stratification_name)
-      strata_names <- self$find_strata_names_from_input(stratification_name, strata_request, report)
-      
-      # if vector of length zero passed, stratify all the compartment types in the model
-      if (length(compartment_types_to_stratify) == 0) {
-        compartment_types_to_stratify <- self$compartment_types
-        if (report) {
-          writeLines("no compartment names specified for this stratification, so stratification applied to all model compartments as default behaviour")
-        }
-      }
-      
-      # otherwise check all the requested compartments are available and allow model run to proceed
-      else if (length(setdiff(compartment_types_to_stratify, self$compartment_types)) != 0) {
-        stop("requested compartment or compartments to be stratified are not implemented in this model")
-      }
-      
-      # check adjustments have been requested appropriately and warn if not
-      for (parameter in names(adjustment_requests)) {
-        for (requested_stratum in names(adjustment_requests[[parameter]]$adjustments)) {
-          if (!requested_stratum %in% as.character(strata_names) & report) {
-            stop(paste("stratum", requested_stratum, "requested, but unavailable"))
-          }
-        }
-        for (stratum in as.character(strata_names)) {
-          if (!stratum %in% names(adjustment_requests[[parameter]]$adjustments)) {
-            adjustment_requests[[parameter]]$adjustments[stratum] <- 1
-            if (report) {
-              writeLines(paste("no request made for adjustment to", stratum, "stratum, so using value of one by default"))
-            }
-          }
-        }
-      }
-      
-      # work out ageing flows (comes first so that the compartment names are still in the unstratified form)
-      if (stratification_name == "age") {
-        self$set_ageing_rates(strata_names, report)
-      }
-      strata_names
-    },
-    
-    # specific method for checking stratification request for age stratification
-    check_age_stratification_request = function (strata_request, compartment_types_to_stratify, report) {
-      if (length(compartment_types_to_stratify) != 0) {
-        stop("requested age stratification, but not applying to all compartments")
-      }
-      else if (!is.numeric(strata_request)) {
-        stop("inputs for age strata breakpoints are not numeric")
-      }
-      else if (report) {
-        writeLines(paste("\nimplementing age-specific stratification with pre-specified behaviour for this approach"))
-      }
-      else if ("age" %in% self$strata) {
-        stop("requested stratification by age, but this has pre-specified behaviour, can only be applied once and has already been implemented")
-      }
-      if (is.unsorted(strata_request)) {
-        strata_request <- sort(strata_request)
-        if (report) {
-          writeLines(paste("requested strata for age stratification not ordered, so have been sorted to give", 
-                           paste(rep(", ", length(strata_request)), strata_request, collapse=""), sep=""))
-        }
-      }
-      if (!0 %in% strata_request) {
-        strata_request <- c(0, strata_request)
-        if (report) {
-          writeLines(paste("adding age strata called '0' as not requested, to represent those aged less than", strata_request[2]))
         }
       }
     },
@@ -584,7 +800,7 @@ EpiModel <- R6Class(
       # stratify each compartment that needs stratification
       for (compartment in names(self$compartment_values)) {
         if (find_stem(compartment) %in% compartments_to_stratify) {
-
+          
           # append the additional compartment
           for (stratum in strata_names) {
             new_compartment_name <- create_stratified_name(compartment, stratification_name, stratum)
@@ -643,7 +859,7 @@ EpiModel <- R6Class(
         else {
           whether_stratify <- c(FALSE, FALSE)
         }
-
+        
         # if flow is active and stratification is relevant    
         if (any(whether_stratify) & self$transition_flows$implement[flow]) {
           self$add_stratified_flows(flow, stratification_name, strata_names, whether_stratify[1], whether_stratify[2], adjustment_requests, report)
@@ -670,7 +886,7 @@ EpiModel <- R6Class(
               writeLines(paste("\tRetaining existing death parameter value", self$death_flows$parameter[flow], "for new", 
                                create_stratified_name(self$death_flows$from[flow], stratification_name, stratum), "compartment"))
             }
-          self$death_flows$implement[flow] <- FALSE
+            self$death_flows$implement[flow] <- FALSE
           }
         }
       }
@@ -682,7 +898,7 @@ EpiModel <- R6Class(
       if (report) {
         writeLines(paste("For flow from", self$transition_flows$from[flow], "to", self$transition_flows$to[flow], "in stratification", stratification_name))
       }
-            
+      
       # loop over each stratum in the requested stratification structure
       for (stratum in strata_names) {
         
@@ -708,7 +924,7 @@ EpiModel <- R6Class(
         else if (report & stratum == strata_names[1]) {
           writeLines(paste("\tImplementing new parameter", parameter_name))
         }
-
+        
         # determine whether to and/or from compartments are stratified
         if (stratify_from) {
           from_compartment <- create_stratified_name(self$transition_flows$from[flow], stratification_name, stratum)
@@ -734,7 +950,7 @@ EpiModel <- R6Class(
     
     # stratify entry/recruitment/birth flows
     stratify_entry_flows = function(stratification_name, strata_names, compartments_to_stratify, requested_proportions, report) {
-
+      
       # work out parameter values for stratifying the entry proportion adjustments
       if (self$entry_compartment %in% compartments_to_stratify) {
         for (stratum in strata_names) {
@@ -776,7 +992,7 @@ EpiModel <- R6Class(
             if (!stratum %in% names(adjustment_requests[[parameter_request]][["adjustments"]])) {
               adjustment_requests[[parameter_request]][["adjustments"]][stratum] <- 1
             }
-
+            
             # populate the parameter adjustment attribute with the new adjustment
             parameter_adjustment_name <- create_stratified_name(unadjusted_parameter, stratification_name, stratum)
             self$parameters[parameter_adjustment_name] <- adjustment_requests[[parameter_request]][["adjustments"]][as.character(stratum)]
@@ -790,202 +1006,41 @@ EpiModel <- R6Class(
       }
       parameter_adjustment_name
     },
-
-    # __________
-    # methods for running the model
     
-    # integrate model odes  
-    run_model = function () {
-      if (self$report_progress) {
-        writeLines("\nNow integrating")
-      }
-      self$outputs <- as.data.frame(
-        lsodar(self$compartment_values, self$times, self$make_model_function(), rootfunc=self$set_stopping_conditions()))
-      if (self$report_progress) {
-        writeLines("\nIntegration complete")
-      }
-    },   
-    
-    # create derivative function
-    make_model_function = function() {
-      epi_model_function <- function(time, compartment_values, parameters) {
-        self$update_odes(time, compartment_values)
-      }
-    },
-    
-    # if requested to stop when equilibrium is reached
-    set_stopping_conditions = function() {
+    # adjust stratified parameter value
+    adjust_parameter = function(flow_or_compartment) {
       
-      # never stop with null root function argument
-      if (is.null(self$equilibrium_stopping_tolerance)) {
-        return(NULL)
-      }
+      # start from baseline values
+      base_parameter_value <- as.numeric(self$parameters[find_stem(flow_or_compartment)])
+      parameter_adjustment_value <- 1
       
-      # stop once largest net compartment change falls below specified threshold
-      else {
-        epi_model_function <- function(time, compartment_values, parameters) {
-          max(abs(unlist(self$update_odes(time, compartment_values)))) - self$equilibrium_stopping_tolerance
-        }
-      }
-    },
-    
-    # separate out the short section of code called by both model function and root function
-    update_odes = function(time, compartment_values) {
-      
-      # update all the emergent model quantities needed for integration
-      self$update_tracked_quantities(compartment_values)
-      
-      # apply flows
-      self$apply_all_flow_types_to_odes(setNames(rep(0, length(compartment_values)), names(compartment_values)), compartment_values, time)
-    },
-    
-    # apply all flow types to a vector of zeros (deaths must come before births in case births replace deaths)
-    apply_all_flow_types_to_odes = function(ode_equations, compartment_values, time) {
-      ode_equations <- self$apply_transition_flows(ode_equations, compartment_values, time)
-      ode_equations <- self$apply_compartment_death_flows(ode_equations, compartment_values, time)
-      ode_equations <- self$apply_universal_death_flow(ode_equations, compartment_values, time)
-      ode_equations <- list(self$apply_birth_rate(ode_equations, compartment_values, time))
-    },
-    
-    # add fixed or infection-related flow to odes
-    apply_transition_flows = function(ode_equations, compartment_values, time) {
-      for (f in 1: nrow(self$transition_flows)) {
-        flow <- self$transition_flows[f,]
-
-        if (flow$implement) {
-          
-          # calculate the parameter, flow, effective infectious population and apply to the odes
-          net_flow <- self$adjust_parameter(flow$parameter) * compartment_values[[flow$from]] * self$find_infectious_multiplier(flow$type)
-          ode_equations <- self$increment_compartment(ode_equations, flow$from, -net_flow)
-          ode_equations <- self$increment_compartment(ode_equations, flow$to, net_flow)
-          
-          # track any quantities dependent on flow rates
-          self$track_derived_outputs(flow, net_flow)
-        }
-      }
-      
-      # add another element to the derived outputs vector
-      self$extend_derived_outputs(time)
-      
-      # return flow rates
-      ode_equations
-    },
-
-    # calculate derived quantities to be tracked based on transitions between compartments
-    track_derived_outputs = function(flow, net_flow) {
-      for (output_type in names(self$output_connections)) {
-        if (grepl(self$output_connections[[output_type]]["from"], flow$from) &
-            grepl(self$output_connections[[output_type]]["to"], flow$to)){
-          self$tracked_quantities[[output_type]] <- self$tracked_quantities[[output_type]] + net_flow
-        }
-      }
-    },
-
-    # add the derived quantities being tracked to the end of the tracking vector
-    extend_derived_outputs = function(time) {
-      self$derived_outputs$times <- c(self$derived_outputs$times, time)
-      for (output_type in names(self$output_connections)) {
-        self$derived_outputs[[output_type]] <- c(self$derived_outputs[[output_type]], self$tracked_quantities[[output_type]])
-      }
-    },
-    
-    # equivalent method to for transition flows above, but for deaths
-    apply_compartment_death_flows = function(ode_equations, compartment_values, time) {
-      if (nrow(self$death_flows) > 0) {
-        for (f in 1: nrow(self$death_flows)) {
-          flow <- self$death_flows[f,]
-          if (flow$implement) {
-            net_flow <- self$adjust_parameter(flow$parameter) * compartment_values[flow$from]
-            ode_equations <- self$increment_compartment(ode_equations, flow$from, -net_flow)
-            
-            # increment tracking of total deaths
-            if ("total_deaths" %in% names(self$tracked_quantities)) {
-              self$tracked_quantities$total_deaths <- self$tracked_quantities$total_deaths + net_flow
-            }
-          }
-        }
-      }
-      ode_equations
-    },
-    
-    # apply the population-wide death rate to all compartments
-    apply_universal_death_flow = function(ode_equations, compartment_values, time) {
-      for (compartment in names(self$compartment_values)) {
-        net_flow <- self$adjust_parameter("universal_death_rate") * compartment_values[compartment]
-        ode_equations <- self$increment_compartment(ode_equations, compartment, -net_flow)
+      # if the parameter is stratified
+      if (grepl("X", flow_or_compartment)) {
         
-        # track deaths in case births are meant to replace deaths
-        if ("total_deaths" %in% names(self$tracked_quantities)) {
-          self$tracked_quantities$total_deaths <- self$tracked_quantities$total_deaths + net_flow
-        }
-      }
-      ode_equations
-    },
-    
-    # apply a population-wide death rate to all compartments
-    apply_birth_rate = function(ode_equations, compartment_values, time) {
-      total_births <- self$find_total_births(compartment_values)
-      
-      # split the total births across entry compartments
-      for (compartment in names(compartment_values)) {
-        if (find_stem(compartment) == self$entry_compartment) {
+        # cycle through the parameter adjustments by finding the Xs in the strings,
+        # starting from the most stratified parameter (longest string)
+        x_positions <- extract_x_positions(flow_or_compartment)
+        
+        for (x_instance in rev(x_positions[2:length(x_positions)])) {
           
-          # calculate adjustment to original stem entry rate
-          entry_fraction <- 1
-
-          if (grepl("X", compartment)) {
-            x_positions <- extract_x_positions(compartment)
-            for (x_instance in seq(length(x_positions) - 1)) {
-              adjustment <- paste("entry_fractionX", substr(compartment, x_positions[x_instance] + 1, x_positions[x_instance + 1] - 1), sep="")
-              entry_fraction <- entry_fraction * self$parameters[[adjustment]]
-            }
+          # find the name of the parameter adjustment for the stratum considered
+          adjustment <- substr(flow_or_compartment, 1, x_instance - 1)
+          
+          # if overwrite has been requested at any stage and we can skip the higher strata
+          if (adjustment %in% self$overwrite_parameters) {
+            parameter_adjustment_value <- as.numeric(self$parameters[adjustment])
+            base_parameter_value <- 1
+            break
           }
-          compartment_births <- entry_fraction * total_births
-          ode_equations <- self$increment_compartment(ode_equations, compartment, compartment_births)
+          
+          # otherwise, standard approach to progressively adjusting
+          else {
+            parameter_adjustment_value <- parameter_adjustment_value *
+              as.numeric(self$parameters[adjustment])
+          }
         }
       }
-      ode_equations
-    },
-    
-    # find the total births needing to be added to the model
-    find_total_births = function(compartment_values) {
-      
-      # work out the total births to apply dependent on the approach requested
-      if (self$birth_approach == "add_crude_birth_rate") {
-        self$parameters$crude_birth_rate * sum(compartment_values)
-      }
-      else if (self$birth_approach == "replace_deaths") {
-        self$tracked_quantities$total_deaths
-      }
-      else {
-        0
-      }      
-    },
-    
-    # find the multiplier to account for the infectious population in dynamic flows
-    find_infectious_multiplier = function(flow_type) {
-      if (flow_type == "infection_density") {
-        self$tracked_quantities$infectious_population
-      }
-      else if (flow_type == "infection_frequency") {
-        self$tracked_quantities$infectious_population / self$tracked_quantities$total_population
-      }
-      else {
-        1
-      }
-    },
-    
-    # update quantities that emerge during model running, but not pre-defined functions of time or population deaths, which are updated as they are calculated
-    update_tracked_quantities = function(compartment_values) {
-      for (quantity in names(self$tracked_quantities)) {
-        self$tracked_quantities[[quantity]] <- 0
-        if (quantity == "infectious_population") {
-          self$find_infectious_population(compartment_values)
-        }
-        else if (quantity == "total_population") {
-          self$tracked_quantities$total_population <- sum(compartment_values)
-        }
-      }
+      adjusted_parameter <- base_parameter_value * parameter_adjustment_value
     },
     
     # calculations to find the effective infectious population
@@ -1013,48 +1068,6 @@ EpiModel <- R6Class(
             compartment_values[match(compartment, names(self$compartment_values))] * infectiousness_modifier
         }
       }
-    },
-
-    # adjust stratified parameter value
-    adjust_parameter = function(flow_or_compartment) {
-      
-      # start from baseline values
-      base_parameter_value <- as.numeric(self$parameters[find_stem(flow_or_compartment)])
-      parameter_adjustment_value <- 1
-      
-      # if the parameter is stratified
-      if (grepl("X", flow_or_compartment)) {
-
-        # cycle through the parameter adjustments by finding the Xs in the strings,
-        # starting from the most stratified parameter (longest string)
-        x_positions <- extract_x_positions(flow_or_compartment)
-        
-        for (x_instance in rev(x_positions[2:length(x_positions)])) {
-          
-          # find the name of the parameter adjustment for the stratum considered
-          adjustment <- substr(flow_or_compartment, 1, x_instance - 1)
-
-          # if overwrite has been requested at any stage and we can skip the higher strata
-          if (adjustment %in% self$overwrite_parameters) {
-            parameter_adjustment_value <- as.numeric(self$parameters[adjustment])
-            base_parameter_value <- 1
-            break
-          }
-          
-          # otherwise, standard approach to progressively adjusting
-          else {
-            parameter_adjustment_value <- parameter_adjustment_value *
-              as.numeric(self$parameters[adjustment])
-          }
-        }
-      }
-      adjusted_parameter <- base_parameter_value * parameter_adjustment_value
-    },
-    
-    # general method to increment the odes by a value specified as an argument
-    increment_compartment = function(ode_equations, compartment_name, increment) {
-      ode_equations[compartment_name] <- ode_equations[compartment_name] + increment
-      ode_equations
     }
   )
 )
@@ -1081,7 +1094,7 @@ ModelInterpreter <- R6Class(
       for (time_value in 1:length(self$table_final_outputs$time)) {
         self$table_final_outputs$time[[time_value]] <- self$table_final_outputs$time[[time_value]] * 365
       }
-      },
+    },
     
     # sum all the compartment values of one type
     find_compartment_totals = function() {
@@ -1094,16 +1107,16 @@ ModelInterpreter <- R6Class(
             self$compartment_totals[[compartment_type]] <-
               self$compartment_totals[[compartment_type]] + self$outputs[[compartment]]
           }
-          }
         }
-      },
+      }
+    },
     
     # allows the user to plot compartment/multiple compartments against time
     plot_function = function(compartment = c("susceptible", "infectious"), points = FALSE) {
-
+      
       # final_data is populated with key/value columns that is put into ggplot
       final_data <- data.frame(interpreter$table_final_outputs %>% 
-        gather(Compartments, value, compartment))
+                                 gather(Compartments, value, compartment))
       
       # ggplot is initiated
       plot <- ggplot(final_data, aes(time, value, color = Compartments)) + geom_line()
@@ -1129,7 +1142,7 @@ ModelInterpreter <- R6Class(
       
       # the legend is also cleaned up with necessary outputs
       plot <- plot + scale_color_discrete(breaks = compartment,
-                                            labels = compartment_capitalised) +
+                                          labels = compartment_capitalised) +
         theme_bw() +
         theme(plot.title = element_text(hjust = 0.5))
       
@@ -1143,7 +1156,7 @@ ModelInterpreter <- R6Class(
     # simple method to plot the size of a compartment
     plot_compartment = function(compartment) {
       plot(self$times, self$compartment_totals[[compartment]])
-      },
+    },
     
     # creates a flowchart - stratified flowchart unless otherwise specified
     # parameters can also be presented unless otherwise specified
@@ -1218,8 +1231,8 @@ ModelInterpreter <- R6Class(
         if (type_of_flow$implement[[row]]) {
           
           #Parameters are added or not added in to the flowchart depending on the setting
-         
-           if (parameters) {
+          
+          if (parameters) {
             connections <- paste(' edge [label =',
                                  type_of_flow$parameter[[row]],
                                  ']')
@@ -1249,6 +1262,6 @@ ModelInterpreter <- R6Class(
       svg <- charToRaw(svg)
       rsvg_pdf(svg, paste('flowchart~', type , '.pdf', sep = ''))
     }
-    )
+  )
   )
 
