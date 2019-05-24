@@ -220,6 +220,13 @@ EpiModel <- R6Class(
       }
     },
     
+    # short function to save the if statement in every call to output some information
+    output_to_user = function(comment) {
+      if (self$report_progress) {
+        writeLines(comment)
+      }
+    },
+    
     # set starting compartment values
     set_initial_conditions = function(initial_conditions_to_total) {
       
@@ -230,9 +237,7 @@ EpiModel <- R6Class(
         }
         else {
           self$compartment_values[compartment] <- 0
-          if (self$report_progress) {
-            writeLines(paste("\nNo starting value requested for", compartment, "compartment, so set to zero"))
-          }
+          self$output_to_user(paste("\nNo starting value requested for", compartment, "compartment, so set to zero"))
         }
       }
       
@@ -251,11 +256,9 @@ EpiModel <- R6Class(
         stop("total of requested compartment values is greater than the requested starting population")
       }
       remaining_population <- self$starting_population - Reduce("+", self$compartment_values)
-      if (self$report_progress) {
-        writeLines(paste("\nRequested that total population sum to", self$starting_population))
-        writeLines(paste("Remaining population of ", as.character(round(remaining_population, self$reporting_sigfigs)), 
-                         " allocated to ", compartment, " compartment", sep=""))
-      }
+      self$output_to_user(paste("\nRequested that total population sum to", self$starting_population))
+      self$output_to_user(paste("Remaining population of ", as.character(round(remaining_population, self$reporting_sigfigs)), 
+                                " allocated to ", compartment, " compartment", sep=""))
       self$compartment_values[compartment] <- remaining_population
     },
     
@@ -274,9 +277,7 @@ EpiModel <- R6Class(
       
       # otherwise use the entry compartment and report
       else {
-        if (self$report_progress) {
-          writeLines(paste("\nNo default starting compartment requested for unallocated population, so will be allocated to entry compartment,", compartment))
-        }
+        self$output_to_user(paste("\nNo default starting compartment requested for unallocated population, so will be allocated to entry compartment,", self$entry_compartment))
         return(self$entry_compartment)
       }
     },
@@ -359,14 +360,10 @@ EpiModel <- R6Class(
     
     # integrate model odes  
     run_model = function () {
-      if (self$report_progress) {
-        writeLines("\nNow integrating")
-      }
+      self$output_to_user("\nNow integrating")
       self$outputs <- as.data.frame(lsodar(self$compartment_values, self$times, self$make_model_function(),
                                            rootfunc = self$set_stopping_conditions()))
-      if (self$report_progress) {
-        writeLines("\nIntegration complete")
-      }
+      self$output_to_user("\nIntegration complete")
     },   
     
     # create derivative function
