@@ -117,7 +117,14 @@ EpiModel <- R6Class(
         self$parameters[parameter_name]
       }
     },
-    
+
+    # short function to save the if statement in every call to output some information
+    output_to_user = function(comment) {
+      if (self$report_progress) {
+        writeLines(comment)
+      }
+    },
+        
     # __________
     # model construction methods
     
@@ -133,10 +140,7 @@ EpiModel <- R6Class(
         times, compartment_types, initial_conditions, parameters, requested_flows, initial_conditions_to_total,
         infectious_compartment, birth_approach, report_progress, reporting_sigfigs, entry_compartment, starting_population,
         default_starting_compartment, equilibrium_stopping_tolerance, output_connections, tracked_quantities)
-      if (is.unsorted(self$times)) {
-        writeLines("requested integration times are not sorted, now sorting")
-        self$times <- sort(self$times)
-      }
+
       
       # convert input arguments to model attributes
       for (attribute_to_assign in c(
@@ -191,7 +195,6 @@ EpiModel <- R6Class(
         }
       }
       
-      
       # infectious compartment
       if (!infectious_compartment %in% compartment_types) {
         stop("infectious compartment name is not one of the listed compartment types")
@@ -200,6 +203,12 @@ EpiModel <- R6Class(
       # hard coded available birth approaches
       if (!birth_approach %in% private$available_birth_approaches) {
         stop("requested birth approach unavailable")
+      }
+      
+      # order times if needed
+      if (is.unsorted(self$times)) {
+        self$output_to_user("requested integration times are not sorted, now sorting")
+        self$times <- sort(self$times)
       }
       
       # report on characteristics of inputs
@@ -217,13 +226,6 @@ EpiModel <- R6Class(
         }
         writeLines(paste("\nInfectious compartment is called:", infectious_compartment))
         writeLines(paste("\nBirth approach is:", birth_approach))
-      }
-    },
-    
-    # short function to save the if statement in every call to output some information
-    output_to_user = function(comment) {
-      if (self$report_progress) {
-        writeLines(comment)
       }
     },
     
@@ -584,7 +586,6 @@ EpiModel <- R6Class(
     }
   )
 )
-
 
 
 StratifiedModel <- R6Class(
@@ -1260,5 +1261,5 @@ ModelInterpreter <- R6Class(
       rsvg_pdf(svg, paste('flowchart~', type , '.pdf', sep = ''))
     }
   )
-  )
+)
 
