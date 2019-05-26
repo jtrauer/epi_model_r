@@ -756,10 +756,7 @@ StratifiedModel <- R6Class(
     
     # find the names of the stratifications from a particular user request
     find_strata_names_from_input = function(stratification_name, strata_request, report) {
-      if (stratification_name == "age" & !is.numeric(strata_request)) {
-        stop("age stratification requested, but with strata names that are not numeric")
-      }
-      else if (length(strata_request) == 0) {
+      if (length(strata_request) == 0) {
         stop("requested to stratify, but no stratification labels provided")
       }
       else if (length(strata_request) == 1 & is.numeric(strata_request)) {
@@ -833,9 +830,7 @@ StratifiedModel <- R6Class(
           if (startsWith(parameter, "universal_death_rate")) {
             for (stratum in strata_names) {
               self$add_adjusted_parameter(parameter, stratification_name, stratum, strata_names, adjustment_requests)
-              if (report) {
-                writeLines(paste("Modifying universal death rate for", stratum, "stratum of", stratification_name))
-              }
+              self$output_to_user(paste("Modifying universal death rate for", stratum, "stratum of", stratification_name))
             }
           }
         }
@@ -846,28 +841,12 @@ StratifiedModel <- R6Class(
     stratify_transition_flows = function(stratification_name, strata_names, adjustment_requests, report) {
       for (flow in seq(nrow(self$transition_flows))) {
         
-        # both from and to compartments being stratified
-        if (find_stem(self$transition_flows$from[flow]) %in% self$compartment_types_to_stratify &
-            find_stem(self$transition_flows$to[flow]) %in% self$compartment_types_to_stratify) {
-          whether_stratify <- c(TRUE, TRUE)
-        }
-        
-        # from compartment being stratified but not to compartment
-        else if (find_stem(self$transition_flows$from[flow]) %in% self$compartment_types_to_stratify) {
-          whether_stratify <- c(TRUE, FALSE)
-        }
-        
-        # to compartment being stratified but not from compartment
-        else if (find_stem(self$transition_flows$to[flow]) %in% self$compartment_types_to_stratify) {
-          whether_stratify <- c(FALSE, TRUE)
-        }
-        else {
-          whether_stratify <- c(FALSE, FALSE)
-        }
-        
         # if flow is active and stratification is relevant    
-        if (any(whether_stratify) & self$transition_flows$implement[flow]) {
-          self$add_stratified_flows(flow, stratification_name, strata_names, whether_stratify[1], whether_stratify[2], adjustment_requests, report)
+        if (self$transition_flows$implement[flow]) {
+          self$add_stratified_flows(flow, stratification_name, strata_names, 
+                                    find_stem(self$transition_flows$from[flow]) %in% self$compartment_types_to_stratify,
+                                    find_stem(self$transition_flows$to[flow]) %in% self$compartment_types_to_stratify,
+                                    adjustment_requests, report)
         }
       }
       self$output_to_user("stratified transition flows matrix:")
@@ -902,57 +881,59 @@ StratifiedModel <- R6Class(
     # add additional stratified flow to flow data frame
     add_stratified_flows = function(flow, stratification_name, strata_names, stratify_from, stratify_to, adjustment_requests, report) {
       
-      if (report) {
-        writeLines(paste("For flow from", self$transition_flows$from[flow], "to", self$transition_flows$to[flow], "in stratification", stratification_name))
-      }
-      
-      # loop over each stratum in the requested stratification structure
-      for (stratum in strata_names) {
+      if (stratify_from | stratify_to) {
+        if (report) {
+          writeLines(paste("For flow from", self$transition_flows$from[flow], "to", self$transition_flows$to[flow], "in stratification", stratification_name))
+        }
         
-        # find parameter name, will remain as null if no requests have been made by the user
-        parameter_name <- self$add_adjusted_parameter(self$transition_flows$parameter[flow], stratification_name, stratum, strata_names, adjustment_requests)
-        
-        # default behaviour for parameters not requested is to split the parameter into equal parts to split but from not split
-        # otherwise retain the existing parameter
-        if (is.null(parameter_name) & !stratify_from & stratify_to) {
-          old_parameter_name <- self$transition_flows$parameter[flow]
-          parameter_name <- create_stratified_name(self$transition_flows$parameter[flow], stratification_name, stratum)
-          self$parameters[parameter_name] <- 1 / length(strata_names)
-          if (report & stratum == strata_names[1]) {
-            writeLines(paste("\tSplitting existing parameter value", old_parameter_name, "into", length(strata_names), "equal parts"))
+        # loop over each stratum in the requested stratification structure
+        for (stratum in strata_names) {
+          
+          # find parameter name, will remain as null if no requests have been made by the user
+          parameter_name <- self$add_adjusted_parameter(self$transition_flows$parameter[flow], stratification_name, stratum, strata_names, adjustment_requests)
+          
+          # default behaviour for parameters not requested is to split the parameter into equal parts to split but from not split
+          # otherwise retain the existing parameter
+          if (is.null(parameter_name) & !stratify_from & stratify_to) {
+            old_parameter_name <- self$transition_flows$parameter[flow]
+            parameter_name <- create_stratified_name(self$transition_flows$parameter[flow], stratification_name, stratum)
+            self$parameters[parameter_name] <- 1 / length(strata_names)
+            if (report & stratum == strata_names[1]) {
+              writeLines(paste("\tSplitting existing parameter value", old_parameter_name, "into", length(strata_names), "equal parts"))
+            }
           }
-        }
-        else if (is.null(parameter_name)) {
-          parameter_name <- self$transition_flows$parameter[flow]
-          if (report & stratum == strata_names[1]) {
-            writeLines(paste("\tRetaining existing parameter value", parameter_name))
+          else if (is.null(parameter_name)) {
+            parameter_name <- self$transition_flows$parameter[flow]
+            if (report & stratum == strata_names[1]) {
+              writeLines(paste("\tRetaining existing parameter value", parameter_name))
+            }
           }
-        }
-        else if (report & stratum == strata_names[1]) {
-          writeLines(paste("\tImplementing new parameter", parameter_name))
+          else if (report & stratum == strata_names[1]) {
+            writeLines(paste("\tImplementing new parameter", parameter_name))
+          }
+          
+          # determine whether to and/or from compartments are stratified
+          if (stratify_from) {
+            from_compartment <- create_stratified_name(self$transition_flows$from[flow], stratification_name, stratum)
+          }
+          else {
+            from_compartment <- self$transition_flows$from[flow]
+          }
+          if (stratify_to) {
+            to_compartment <- create_stratified_name(self$transition_flows$to[flow], stratification_name, stratum)
+          }
+          else {
+            to_compartment <- self$transition_flows$to[flow]
+          }
+          
+          # add the new flow
+          self$transition_flows <- rbind(self$transition_flows,data.frame(
+            parameter=parameter_name, from=from_compartment, to=to_compartment, implement=TRUE, type=self$transition_flows$type[flow]))
         }
         
-        # determine whether to and/or from compartments are stratified
-        if (stratify_from) {
-          from_compartment <- create_stratified_name(self$transition_flows$from[flow], stratification_name, stratum)
-        }
-        else {
-          from_compartment <- self$transition_flows$from[flow]
-        }
-        if (stratify_to) {
-          to_compartment <- create_stratified_name(self$transition_flows$to[flow], stratification_name, stratum)
-        }
-        else {
-          to_compartment <- self$transition_flows$to[flow]
-        }
-        
-        # add the new flow
-        self$transition_flows <- rbind(self$transition_flows,data.frame(
-          parameter=parameter_name, from=from_compartment, to=to_compartment, implement=TRUE, type=self$transition_flows$type[flow]))
+        # remove old flow
+        self$transition_flows$implement[flow] <- FALSE
       }
-      
-      # remove old flow
-      self$transition_flows$implement[flow] <- FALSE
     },
     
     # stratify entry/recruitment/birth flows
