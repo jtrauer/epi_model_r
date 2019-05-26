@@ -887,8 +887,9 @@ StratifiedModel <- R6Class(
         # loop over each stratum in the requested stratification structure
         for (stratum in strata_names) {
           
-          # find parameter name, will remain as null if no requests have been made by the user
-          parameter_name <- self$add_adjusted_parameter(self$transition_flows$parameter[flow], stratification_name, stratum, strata_names, adjustment_requests)
+          # find parameter name
+          parameter_name <- self$add_adjusted_parameter(
+            self$transition_flows$parameter[flow], stratification_name, stratum, strata_names, adjustment_requests)
           if (is.null(parameter_name)) {
             parameter_name <- self$sort_absent_parameter_request(stratification_name, strata_names, stratum, stratify_from, stratify_to, flow)
           }
@@ -949,17 +950,15 @@ StratifiedModel <- R6Class(
           else if (stratification_name == "age") {
             self$parameters[entry_fraction_name] <- 0
           }
-          else if (stratum %in% names(requested_proportions[["adjustments"]])) {
-            self$parameters[entry_fraction_name] <- requested_proportions[["adjustments"]][[stratum]]
-            if (report) {
-              writeLines(paste("Assigning specified proportion of starting population to", stratum))
-            }
+          
+          # should change this code to be more like approach to parameter adjustment
+          else if (stratum %in% names(requested_proportions$adjustments)) {
+            self$parameters[entry_fraction_name] <- requested_proportions$adjustments[[stratum]]
+            self$output_to_user(paste("assigning specified proportion of starting population to", stratum))
           }
           else {
             self$parameters[entry_fraction_name] <- 1 / length(strata_names)
-            if (report) {
-              writeLines(paste("Assuming", as.character(1 / length(strata_names)), "of starting population to be assigned to", stratum, "stratum by default"))
-            }
+            self$output_to_user(paste("assuming", as.character(1 / length(strata_names)), "of starting population to be assigned to", stratum, "stratum by default"))
           }
         }
       }
