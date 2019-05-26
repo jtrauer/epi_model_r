@@ -364,10 +364,10 @@ EpiModel <- R6Class(
     
     # integrate model odes  
     run_model = function () {
-      self$output_to_user("\nNow integrating")
+      self$output_to_user("\nnow integrating")
       self$outputs <- as.data.frame(lsodar(self$compartment_values, self$times, self$make_model_function(),
                                            rootfunc = self$set_stopping_conditions()))
-      self$output_to_user("\nIntegration complete")
+      self$output_to_user("\nintegration complete")
     },   
     
     # create derivative function
@@ -830,7 +830,7 @@ StratifiedModel <- R6Class(
           if (startsWith(parameter, "universal_death_rate")) {
             for (stratum in strata_names) {
               self$add_adjusted_parameter(parameter, stratification_name, stratum, strata_names, adjustment_requests)
-              self$output_to_user(paste("Modifying universal death rate for", stratum, "stratum of", stratification_name))
+              self$output_to_user(paste("modifying universal death rate for", stratum, "stratum of", stratification_name))
             }
           }
         }
@@ -869,7 +869,7 @@ StratifiedModel <- R6Class(
                                                  from=create_stratified_name(self$death_flows$from[flow], stratification_name, stratum), 
                                                  implement=TRUE, stringsAsFactors=FALSE))
             if (report) {
-              writeLines(paste("\tRetaining existing death parameter value", self$death_flows$parameter[flow], "for new", 
+              writeLines(paste("\tretaining existing death parameter value", self$death_flows$parameter[flow], "for new", 
                                create_stratified_name(self$death_flows$from[flow], stratification_name, stratum), "compartment"))
             }
             self$death_flows$implement[flow] <- FALSE
