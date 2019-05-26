@@ -882,36 +882,17 @@ StratifiedModel <- R6Class(
     add_stratified_flows = function(flow, stratification_name, strata_names, stratify_from, stratify_to, adjustment_requests, report) {
       
       if (stratify_from | stratify_to) {
-        if (report) {
-          writeLines(paste("For flow from", self$transition_flows$from[flow], "to", self$transition_flows$to[flow], "in stratification", stratification_name))
-        }
+        self$output_to_user(paste("for flow from", self$transition_flows$from[flow], "to", self$transition_flows$to[flow], "in stratification", stratification_name))
         
         # loop over each stratum in the requested stratification structure
         for (stratum in strata_names) {
           
           # find parameter name, will remain as null if no requests have been made by the user
           parameter_name <- self$add_adjusted_parameter(self$transition_flows$parameter[flow], stratification_name, stratum, strata_names, adjustment_requests)
-          
-          # default behaviour for parameters not requested is to split the parameter into equal parts to split but from not split
-          # otherwise retain the existing parameter
-          if (is.null(parameter_name) & !stratify_from & stratify_to) {
-            old_parameter_name <- self$transition_flows$parameter[flow]
-            parameter_name <- create_stratified_name(self$transition_flows$parameter[flow], stratification_name, stratum)
-            self$parameters[parameter_name] <- 1 / length(strata_names)
-            if (report & stratum == strata_names[1]) {
-              writeLines(paste("\tSplitting existing parameter value", old_parameter_name, "into", length(strata_names), "equal parts"))
-            }
+          if (is.null(parameter_name)) {
+            parameter_name <- self$sort_absent_parameter_request(stratification_name, strata_names, stratum, stratify_from, stratify_to, flow)
           }
-          else if (is.null(parameter_name)) {
-            parameter_name <- self$transition_flows$parameter[flow]
-            if (report & stratum == strata_names[1]) {
-              writeLines(paste("\tRetaining existing parameter value", parameter_name))
-            }
-          }
-          else if (report & stratum == strata_names[1]) {
-            writeLines(paste("\tImplementing new parameter", parameter_name))
-          }
-          
+                      
           # determine whether to and/or from compartments are stratified
           if (stratify_from) {
             from_compartment <- create_stratified_name(self$transition_flows$from[flow], stratification_name, stratum)
@@ -934,6 +915,25 @@ StratifiedModel <- R6Class(
         # remove old flow
         self$transition_flows$implement[flow] <- FALSE
       }
+    },
+    
+    # work out what to do if a specific parameter adjustment has not been requested
+    sort_absent_parameter_request = function (stratification_name, strata_names, stratum, stratify_from, stratify_to, flow) {
+      
+      # default behaviour for parameters not requested is to split the parameter into equal parts from compartment not split but to compartment is
+      if (!stratify_from & stratify_to) {
+        old_parameter_name <- self$transition_flows$parameter[flow]
+        parameter_name <- create_stratified_name(self$transition_flows$parameter[flow], stratification_name, stratum)
+        self$parameters[parameter_name] <- 1 / length(strata_names)
+        self$output_to_user(paste("\tsplitting existing parameter value", old_parameter_name, "into", length(strata_names), "equal parts"))
+      }
+      
+      # otherwise if no request, retain the existing parameter
+      else {
+        parameter_name <- self$transition_flows$parameter[flow]
+        self$output_to_user(paste("\tretaining existing parameter value", parameter_name))
+      }
+      parameter_name
     },
     
     # stratify entry/recruitment/birth flows
