@@ -708,7 +708,7 @@ StratifiedModel <- R6Class(
         for (stratum in as.character(strata_names)) {
           if (!stratum %in% names(adjustment_requests[[parameter]]$adjustments)) {
             adjustment_requests[[parameter]]$adjustments[stratum] <- 1
-            self$output_to_user(paste("no request made for adjustment to", stratum, "stratum, so using parent value by default"))
+            self$output_to_user(paste("no request made for adjustment to", parameter, "within stratum", stratum, "so using parent value by default"))
           }
         }
       }
