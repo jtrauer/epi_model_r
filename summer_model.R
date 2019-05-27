@@ -576,8 +576,8 @@ EpiModel <- R6Class(
     },
     
     # placeholder function to allow for stratification
-    adjust_parameter = function(flow_or_compartment) {
-      as.numeric(self$parameters[find_stem(flow_or_compartment)])
+    adjust_parameter = function(parameter) {
+      as.numeric(self$parameters[find_stem(parameter)])
     },
     
     # general method to increment the odes by a value specified as an argument
@@ -823,15 +823,14 @@ StratifiedModel <- R6Class(
       }
     },
     
-    # stratify the approach to universal, population-wide deaths (which can vary by stratum)
+    # stratify the approach to universal, population-wide deaths (which can be made to vary by stratum)
     stratify_universal_death_rate = function(stratification_name, strata_names, adjustment_requests, report) {
-      if ("universal_death_rate" %in% names(adjustment_requests)) {
-        for (parameter in names(self$parameters)) {
-          if (startsWith(parameter, "universal_death_rate")) {
-            for (stratum in strata_names) {
-              self$add_adjusted_parameter(parameter, stratification_name, stratum, strata_names, adjustment_requests)
-              self$output_to_user(paste("modifying universal death rate for", stratum, "stratum of", stratification_name))
-            }
+      for (parameter in names(self$parameters)) {
+        
+        # take each parameter that refers to the universal death rate and adjust it for each stratum according to user request
+        if (find_stem(parameter) == "universal_death_rate" & "universal_death_rate" %in% names(adjustment_requests)) {
+          for (stratum in strata_names) {
+            self$add_adjusted_parameter(parameter, stratification_name, stratum, strata_names, adjustment_requests)
           }
         }
       }
@@ -862,16 +861,11 @@ StratifiedModel <- R6Class(
             if (is.null(parameter_name)) {
               parameter_name <- self$death_flows$parameter[flow]
             }
-            
             self$death_flows <- rbind(self$death_flows, 
                                       data.frame(type=self$death_flows$type[flow], 
                                                  parameter=parameter_name, 
                                                  from=create_stratified_name(self$death_flows$from[flow], stratification_name, stratum), 
                                                  implement=TRUE, stringsAsFactors=FALSE))
-            if (report) {
-              writeLines(paste("\tretaining existing death parameter value", self$death_flows$parameter[flow], "for new", 
-                               create_stratified_name(self$death_flows$from[flow], stratification_name, stratum), "compartment"))
-            }
             self$death_flows$implement[flow] <- FALSE
           }
         }
@@ -923,10 +917,9 @@ StratifiedModel <- R6Class(
       
       # default behaviour for parameters not requested is to split the parameter into equal parts from compartment not split but to compartment is
       if (!stratify_from & stratify_to) {
-        old_parameter_name <- self$transition_flows$parameter[flow]
-        parameter_name <- create_stratified_name(self$transition_flows$parameter[flow], stratification_name, stratum)
-        self$parameters[parameter_name] <- 1 / length(strata_names)
-        self$output_to_user(paste("\tsplitting existing parameter value", old_parameter_name, "into", length(strata_names), "equal parts"))
+        self$output_to_user(paste("\tsplitting existing parameter value", self$transition_flows$parameter[flow], "into", length(strata_names), "equal parts"))
+        self$parameters[create_stratified_name(self$transition_flows$parameter[flow], stratification_name, stratum)] <- 
+          1 / length(strata_names)
       }
       
       # otherwise if no request, retain the existing parameter
@@ -967,6 +960,7 @@ StratifiedModel <- R6Class(
     # cycle through parameter stratification requests with the last one overwriting earlier ones in the list
     add_adjusted_parameter = function(unadjusted_parameter, stratification_name, stratum, strata_names, adjustment_requests) {
       parameter_adjustment_name <- NULL
+      self$output_to_user(paste("\tmodifying", unadjusted_parameter, "for", stratum, "stratum of", stratification_name))
       
       # for each request for adjustment, if there are any
       if (is.list(adjustment_requests)) {
@@ -980,6 +974,8 @@ StratifiedModel <- R6Class(
             if (!stratum %in% names(adjustment_requests[[parameter_request]]$adjustments)) {
               self$parameters[parameter_adjustment_name] <- 1
             }
+            
+            # otherwise implement user request
             else {
               self$parameters[parameter_adjustment_name] <- adjustment_requests[[parameter_request]]$adjustments[as.character(stratum)]
             }
@@ -995,26 +991,23 @@ StratifiedModel <- R6Class(
     },
     
     # adjust stratified parameter value
-    adjust_parameter = function(flow_or_compartment) {
+    adjust_parameter = function(parameter) {
       
-      # start from baseline values
-      base_parameter_value <- as.numeric(self$parameters[find_stem(flow_or_compartment)])
-      
+      # start from baseline values and no adjustment
+      base_parameter_value <- as.numeric(self$parameters[find_stem(parameter)])
       parameter_adjustment_value <- 1
       
       # if the parameter is stratified
-      if (grepl("X", flow_or_compartment)) {
+      if (grepl("X", parameter)) {
         
-        # cycle through the parameter adjustments by finding the Xs in the strings,
-        # starting from the most stratified parameter (longest string)
-        x_positions <- extract_x_positions(flow_or_compartment)
-        
+        # cycle through the parameter adjustments by finding the Xs in the strings, starting from the most stratified parameter
+        x_positions <- extract_x_positions(parameter)
         for (x_instance in rev(x_positions[2:length(x_positions)])) {
           
           # find the name of the parameter adjustment for the stratum considered
-          adjustment <- substr(flow_or_compartment, 1, x_instance - 1)
+          adjustment <- substr(parameter, 1, x_instance - 1)
           
-          # if overwrite has been requested at any stage and we can skip the higher strata
+          # if overwrite has been requested at any stage and we can skip the strata higher up the hierarchy
           if (adjustment %in% self$overwrite_parameters) {
             parameter_adjustment_value <- as.numeric(self$parameters[adjustment])
             base_parameter_value <- 1
@@ -1023,8 +1016,7 @@ StratifiedModel <- R6Class(
           
           # otherwise, standard approach to progressively adjusting
           else {
-            parameter_adjustment_value <- parameter_adjustment_value *
-              as.numeric(self$parameters[adjustment])
+            parameter_adjustment_value <- parameter_adjustment_value * as.numeric(self$parameters[adjustment])
           }
         }
       }
