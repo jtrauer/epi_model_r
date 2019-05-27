@@ -993,6 +993,10 @@ StratifiedModel <- R6Class(
     # adjust stratified parameter value
     adjust_parameter = function(parameter) {
       
+      print("_________________________")
+      print(parameter)
+      print("__")
+      
       # start from baseline values and no adjustment
       base_parameter_value <- as.numeric(self$parameters[find_stem(parameter)])
       parameter_adjustment_value <- 1
@@ -1007,6 +1011,9 @@ StratifiedModel <- R6Class(
           # find the name of the parameter adjustment for the stratum considered
           adjustment <- substr(parameter, 1, x_instance - 1)
           
+          print(adjustment)
+          
+          
           # if overwrite has been requested at any stage and we can skip the strata higher up the hierarchy
           if (adjustment %in% self$overwrite_parameters) {
             parameter_adjustment_value <- as.numeric(self$parameters[adjustment])
@@ -1020,6 +1027,8 @@ StratifiedModel <- R6Class(
           }
         }
       }
+      print(find_stem(parameter))
+      
       adjusted_parameter <- base_parameter_value * parameter_adjustment_value
     },
     
