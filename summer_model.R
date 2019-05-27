@@ -1010,9 +1010,10 @@ StratifiedModel <- R6Class(
           
           # if overwrite has been requested at any stage and we can skip the strata higher up the hierarchy
           if (adjustment %in% self$overwrite_parameters) {
-            parameter_adjustment_value <- as.numeric(self$parameters[adjustment])
-            base_parameter_value <- 1
-            break
+            return(as.numeric(self$parameters[adjustment]))
+            # parameter_adjustment_value <- as.numeric(self$parameters[adjustment])
+            # base_parameter_value <- 1
+            # break
           }
           
           # otherwise, standard approach to progressively adjusting
