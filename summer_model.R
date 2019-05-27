@@ -974,15 +974,15 @@ StratifiedModel <- R6Class(
           
           # if the parameter being considered is an extension of the parameter type requested
           if (startsWith(unadjusted_parameter, parameter_request)) {
-            
-            # if a stratum hasn't been requested, assign it an adjustment value of 1
-            if (!stratum %in% names(adjustment_requests[[parameter_request]][["adjustments"]])) {
-              adjustment_requests[[parameter_request]][["adjustments"]][stratum] <- 1
-            }
-            
-            # populate the parameter adjustment attribute with the new adjustment
             parameter_adjustment_name <- create_stratified_name(unadjusted_parameter, stratification_name, stratum)
-            self$parameters[parameter_adjustment_name] <- adjustment_requests[[parameter_request]][["adjustments"]][as.character(stratum)]
+
+            # if a stratum hasn't been requested, assign it an adjustment value of 1
+            if (!stratum %in% names(adjustment_requests[[parameter_request]]$adjustments)) {
+              self$parameters[parameter_adjustment_name] <- 1
+            }
+            else {
+              self$parameters[parameter_adjustment_name] <- adjustment_requests[[parameter_request]]$adjustments[as.character(stratum)]
+            }
             
             # overwrite parameters higher up the tree by listing which ones to be overwritten
             if (stratum %in% adjustment_requests[[parameter_request]]$overwrite) {
