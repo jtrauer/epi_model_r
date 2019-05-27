@@ -364,10 +364,10 @@ EpiModel <- R6Class(
     
     # integrate model odes  
     run_model = function () {
-      self$output_to_user("\nNow integrating")
+      self$output_to_user("\nnow integrating")
       self$outputs <- as.data.frame(lsodar(self$compartment_values, self$times, self$make_model_function(),
                                            rootfunc = self$set_stopping_conditions()))
-      self$output_to_user("\nIntegration complete")
+      self$output_to_user("\nintegration complete")
     },   
     
     # create derivative function
@@ -517,7 +517,6 @@ EpiModel <- R6Class(
           # calculate adjustment to original stem entry rate
           entry_fraction <- 1
           x_positions <- extract_x_positions(compartment)
-          
           if (!x_positions[1] == -1) {
             for (x_instance in seq(length(x_positions) - 1)) {
               adjustment <- paste("entry_fractionX", substr(compartment, x_positions[x_instance] + 1, x_positions[x_instance + 1] - 1), sep="")
@@ -600,7 +599,7 @@ StratifiedModel <- R6Class(
     compartment_types_to_stratify = c(),
     
     # master stratification method
-    stratify = function(stratification_name, strata_request, compartment_types_to_stratify, 
+    stratify = function(stratification_name, strata_request, compartment_types_to_stratify,
                         adjustment_requests=c(), requested_proportions=list(), infectiousness_adjustments=c(), report=TRUE) {
       strata_names <- self$prepare_and_check_stratification(
         stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests, report)
@@ -641,7 +640,7 @@ StratifiedModel <- R6Class(
       
       # checks and reporting for age stratification and general starting message otherwise
       if (stratification_name == "age") {
-        self$check_age_stratification(strata_request, compartment_types_to_stratify)
+        strata_request <- self$check_age_stratification(strata_request, compartment_types_to_stratify)
       }
       else {
         self$output_to_user(paste("\nimplementing stratification for:", stratification_name))
@@ -650,7 +649,7 @@ StratifiedModel <- R6Class(
       # record stratification as attribute to model, find the names to apply strata and check compartment and parameter requests
       self$strata <- c(self$strata, stratification_name)
       strata_names <- self$find_strata_names_from_input(stratification_name, strata_request, report)
-      self$compartment_types_to_stratify <- self$check_compartment_request(compartment_types_to_stratify)
+      self$check_compartment_request(compartment_types_to_stratify)
       self$check_parameter_adjustment_requests(adjustment_requests, strata_names)
       strata_names
     },
@@ -662,7 +661,7 @@ StratifiedModel <- R6Class(
         stop("requested stratification by age, but this has specific behaviour and can only be applied once")
       }
       else if (length(compartment_types_to_stratify) != 0) {
-        stop("requested age stratification, but not applied to all compartments")
+        stop("requested age stratification, but requested to apply to specific compartments")
       }
       else if (!is.numeric(strata_request)) {
         stop("inputs for age strata breakpoints are not numeric")
@@ -676,6 +675,7 @@ StratifiedModel <- R6Class(
         strata_request <- c(0, strata_request)
         self$output_to_user(paste("adding age stratum called '0' as not requested, to represent those aged less than", strata_request[2]))
       }
+      strata_request
     },
     
     # check the requested compartments to be stratified has been requested correctly
@@ -683,8 +683,8 @@ StratifiedModel <- R6Class(
       
       # if vector of length zero passed, stratify all the compartment types in the model
       if (length(compartment_types_to_stratify) == 0) {
-        self$compartment_types_to_stratify <- self$compartment_types
         self$output_to_user("no compartment names specified for this stratification, so stratification applied to all model compartments")
+        self$compartment_types_to_stratify <- self$compartment_types
       }
       
       # otherwise check all the requested compartments are available and allow model run to proceed
@@ -708,7 +708,7 @@ StratifiedModel <- R6Class(
         for (stratum in as.character(strata_names)) {
           if (!stratum %in% names(adjustment_requests[[parameter]]$adjustments)) {
             adjustment_requests[[parameter]]$adjustments[stratum] <- 1
-            self$output_to_user(paste("no request made for adjustment to", stratum, "stratum, so using parent value by default"))
+            self$output_to_user(paste("no request made for adjustment to", parameter, "within stratum", stratum, "so using parent value by default"))
           }
         }
       }
@@ -756,10 +756,7 @@ StratifiedModel <- R6Class(
     
     # find the names of the stratifications from a particular user request
     find_strata_names_from_input = function(stratification_name, strata_request, report) {
-      if (stratification_name == "age" & !is.numeric(strata_request)) {
-        stop("age stratification requested, but with strata names that are not numeric")
-      }
-      else if (length(strata_request) == 0) {
+      if (length(strata_request) == 0) {
         stop("requested to stratify, but no stratification labels provided")
       }
       else if (length(strata_request) == 1 & is.numeric(strata_request)) {
@@ -808,7 +805,7 @@ StratifiedModel <- R6Class(
       
       # stratify each compartment that needs stratification
       for (compartment in names(self$compartment_values)) {
-        if (find_stem(compartment) %in% self$compartments_to_stratify) {
+        if (find_stem(compartment) %in% self$compartment_types_to_stratify) {
           
           # append the additional compartment
           for (stratum in strata_names) {
@@ -820,7 +817,7 @@ StratifiedModel <- R6Class(
           
           # remove the original one
           self$removed_compartments <- c(self$removed_compartments, compartment)
-          self$compartment_values[compartment] <- 0
+          self$compartment_values <- self$compartment_values[names(self$compartment_values) != compartment]
           self$output_to_user(paste("removing compartment:", compartment))
         }
       }
@@ -833,9 +830,7 @@ StratifiedModel <- R6Class(
           if (startsWith(parameter, "universal_death_rate")) {
             for (stratum in strata_names) {
               self$add_adjusted_parameter(parameter, stratification_name, stratum, strata_names, adjustment_requests)
-              if (report) {
-                writeLines(paste("Modifying universal death rate for", stratum, "stratum of", stratification_name))
-              }
+              self$output_to_user(paste("modifying universal death rate for", stratum, "stratum of", stratification_name))
             }
           }
         }
@@ -846,28 +841,12 @@ StratifiedModel <- R6Class(
     stratify_transition_flows = function(stratification_name, strata_names, adjustment_requests, report) {
       for (flow in seq(nrow(self$transition_flows))) {
         
-        # both from and to compartments being stratified
-        if (find_stem(self$transition_flows$from[flow]) %in% self$compartments_to_stratify &
-            find_stem(self$transition_flows$to[flow]) %in% self$compartments_to_stratify) {
-          whether_stratify <- c(TRUE, TRUE)
-        }
-        
-        # from compartment being stratified but not to compartment
-        else if (find_stem(self$transition_flows$from[flow]) %in% self$compartments_to_stratify) {
-          whether_stratify <- c(TRUE, FALSE)
-        }
-        
-        # to compartment being stratified but not from compartment
-        else if (find_stem(self$transition_flows$to[flow]) %in% self$compartments_to_stratify) {
-          whether_stratify <- c(FALSE, TRUE)
-        }
-        else {
-          whether_stratify <- c(FALSE, FALSE)
-        }
-        
         # if flow is active and stratification is relevant    
-        if (any(whether_stratify) & self$transition_flows$implement[flow]) {
-          self$add_stratified_flows(flow, stratification_name, strata_names, whether_stratify[1], whether_stratify[2], adjustment_requests, report)
+        if (self$transition_flows$implement[flow]) {
+          self$add_stratified_flows(flow, stratification_name, strata_names, 
+                                    find_stem(self$transition_flows$from[flow]) %in% self$compartment_types_to_stratify,
+                                    find_stem(self$transition_flows$to[flow]) %in% self$compartment_types_to_stratify,
+                                    adjustment_requests, report)
         }
       }
       self$output_to_user("stratified transition flows matrix:")
@@ -877,7 +856,7 @@ StratifiedModel <- R6Class(
     # add compartment-specific death flows to death data frame
     stratify_death_flows = function(stratification_name, strata_names, adjustment_requests, report) {
       for (flow in seq(nrow(self$death_flows))) {
-        if (find_stem(self$death_flows$from[flow]) %in% self$compartments_to_stratify) {
+        if (find_stem(self$death_flows$from[flow]) %in% self$compartment_types_to_stratify) {
           for (stratum in strata_names) {
             parameter_name <- self$add_adjusted_parameter(self$death_flows$parameter[flow], stratification_name, stratum, strata_names, adjustment_requests)
             if (is.null(parameter_name)) {
@@ -890,7 +869,7 @@ StratifiedModel <- R6Class(
                                                  from=create_stratified_name(self$death_flows$from[flow], stratification_name, stratum), 
                                                  implement=TRUE, stringsAsFactors=FALSE))
             if (report) {
-              writeLines(paste("\tRetaining existing death parameter value", self$death_flows$parameter[flow], "for new", 
+              writeLines(paste("\tretaining existing death parameter value", self$death_flows$parameter[flow], "for new", 
                                create_stratified_name(self$death_flows$from[flow], stratification_name, stratum), "compartment"))
             }
             self$death_flows$implement[flow] <- FALSE
@@ -902,64 +881,67 @@ StratifiedModel <- R6Class(
     # add additional stratified flow to flow data frame
     add_stratified_flows = function(flow, stratification_name, strata_names, stratify_from, stratify_to, adjustment_requests, report) {
       
-      if (report) {
-        writeLines(paste("For flow from", self$transition_flows$from[flow], "to", self$transition_flows$to[flow], "in stratification", stratification_name))
+      if (stratify_from | stratify_to) {
+        self$output_to_user(paste("for flow from", self$transition_flows$from[flow], "to", self$transition_flows$to[flow], "in stratification", stratification_name))
+        
+        # loop over each stratum in the requested stratification structure
+        for (stratum in strata_names) {
+          
+          # find parameter name
+          parameter_name <- self$add_adjusted_parameter(
+            self$transition_flows$parameter[flow], stratification_name, stratum, strata_names, adjustment_requests)
+          if (is.null(parameter_name)) {
+            parameter_name <- self$sort_absent_parameter_request(stratification_name, strata_names, stratum, stratify_from, stratify_to, flow)
+          }
+                      
+          # determine whether to and/or from compartments are stratified
+          if (stratify_from) {
+            from_compartment <- create_stratified_name(self$transition_flows$from[flow], stratification_name, stratum)
+          }
+          else {
+            from_compartment <- self$transition_flows$from[flow]
+          }
+          if (stratify_to) {
+            to_compartment <- create_stratified_name(self$transition_flows$to[flow], stratification_name, stratum)
+          }
+          else {
+            to_compartment <- self$transition_flows$to[flow]
+          }
+          
+          # add the new flow
+          self$transition_flows <- rbind(self$transition_flows,data.frame(
+            parameter=parameter_name, from=from_compartment, to=to_compartment, implement=TRUE, type=self$transition_flows$type[flow]))
+        }
+        
+        # remove old flow
+        self$transition_flows$implement[flow] <- FALSE
+      }
+    },
+    
+    # work out what to do if a specific parameter adjustment has not been requested
+    sort_absent_parameter_request = function (stratification_name, strata_names, stratum, stratify_from, stratify_to, flow) {
+      
+      # default behaviour for parameters not requested is to split the parameter into equal parts from compartment not split but to compartment is
+      if (!stratify_from & stratify_to) {
+        old_parameter_name <- self$transition_flows$parameter[flow]
+        parameter_name <- create_stratified_name(self$transition_flows$parameter[flow], stratification_name, stratum)
+        self$parameters[parameter_name] <- 1 / length(strata_names)
+        self$output_to_user(paste("\tsplitting existing parameter value", old_parameter_name, "into", length(strata_names), "equal parts"))
       }
       
-      # loop over each stratum in the requested stratification structure
-      for (stratum in strata_names) {
-        
-        # find parameter name, will remain as null if no requests have been made by the user
-        parameter_name <- self$add_adjusted_parameter(self$transition_flows$parameter[flow], stratification_name, stratum, strata_names, adjustment_requests)
-        
-        # default behaviour for parameters not requested is to split the parameter into equal parts to split but from not split
-        # otherwise retain the existing parameter
-        if (is.null(parameter_name) & !stratify_from & stratify_to) {
-          old_parameter_name <- self$transition_flows$parameter[flow]
-          parameter_name <- create_stratified_name(self$transition_flows$parameter[flow], stratification_name, stratum)
-          self$parameters[parameter_name] <- 1 / length(strata_names)
-          if (report & stratum == strata_names[1]) {
-            writeLines(paste("\tSplitting existing parameter value", old_parameter_name, "into", length(strata_names), "equal parts"))
-          }
-        }
-        else if (is.null(parameter_name)) {
-          parameter_name <- self$transition_flows$parameter[flow]
-          if (report & stratum == strata_names[1]) {
-            writeLines(paste("\tRetaining existing parameter value", parameter_name))
-          }
-        }
-        else if (report & stratum == strata_names[1]) {
-          writeLines(paste("\tImplementing new parameter", parameter_name))
-        }
-        
-        # determine whether to and/or from compartments are stratified
-        if (stratify_from) {
-          from_compartment <- create_stratified_name(self$transition_flows$from[flow], stratification_name, stratum)
-        }
-        else {
-          from_compartment <- self$transition_flows$from[flow]
-        }
-        if (stratify_to) {
-          to_compartment <- create_stratified_name(self$transition_flows$to[flow], stratification_name, stratum)
-        }
-        else {
-          to_compartment <- self$transition_flows$to[flow]
-        }
-        
-        # add the new flow
-        self$transition_flows <- rbind(self$transition_flows,data.frame(
-          parameter=parameter_name, from=from_compartment, to=to_compartment, implement=TRUE, type=self$transition_flows$type[flow]))
+      # otherwise if no request, retain the existing parameter
+      else {
+        parameter_name <- self$transition_flows$parameter[flow]
+        self$output_to_user(paste("\tretaining existing parameter value", parameter_name))
       }
-      
-      # remove old flow
-      self$transition_flows$implement[flow] <- FALSE
+      parameter_name
     },
     
     # stratify entry/recruitment/birth flows
     stratify_entry_flows = function(stratification_name, strata_names, requested_proportions, report) {
       
       # work out parameter values for stratifying the entry proportion adjustments
-      if (self$entry_compartment %in% self$compartments_to_stratify) {
+      if (self$entry_compartment %in% self$compartment_types_to_stratify) {
         for (stratum in strata_names) {
           entry_fraction_name <- create_stratified_name("entry_fraction", stratification_name, stratum)
           if (stratification_name == "age" & as.character(stratum) == "0") {
@@ -968,17 +950,15 @@ StratifiedModel <- R6Class(
           else if (stratification_name == "age") {
             self$parameters[entry_fraction_name] <- 0
           }
-          else if (stratum %in% names(requested_proportions[["adjustments"]])) {
-            self$parameters[entry_fraction_name] <- requested_proportions[["adjustments"]][[stratum]]
-            if (report) {
-              writeLines(paste("Assigning specified proportion of starting population to", stratum))
-            }
+          
+          # should change this code to be more like approach to parameter adjustment
+          else if (stratum %in% names(requested_proportions$adjustments)) {
+            self$parameters[entry_fraction_name] <- requested_proportions$adjustments[[stratum]]
+            self$output_to_user(paste("assigning specified proportion of starting population to", stratum))
           }
           else {
             self$parameters[entry_fraction_name] <- 1 / length(strata_names)
-            if (report) {
-              writeLines(paste("Assuming", as.character(1 / length(strata_names)), "of starting population to be assigned to", stratum, "stratum by default"))
-            }
+            self$output_to_user(paste("assuming", as.character(1 / length(strata_names)), "of starting population to be assigned to", stratum, "stratum by default"))
           }
         }
       }
@@ -994,15 +974,15 @@ StratifiedModel <- R6Class(
           
           # if the parameter being considered is an extension of the parameter type requested
           if (startsWith(unadjusted_parameter, parameter_request)) {
-            
-            # if a stratum hasn't been requested, assign it an adjustment value of 1
-            if (!stratum %in% names(adjustment_requests[[parameter_request]][["adjustments"]])) {
-              adjustment_requests[[parameter_request]][["adjustments"]][stratum] <- 1
-            }
-            
-            # populate the parameter adjustment attribute with the new adjustment
             parameter_adjustment_name <- create_stratified_name(unadjusted_parameter, stratification_name, stratum)
-            self$parameters[parameter_adjustment_name] <- adjustment_requests[[parameter_request]][["adjustments"]][as.character(stratum)]
+
+            # if a stratum hasn't been requested, assign it an adjustment value of 1
+            if (!stratum %in% names(adjustment_requests[[parameter_request]]$adjustments)) {
+              self$parameters[parameter_adjustment_name] <- 1
+            }
+            else {
+              self$parameters[parameter_adjustment_name] <- adjustment_requests[[parameter_request]]$adjustments[as.character(stratum)]
+            }
             
             # overwrite parameters higher up the tree by listing which ones to be overwritten
             if (stratum %in% adjustment_requests[[parameter_request]]$overwrite) {
@@ -1019,6 +999,7 @@ StratifiedModel <- R6Class(
       
       # start from baseline values
       base_parameter_value <- as.numeric(self$parameters[find_stem(flow_or_compartment)])
+      
       parameter_adjustment_value <- 1
       
       # if the parameter is stratified
