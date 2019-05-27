@@ -970,13 +970,8 @@ StratifiedModel <- R6Class(
           if (startsWith(unadjusted_parameter, parameter_request)) {
             parameter_adjustment_name <- create_stratified_name(unadjusted_parameter, stratification_name, stratum)
 
-            # if a stratum hasn't been requested, assign it an adjustment value of 1
-            if (!stratum %in% names(adjustment_requests[[parameter_request]]$adjustments)) {
-              self$parameters[parameter_adjustment_name] <- 1
-            }
-            
-            # otherwise implement user request
-            else {
+            # implement user request if requested (note that otherwise parameter will now be left out and assumed to be 1 during integration)
+            if (stratum %in% names(adjustment_requests[[parameter_request]]$adjustments)) {
               self$parameters[parameter_adjustment_name] <- adjustment_requests[[parameter_request]]$adjustments[as.character(stratum)]
             }
             
@@ -1013,7 +1008,6 @@ StratifiedModel <- R6Class(
           
           print(adjustment)
           
-          
           # if overwrite has been requested at any stage and we can skip the strata higher up the hierarchy
           if (adjustment %in% self$overwrite_parameters) {
             parameter_adjustment_value <- as.numeric(self$parameters[adjustment])
@@ -1022,7 +1016,7 @@ StratifiedModel <- R6Class(
           }
           
           # otherwise, standard approach to progressively adjusting
-          else {
+          else if (adjustment %in% self$parameters) {
             parameter_adjustment_value <- parameter_adjustment_value * as.numeric(self$parameters[adjustment])
           }
         }
