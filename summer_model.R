@@ -501,7 +501,7 @@ EpiModel <- R6Class(
       
       # work out the total births to apply dependent on the approach requested
       if (self$birth_approach == "add_crude_birth_rate") {
-        total_births <- self$parameters[["crude_birth_rate"]] * sum(compartment_values)
+        total_births <- self$parameters$crude_birth_rate * sum(compartment_values)
       }
       else if (self$birth_approach == "replace_deaths") {
         total_births <- self$tracked_quantities$total_deaths
@@ -918,8 +918,7 @@ StratifiedModel <- R6Class(
       # default behaviour for parameters not requested is to split the parameter into equal parts from compartment not split but to compartment is
       if (!stratify_from & stratify_to) {
         self$output_to_user(paste("\tsplitting existing parameter value", self$transition_flows$parameter[flow], "into", length(strata_names), "equal parts"))
-        self$parameters[create_stratified_name(self$transition_flows$parameter[flow], stratification_name, stratum)] <- 
-          1 / length(strata_names)
+        self$parameters[create_stratified_name(self$transition_flows$parameter[flow], stratification_name, stratum)] <- 1 / length(strata_names)
       }
       
       # otherwise if no request, retain the existing parameter
@@ -944,7 +943,7 @@ StratifiedModel <- R6Class(
             self$parameters[entry_fraction_name] <- 0
           }
           
-          # should change this code to be more like approach to parameter adjustment
+          # should change this code to be more like approach to parameter adjustment, or perhaps add a normal function
           else if (stratum %in% names(requested_proportions$adjustments)) {
             self$parameters[entry_fraction_name] <- requested_proportions$adjustments[[stratum]]
             self$output_to_user(paste("assigning specified proportion of starting population to", stratum))
@@ -970,13 +969,8 @@ StratifiedModel <- R6Class(
           if (startsWith(unadjusted_parameter, parameter_request)) {
             parameter_adjustment_name <- create_stratified_name(unadjusted_parameter, stratification_name, stratum)
 
-            # if a stratum hasn't been requested, assign it an adjustment value of 1
-            if (!stratum %in% names(adjustment_requests[[parameter_request]]$adjustments)) {
-              self$parameters[parameter_adjustment_name] <- 1
-            }
-            
-            # otherwise implement user request
-            else {
+            # implement user request if requested (note that otherwise parameter will now be left out and assumed to be 1 during integration)
+            if (stratum %in% names(adjustment_requests[[parameter_request]]$adjustments)) {
               self$parameters[parameter_adjustment_name] <- adjustment_requests[[parameter_request]]$adjustments[as.character(stratum)]
             }
             
@@ -992,35 +986,23 @@ StratifiedModel <- R6Class(
     
     # adjust stratified parameter value
     adjust_parameter = function(parameter) {
+      adjusted_parameter <- 1
       
-      # start from baseline values and no adjustment
-      base_parameter_value <- as.numeric(self$parameters[find_stem(parameter)])
-      parameter_adjustment_value <- 1
-      
-      # if the parameter is stratified
-      if (grepl("X", parameter)) {
+      # cycle through the parameter adjustments by finding the Xs in the strings, starting from the most stratified parameter
+      for (x_instance in rev(extract_x_positions(parameter))) {
+        adjustment <- substr(parameter, 1, x_instance - 1)
         
-        # cycle through the parameter adjustments by finding the Xs in the strings, starting from the most stratified parameter
-        x_positions <- extract_x_positions(parameter)
-        for (x_instance in rev(x_positions[2:length(x_positions)])) {
-          
-          # find the name of the parameter adjustment for the stratum considered
-          adjustment <- substr(parameter, 1, x_instance - 1)
-          
-          # if overwrite has been requested at any stage and we can skip the strata higher up the hierarchy
-          if (adjustment %in% self$overwrite_parameters) {
-            parameter_adjustment_value <- as.numeric(self$parameters[adjustment])
-            base_parameter_value <- 1
-            break
-          }
-          
-          # otherwise, standard approach to progressively adjusting
-          else {
-            parameter_adjustment_value <- parameter_adjustment_value * as.numeric(self$parameters[adjustment])
-          }
+        # if overwrite has been requested at any stage and we can skip all the strata higher up the hierarchy
+        if (adjustment %in% self$overwrite_parameters) {
+          return(self$parameters[[adjustment]])
+        }
+        
+        # otherwise, progressively adjust
+        else if (adjustment %in% names(self$parameters)) {
+          adjusted_parameter <- adjusted_parameter * self$parameters[[adjustment]]
         }
       }
-      adjusted_parameter <- base_parameter_value * parameter_adjustment_value
+      return(adjusted_parameter)
     },
     
     # calculations to find the effective infectious population
