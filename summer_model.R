@@ -501,7 +501,7 @@ EpiModel <- R6Class(
       
       # work out the total births to apply dependent on the approach requested
       if (self$birth_approach == "add_crude_birth_rate") {
-        total_births <- self$parameters[["crude_birth_rate"]] * sum(compartment_values)
+        total_births <- self$parameters$crude_birth_rate * sum(compartment_values)
       }
       else if (self$birth_approach == "replace_deaths") {
         total_births <- self$tracked_quantities$total_deaths
@@ -987,44 +987,23 @@ StratifiedModel <- R6Class(
     
     # adjust stratified parameter value
     adjust_parameter = function(parameter) {
+      adjusted_parameter <- 1
       
-      print("_________________________")
-      print(parameter)
-      print("__")
-      
-      # start from baseline values and no adjustment
-      base_parameter_value <- as.numeric(self$parameters[find_stem(parameter)])
-      parameter_adjustment_value <- 1
-      
-      # if the parameter is stratified
-      if (grepl("X", parameter)) {
+      # cycle through the parameter adjustments by finding the Xs in the strings, starting from the most stratified parameter
+      for (x_instance in rev(extract_x_positions(parameter))) {
+        adjustment <- substr(parameter, 1, x_instance - 1)
         
-        # cycle through the parameter adjustments by finding the Xs in the strings, starting from the most stratified parameter
-        x_positions <- extract_x_positions(parameter)
-        for (x_instance in rev(x_positions[2:length(x_positions)])) {
-          
-          # find the name of the parameter adjustment for the stratum considered
-          adjustment <- substr(parameter, 1, x_instance - 1)
-          
-          print(adjustment)
-          
-          # if overwrite has been requested at any stage and we can skip the strata higher up the hierarchy
-          if (adjustment %in% self$overwrite_parameters) {
-            return(as.numeric(self$parameters[adjustment]))
-            # parameter_adjustment_value <- as.numeric(self$parameters[adjustment])
-            # base_parameter_value <- 1
-            # break
-          }
-          
-          # otherwise, standard approach to progressively adjusting
-          else if (adjustment %in% self$parameters) {
-            parameter_adjustment_value <- parameter_adjustment_value * as.numeric(self$parameters[adjustment])
-          }
+        # if overwrite has been requested at any stage and we can skip the strata higher up the hierarchy
+        if (adjustment %in% self$overwrite_parameters) {
+          return(self$parameters[[adjustment]])
+        }
+        
+        # otherwise, standard approach to progressively adjusting
+        else if (adjustment %in% names(self$parameters)) {
+          adjusted_parameter <- adjusted_parameter * self$parameters[[adjustment]]
         }
       }
-      print(find_stem(parameter))
-      
-      adjusted_parameter <- base_parameter_value * parameter_adjustment_value
+      return(adjusted_parameter)
     },
     
     # calculations to find the effective infectious population
