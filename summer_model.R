@@ -918,8 +918,7 @@ StratifiedModel <- R6Class(
       # default behaviour for parameters not requested is to split the parameter into equal parts from compartment not split but to compartment is
       if (!stratify_from & stratify_to) {
         self$output_to_user(paste("\tsplitting existing parameter value", self$transition_flows$parameter[flow], "into", length(strata_names), "equal parts"))
-        self$parameters[create_stratified_name(self$transition_flows$parameter[flow], stratification_name, stratum)] <- 
-          1 / length(strata_names)
+        self$parameters[create_stratified_name(self$transition_flows$parameter[flow], stratification_name, stratum)] <- 1 / length(strata_names)
       }
       
       # otherwise if no request, retain the existing parameter
@@ -944,7 +943,7 @@ StratifiedModel <- R6Class(
             self$parameters[entry_fraction_name] <- 0
           }
           
-          # should change this code to be more like approach to parameter adjustment
+          # should change this code to be more like approach to parameter adjustment, or perhaps add a normal function
           else if (stratum %in% names(requested_proportions$adjustments)) {
             self$parameters[entry_fraction_name] <- requested_proportions$adjustments[[stratum]]
             self$output_to_user(paste("assigning specified proportion of starting population to", stratum))
@@ -993,12 +992,12 @@ StratifiedModel <- R6Class(
       for (x_instance in rev(extract_x_positions(parameter))) {
         adjustment <- substr(parameter, 1, x_instance - 1)
         
-        # if overwrite has been requested at any stage and we can skip the strata higher up the hierarchy
+        # if overwrite has been requested at any stage and we can skip all the strata higher up the hierarchy
         if (adjustment %in% self$overwrite_parameters) {
           return(self$parameters[[adjustment]])
         }
         
-        # otherwise, standard approach to progressively adjusting
+        # otherwise, progressively adjust
         else if (adjustment %in% names(self$parameters)) {
           adjusted_parameter <- adjusted_parameter * self$parameters[[adjustment]]
         }
