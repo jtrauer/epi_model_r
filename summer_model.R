@@ -57,7 +57,11 @@ capitalise_compartment_name = function(compartment) {
 
 # simple function to normalise the values from a list
 normalise_list = function(value_list) {
-  value_list <- lapply(value_list, function(value) value / sum(as.numeric(value_list)))
+  total <- sum(as.numeric(value_list))
+  if (total != 1) {
+    value_list <- lapply(value_list, function(value) value / total)
+  }
+  value_list
 }
 
 # extract the positions of the capital Xs from a string and join on to a number for the total length of the string
@@ -124,6 +128,19 @@ EpiModel <- R6Class(
       else {
         self$parameters[parameter_name]
       }
+    },
+    
+    # add a compartment by specifying its name and value to take 
+    add_compartment = function(new_compartment_name, new_compartment_value) {
+      self$compartment_values[new_compartment_name] <- new_compartment_value
+      self$output_to_user(paste("adding compartment:", new_compartment_name))
+    },
+    
+    # remove a compartment by taking the element out of the compartment values attribute
+    remove_compartment = function(compartment) {
+      self$removed_compartments <- c(self$removed_compartments, compartment)
+      self$compartment_values <- self$compartment_values[names(self$compartment_values) != compartment]
+      self$output_to_user(paste("removing compartment:", compartment))
     },
 
     # short function to save the if statement in every call to output some information
@@ -800,13 +817,7 @@ StratifiedModel <- R6Class(
       }
       
       # normalise if totals not equal to one
-      total_starting_proportions <- sum(as.numeric(requested_proportions))
-      if (total_starting_proportions != 1) {
-        requested_proportions <- normalise_list(requested_proportions)
-        self$output_to_user(paste("total proportions for allocation of starting population sum to", 
-                                  round(as.numeric(total_starting_proportions), self$reporting_sigfigs), "- therefore normalising"))
-      }
-      requested_proportions
+      normalise_list(requested_proportions)
     },
     
     # compartment stratification
@@ -816,18 +827,12 @@ StratifiedModel <- R6Class(
       for (compartment in names(self$compartment_values)) {
         if (find_stem(compartment) %in% self$compartment_types_to_stratify) {
           
-          # append the additional compartment
+          # add and remove compartments
           for (stratum in strata_names) {
-            new_compartment_name <- create_stratified_name(compartment, stratification_name, stratum)
-            self$compartment_values[new_compartment_name] <- 
-              self$compartment_values[[compartment]] * as.numeric(requested_proportions[as.character(stratum)])
-            self$output_to_user(paste("adding compartment:", new_compartment_name))
+            self$add_compartment(create_stratified_name(compartment, stratification_name, stratum),
+                                 self$compartment_values[[compartment]] * as.numeric(requested_proportions[as.character(stratum)]))
           }
-          
-          # remove the original one
-          self$removed_compartments <- c(self$removed_compartments, compartment)
-          self$compartment_values <- self$compartment_values[names(self$compartment_values) != compartment]
-          self$output_to_user(paste("removing compartment:", compartment))
+          self$remove_compartment(compartment)
         }
       }
     },
@@ -973,7 +978,7 @@ StratifiedModel <- R6Class(
       # for each request for adjustment, if there are any
       for (parameter_request in names(adjustment_requests)) {
         
-        # if the parameter being considered is an extension of the parameter type requested
+        # if the parameter being considered is an extension of the base parameter type requested
         if (startsWith(unadjusted_parameter, parameter_request)) {
           parameter_adjustment_name <- create_stratified_name(unadjusted_parameter, stratification_name, stratum)
 
