@@ -65,6 +65,15 @@ extract_x_positions = function(input_string) {
   x_positions <- c(unlist(gregexpr("X", input_string)), nchar(input_string) + 1)
 }
 
+
+extract_reversed_x_positions = function(input_string) {
+  x_positions <- unlist(gregexpr("X", input_string))
+  if (x_positions[1] == -1) {
+    x_positions <- c()
+  }
+  rev(c(x_positions, nchar(input_string) + 1))
+}
+
 # objects
 
 # main epidemiological model object
@@ -989,7 +998,7 @@ StratifiedModel <- R6Class(
       adjusted_parameter <- 1
       
       # cycle through the parameter adjustments by finding the Xs in the strings, starting from the most stratified parameter
-      for (x_instance in rev(extract_x_positions(parameter))) {
+      for (x_instance in extract_reversed_x_positions(parameter)) {
         adjustment <- substr(parameter, 1, x_instance - 1)
         
         # if overwrite has been requested at any stage and we can skip all the strata higher up the hierarchy
