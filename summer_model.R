@@ -609,7 +609,7 @@ StratifiedModel <- R6Class(
     
     # master stratification method
     stratify = function(stratification_name, strata_request, compartment_types_to_stratify,
-                        adjustment_requests=c(), requested_proportions=list(), infectiousness_adjustments=c(), report=TRUE) {
+                        adjustment_requests=list(), requested_proportions=list(), infectiousness_adjustments=c(), report=TRUE) {
       strata_names <- self$prepare_and_check_stratification(
         stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests, report)
       
@@ -967,26 +967,24 @@ StratifiedModel <- R6Class(
     
     # cycle through parameter stratification requests with the last one overwriting earlier ones in the list
     add_adjusted_parameter = function(unadjusted_parameter, stratification_name, stratum, strata_names, adjustment_requests) {
-      parameter_adjustment_name <- NULL
       self$output_to_user(paste("\tmodifying", unadjusted_parameter, "for", stratum, "stratum of", stratification_name))
+      parameter_adjustment_name <- NULL
       
       # for each request for adjustment, if there are any
-      if (is.list(adjustment_requests)) {
-        for (parameter_request in names(adjustment_requests)) {
-          
-          # if the parameter being considered is an extension of the parameter type requested
-          if (startsWith(unadjusted_parameter, parameter_request)) {
-            parameter_adjustment_name <- create_stratified_name(unadjusted_parameter, stratification_name, stratum)
+      for (parameter_request in names(adjustment_requests)) {
+        
+        # if the parameter being considered is an extension of the parameter type requested
+        if (startsWith(unadjusted_parameter, parameter_request)) {
+          parameter_adjustment_name <- create_stratified_name(unadjusted_parameter, stratification_name, stratum)
 
-            # implement user request if requested (note that otherwise parameter will now be left out and assumed to be 1 during integration)
-            if (stratum %in% names(adjustment_requests[[parameter_request]]$adjustments)) {
-              self$parameters[parameter_adjustment_name] <- adjustment_requests[[parameter_request]]$adjustments[as.character(stratum)]
-            }
-            
-            # overwrite parameters higher up the tree by listing which ones to be overwritten
-            if (stratum %in% adjustment_requests[[parameter_request]]$overwrite) {
-              self$overwrite_parameters <- c(self$overwrite_parameters, parameter_adjustment_name)
-            }
+          # implement user request if requested (note that otherwise parameter will now be left out and assumed to be 1 during integration)
+          if (stratum %in% names(adjustment_requests[[parameter_request]]$adjustments)) {
+            self$parameters[parameter_adjustment_name] <- adjustment_requests[[parameter_request]]$adjustments[as.character(stratum)]
+          }
+          
+          # overwrite parameters higher up the tree by listing which ones to be overwritten
+          if (stratum %in% adjustment_requests[[parameter_request]]$overwrite) {
+            self$overwrite_parameters <- c(self$overwrite_parameters, parameter_adjustment_name)
           }
         }
       }
@@ -1011,7 +1009,7 @@ StratifiedModel <- R6Class(
           adjusted_parameter <- adjusted_parameter * self$parameters[[adjustment]]
         }
       }
-      return(adjusted_parameter)
+      adjusted_parameter
     },
     
     # calculations to find the effective infectious population
