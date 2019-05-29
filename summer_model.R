@@ -1004,15 +1004,16 @@ StratifiedModel <- R6Class(
       for (flow in seq(nrow(self$transition_flows))) {
         parameter <- self$transition_flows$parameter[flow]
         self$parameter_components[[parameter]] <- list(time_variants = c(), constants = c(), constant_value = 1)
-        
         for (x_instance in extract_reversed_x_positions(parameter)) {
           component <- substr(parameter, 1, x_instance - 1)
           is_time_variant <- component %in% self$time_variants
           if (component %in% self$overwrite_parameters & is_time_variant) {
-            self$parameter_components[[parameter]] <- list(time_variants = c(component), constants = c())
+            self$parameter_components[[parameter]] <- list(time_variants = c(component), constants = c(), constant_value = 1)
+            break
           }
           else if (component %in% self$overwrite_parameters & !is_time_variant) {
-            self$parameter_components[[parameter]] <- list(time_variants = c(), constants = c(component))
+            self$parameter_components[[parameter]] <- list(time_variants = c(), constants = c(component), constant_value = 1)
+            break
           }
           else if (is_time_variant) {
             self$parameter_components[[parameter]]$time_variants <- c(self$parameter_components[[parameter]]$time_variants, component)
@@ -1049,12 +1050,9 @@ StratifiedModel <- R6Class(
       adjusted_parameter
     },
 
-    # calculate adjusted parameter value from pre-calculated product of constant components and invidiual time variants    
+    # calculate adjusted parameter value from pre-calculated product of constant components and individual time variants    
     get_stratified_parameter = function(parameter, time) {
-      adjusted_parameter <- 1
-      if (!is.null(self$parameter_components[[parameter]]$constant_value)) {
-        adjusted_parameter <- self$parameter_components[[parameter]]$constant_value
-      }
+      adjusted_parameter <- self$parameter_components[[parameter]]$constant_value
       for (time_variant in self$parameter_components[[parameter]]$time_variants) {
         adjusted_parameter <- adjusted_parameter * self$time_variants[[time_variant]](time)
       }
