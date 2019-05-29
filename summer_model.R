@@ -447,7 +447,7 @@ EpiModel <- R6Class(
         flow <- self$transition_flows[f,]
         
         # find adjusted parameter value
-        adjusted_parameter <- self$adjust_parameter(flow$parameter, time, use_new_approach = TRUE)
+        adjusted_parameter <- self$get_stratified_parameter(flow$parameter, time)
         
         if (flow$implement) {
           
@@ -1029,7 +1029,7 @@ StratifiedModel <- R6Class(
     },
     
     # adjust stratified parameter value
-    adjust_parameter = function(parameter, time, use_new_approach=FALSE) {
+    adjust_parameter = function(parameter, time) {
       adjusted_parameter <- 1
       
       # cycle through the parameter adjustments by finding the Xs in the strings, starting from the most stratified parameter
@@ -1046,10 +1046,18 @@ StratifiedModel <- R6Class(
           adjusted_parameter <- adjusted_parameter * self$find_parameter_value(adjustment, time)
         }
       }
-      if (use_new_approach) {
+      adjusted_parameter
+    },
+
+    # calculate adjusted parameter value from pre-calculated product of constant components and invidiual time variants    
+    get_stratified_parameter = function(parameter, time) {
+      adjusted_parameter <- 1
+      if (!is.null(self$parameter_components[[parameter]]$constant_value)) {
         adjusted_parameter <- self$parameter_components[[parameter]]$constant_value
       }
-      
+      for (time_variant in self$parameter_components[[parameter]]$time_variants) {
+        adjusted_parameter <- adjusted_parameter * self$time_variants[[time_variant]](time)
+      }
       adjusted_parameter
     },
     
