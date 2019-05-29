@@ -129,7 +129,7 @@ EpiModel <- R6Class(
         self$parameters[[parameter_name]]
       }
     },
-    
+
     # add a compartment by specifying its name and value to take 
     add_compartment = function(new_compartment_name, new_compartment_value) {
       self$compartment_values[new_compartment_name] <- new_compartment_value
@@ -391,10 +391,14 @@ EpiModel <- R6Class(
     # integrate model odes  
     run_model = function () {
       self$output_to_user("\nnow integrating")
+      self$organise_parameter_stratifications()
       self$outputs <- as.data.frame(lsodar(self$compartment_values, self$times, self$make_model_function(),
                                            rootfunc = self$set_stopping_conditions()))
       self$output_to_user("\nintegration complete")
     },   
+    
+    # for use in the stratified version
+    organise_parameter_stratifications = function() {},
     
     # create derivative function
     make_model_function = function() {
@@ -443,7 +447,7 @@ EpiModel <- R6Class(
         flow <- self$transition_flows[f,]
         
         # find adjusted parameter value
-        adjusted_parameter <- self$adjust_parameter(flow$parameter, time)
+        adjusted_parameter <- self$get_stratified_parameter(flow$parameter, time)
         
         if (flow$implement) {
           
@@ -488,12 +492,9 @@ EpiModel <- R6Class(
     
     # equivalent method to for transition flows above, but for deaths
     apply_compartment_death_flows = function(ode_equations, compartment_values, time) {
-      
       for (f in seq(nrow(self$death_flows))) {
         flow <- self$death_flows[f,]
-        
-        adjusted_parameter <- self$adjust_parameter(flow$parameter, time)
-        
+        adjusted_parameter <- self$get_stratified_parameter(flow$parameter, time)
         if (flow$implement) {
           from_compartment <- match(flow$from, names(self$compartment_values))
           net_flow <- adjusted_parameter * compartment_values[from_compartment]
@@ -509,7 +510,7 @@ EpiModel <- R6Class(
     # apply the population-wide death rate to all compartments
     apply_universal_death_flow = function(ode_equations, compartment_values, time) {
       for (compartment in names(self$compartment_values)) {
-        adjusted_parameter <- self$adjust_parameter("universal_death_rate", time)
+        adjusted_parameter <- self$get_stratified_parameter("universal_death_rate", time)
         from_compartment <- match(compartment, names(self$compartment_values))
         net_flow <- adjusted_parameter * compartment_values[from_compartment]
         
@@ -601,11 +602,6 @@ EpiModel <- R6Class(
       }      
     },
     
-    # placeholder function to allow for stratification
-    adjust_parameter = function(parameter) {
-      as.numeric(self$parameters[find_stem(parameter)])
-    },
-    
     # general method to increment the odes by a value specified as an argument
     increment_compartment = function(ode_equations, compartment_number, increment) {
       ode_equations[compartment_number] <- ode_equations[compartment_number] + increment
@@ -623,6 +619,7 @@ StratifiedModel <- R6Class(
     overwrite_parameters = c(),
     heterogeneous_infectiousness = FALSE,
     compartment_types_to_stratify = c(),
+    parameter_components = list(),
     
     # master stratification method
     stratify = function(stratification_name, strata_request, compartment_types_to_stratify,
@@ -639,7 +636,7 @@ StratifiedModel <- R6Class(
       self$stratify_entry_flows(stratification_name, strata_names, requested_proportions, report)
       if (nrow(self$death_flows) > 0) {
         self$stratify_death_flows(stratification_name, strata_names, adjustment_requests, report)
-      }      
+      }
       self$stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests, report)
 
       # heterogeneous infectiousness adjustments
@@ -993,23 +990,51 @@ StratifiedModel <- R6Class(
       }
     },
     
-    # adjust stratified parameter value
-    adjust_parameter = function(parameter, time) {
-      adjusted_parameter <- 1
-
-      # cycle through the parameter adjustments by finding the Xs in the strings, starting from the most stratified parameter
+    # prior to integration commencing, work out what the components are of each parameter being implemented
+    organise_parameter_stratifications = function() {
+      
+      # currently only working for the transition flows
+      for (parameter in self$transition_flows$parameter[self$transition_flows$implement]) {
+        self$find_parameter_components(parameter)
+      }
+      for (parameter in self$death_flows$parameter[self$death_flows$implement]) {
+        self$find_parameter_components(parameter)
+      }
+      self$find_parameter_components("universal_death_rate")
+    },
+    
+    # extract the components of the stratified parameter into a list structure
+    find_parameter_components = function(parameter) {
+      self$parameter_components[[parameter]] <- list(time_variants = c(), constants = c(), constant_value = 1)
       for (x_instance in extract_reversed_x_positions(parameter)) {
-        adjustment <- substr(parameter, 1, x_instance - 1)
-        
-        # if overwrite has been requested at any stage and we can skip all the strata higher up the hierarchy
-        if (adjustment %in% self$overwrite_parameters) {
-          return(self$parameters[[adjustment]])
+        component <- substr(parameter, 1, x_instance - 1)
+        is_time_variant <- component %in% self$time_variants
+        if (component %in% self$overwrite_parameters & is_time_variant) {
+          self$parameter_components[[parameter]] <- list(time_variants = c(component), constants = c(), constant_value = 1)
+          break
         }
-        
-        # otherwise, progressively adjust
-        else if (adjustment %in% names(self$parameters)) {
-          adjusted_parameter <- adjusted_parameter * self$find_parameter_value(adjustment, time)
+        else if (component %in% self$overwrite_parameters & !is_time_variant) {
+          self$parameter_components[[parameter]] <- list(time_variants = c(), constants = c(component), constant_value = 1)
+          break
         }
+        else if (is_time_variant) {
+          self$parameter_components[[parameter]]$time_variants <- c(self$parameter_components[[parameter]]$time_variants, component)
+        }
+        else if (component %in% names(self$parameters)) {
+          self$parameter_components[[parameter]]$constants <- c(component, self$parameter_components[[parameter]]$constants)
+        }
+      }
+      for (constant_parameter in self$parameter_components[[parameter]]$constants) {
+        self$parameter_components[[parameter]]$constant_value <- 
+          self$parameter_components[[parameter]]$constant_value * self$parameters[[constant_parameter]]
+      }
+    },
+
+    # calculate adjusted parameter value from pre-calculated product of constant components and individual time variants    
+    get_stratified_parameter = function(parameter, time) {
+      adjusted_parameter <- self$parameter_components[[parameter]]$constant_value
+      for (time_variant in self$parameter_components[[parameter]]$time_variants) {
+        adjusted_parameter <- adjusted_parameter * self$time_variants[[time_variant]](time)
       }
       adjusted_parameter
     },
