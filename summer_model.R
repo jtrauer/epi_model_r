@@ -492,7 +492,6 @@ EpiModel <- R6Class(
     
     # equivalent method to for transition flows above, but for deaths
     apply_compartment_death_flows = function(ode_equations, compartment_values, time) {
-      
       for (f in seq(nrow(self$death_flows))) {
         flow <- self$death_flows[f,]
         adjusted_parameter <- self$get_stratified_parameter(flow$parameter, time)
@@ -511,7 +510,7 @@ EpiModel <- R6Class(
     # apply the population-wide death rate to all compartments
     apply_universal_death_flow = function(ode_equations, compartment_values, time) {
       for (compartment in names(self$compartment_values)) {
-        adjusted_parameter <- self$adjust_parameter("universal_death_rate", time)
+        adjusted_parameter <- self$get_stratified_parameter("universal_death_rate", time)
         from_compartment <- match(compartment, names(self$compartment_values))
         net_flow <- adjusted_parameter * compartment_values[from_compartment]
         
@@ -603,11 +602,6 @@ EpiModel <- R6Class(
       }      
     },
     
-    # placeholder function to allow for stratification
-    adjust_parameter = function(parameter) {
-      as.numeric(self$parameters[find_stem(parameter)])
-    },
-    
     # general method to increment the odes by a value specified as an argument
     increment_compartment = function(ode_equations, compartment_number, increment) {
       ode_equations[compartment_number] <- ode_equations[compartment_number] + increment
@@ -642,7 +636,7 @@ StratifiedModel <- R6Class(
       self$stratify_entry_flows(stratification_name, strata_names, requested_proportions, report)
       if (nrow(self$death_flows) > 0) {
         self$stratify_death_flows(stratification_name, strata_names, adjustment_requests, report)
-      }      
+      }
       self$stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests, report)
 
       # heterogeneous infectiousness adjustments
@@ -1006,6 +1000,7 @@ StratifiedModel <- R6Class(
       for (parameter in self$death_flows$parameter[self$death_flows$implement]) {
         self$find_parameter_components(parameter)
       }
+      self$find_parameter_components("universal_death_rate")
     },
     
     # extract the components of the stratified parameter into a list structure
@@ -1033,27 +1028,6 @@ StratifiedModel <- R6Class(
         self$parameter_components[[parameter]]$constant_value <- 
           self$parameter_components[[parameter]]$constant_value * self$parameters[[constant_parameter]]
       }
-    },
-    
-    # adjust stratified parameter value
-    adjust_parameter = function(parameter, time) {
-      adjusted_parameter <- 1
-      
-      # cycle through the parameter adjustments by finding the Xs in the strings, starting from the most stratified parameter
-      for (x_instance in extract_reversed_x_positions(parameter)) {
-        adjustment <- substr(parameter, 1, x_instance - 1)
-
-        # if overwrite has been requested at any stage and we can skip all the strata higher up the hierarchy
-        if (adjustment %in% self$overwrite_parameters) {
-          return(self$parameters[[adjustment]])
-        }
-        
-        # otherwise, progressively adjust
-        else if (adjustment %in% names(self$parameters)) {
-          adjusted_parameter <- adjusted_parameter * self$find_parameter_value(adjustment, time)
-        }
-      }
-      adjusted_parameter
     },
 
     # calculate adjusted parameter value from pre-calculated product of constant components and individual time variants    
