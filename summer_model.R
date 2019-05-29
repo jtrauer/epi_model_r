@@ -943,30 +943,32 @@ StratifiedModel <- R6Class(
     
     # stratify entry/recruitment/birth flows
     stratify_entry_flows = function(stratification_name, strata_names, requested_proportions, report) {
+      entry_fractions <- list()
       
       # work out parameter values for stratifying the entry proportion adjustments
       if (self$entry_compartment %in% self$compartment_types_to_stratify) {
         for (stratum in strata_names) {
           entry_fraction_name <- create_stratified_name("entry_fraction", stratification_name, stratum)
           if (stratification_name == "age" & as.character(stratum) == "0") {
-            self$parameters[entry_fraction_name] <- 1
+            entry_fractions[entry_fraction_name] <- 1
             next
           }
           else if (stratification_name == "age") {
-            self$parameters[entry_fraction_name] <- 0
+            entry_fractions[entry_fraction_name] <- 0
             next
           }
           
           # should change this code to be more like approach to parameter adjustment, or perhaps add a normalise function
           if (stratum %in% names(requested_proportions$adjustments)) {
-            self$parameters[entry_fraction_name] <- requested_proportions$adjustments[[stratum]]
+            entry_fractions[entry_fraction_name] <- requested_proportions$adjustments[[stratum]]
             self$output_to_user(paste("assigning specified proportion of starting population to", stratum))
           }
           else {
-            self$parameters[entry_fraction_name] <- 1 / length(strata_names)
+            entry_fractions[entry_fraction_name] <- 1 / length(strata_names)
             self$output_to_user(paste("assuming", as.character(1 / length(strata_names)), "of starting population to be assigned to", stratum, "stratum by default"))
           }
         }
+        self$parameters <- c(normalise_list(entry_fractions), self$parameters)
       }
     },  
     
