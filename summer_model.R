@@ -495,9 +495,7 @@ EpiModel <- R6Class(
       
       for (f in seq(nrow(self$death_flows))) {
         flow <- self$death_flows[f,]
-        
-        adjusted_parameter <- self$adjust_parameter(flow$parameter, time)
-        
+        adjusted_parameter <- self$get_stratified_parameter(flow$parameter, time)
         if (flow$implement) {
           from_compartment <- match(flow$from, names(self$compartment_values))
           net_flow <- adjusted_parameter * compartment_values[from_compartment]
@@ -998,34 +996,42 @@ StratifiedModel <- R6Class(
       }
     },
     
-    
+    # prior to integration commencing, work out what the components are of each parameter being implemented
     organise_parameter_stratifications = function() {
       
-      for (flow in seq(nrow(self$transition_flows))) {
-        parameter <- self$transition_flows$parameter[flow]
-        self$parameter_components[[parameter]] <- list(time_variants = c(), constants = c(), constant_value = 1)
-        for (x_instance in extract_reversed_x_positions(parameter)) {
-          component <- substr(parameter, 1, x_instance - 1)
-          is_time_variant <- component %in% self$time_variants
-          if (component %in% self$overwrite_parameters & is_time_variant) {
-            self$parameter_components[[parameter]] <- list(time_variants = c(component), constants = c(), constant_value = 1)
-            break
-          }
-          else if (component %in% self$overwrite_parameters & !is_time_variant) {
-            self$parameter_components[[parameter]] <- list(time_variants = c(), constants = c(component), constant_value = 1)
-            break
-          }
-          else if (is_time_variant) {
-            self$parameter_components[[parameter]]$time_variants <- c(self$parameter_components[[parameter]]$time_variants, component)
-          }
-          else if (component %in% names(self$parameters)) {
-            self$parameter_components[[parameter]]$constants <- c(component, self$parameter_components[[parameter]]$constants)
-          }
+      # currently only working for the transition flows
+      for (parameter in self$transition_flows$parameter[self$transition_flows$implement]) {
+        self$find_parameter_components(parameter)
+      }
+      for (parameter in self$death_flows$parameter[self$death_flows$implement]) {
+        self$find_parameter_components(parameter)
+      }
+    },
+    
+    # extract the components of the stratified parameter into a list structure
+    find_parameter_components = function(parameter) {
+      self$parameter_components[[parameter]] <- list(time_variants = c(), constants = c(), constant_value = 1)
+      for (x_instance in extract_reversed_x_positions(parameter)) {
+        component <- substr(parameter, 1, x_instance - 1)
+        is_time_variant <- component %in% self$time_variants
+        if (component %in% self$overwrite_parameters & is_time_variant) {
+          self$parameter_components[[parameter]] <- list(time_variants = c(component), constants = c(), constant_value = 1)
+          break
         }
-        for (constant_parameter in self$parameter_components[[parameter]]$constants) {
-          self$parameter_components[[parameter]]$constant_value <- 
-            self$parameter_components[[parameter]]$constant_value * self$parameters[[constant_parameter]]
+        else if (component %in% self$overwrite_parameters & !is_time_variant) {
+          self$parameter_components[[parameter]] <- list(time_variants = c(), constants = c(component), constant_value = 1)
+          break
         }
+        else if (is_time_variant) {
+          self$parameter_components[[parameter]]$time_variants <- c(self$parameter_components[[parameter]]$time_variants, component)
+        }
+        else if (component %in% names(self$parameters)) {
+          self$parameter_components[[parameter]]$constants <- c(component, self$parameter_components[[parameter]]$constants)
+        }
+      }
+      for (constant_parameter in self$parameter_components[[parameter]]$constants) {
+        self$parameter_components[[parameter]]$constant_value <- 
+          self$parameter_components[[parameter]]$constant_value * self$parameters[[constant_parameter]]
       }
     },
     
