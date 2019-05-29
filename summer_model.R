@@ -823,7 +823,7 @@ StratifiedModel <- R6Class(
     # compartment stratification
     stratify_compartments = function(stratification_name, strata_names, adjustment_requests, requested_proportions, report) {
       
-      # stratify each compartment that needs stratification
+      # find the existing compartments that need stratification
       for (compartment in names(self$compartment_values)) {
         if (find_stem(compartment) %in% self$compartment_types_to_stratify) {
           
@@ -839,10 +839,10 @@ StratifiedModel <- R6Class(
     
     # stratify the approach to universal, population-wide deaths (which can be made to vary by stratum)
     stratify_universal_death_rate = function(stratification_name, strata_names, adjustment_requests, report) {
+
+      # take each parameter that refers to the universal death rate and adjust it for each stratum according to user request
       for (parameter in names(self$parameters)) {
-        
-        # take each parameter that refers to the universal death rate and adjust it for each stratum according to user request
-        if (find_stem(parameter) == "universal_death_rate" & "universal_death_rate" %in% names(adjustment_requests)) {
+        if (find_stem(parameter) == "universal_death_rate") {
           for (stratum in strata_names) {
             self$add_adjusted_parameter(parameter, stratification_name, stratum, strata_names, adjustment_requests)
           }
@@ -853,8 +853,6 @@ StratifiedModel <- R6Class(
     # stratify flows depending on whether inflow, outflow or both need replication
     stratify_transition_flows = function(stratification_name, strata_names, adjustment_requests, report) {
       for (flow in seq(nrow(self$transition_flows))) {
-        
-        # if flow is active and stratification is relevant    
         if (self$transition_flows$implement[flow]) {
           self$add_stratified_flows(flow, stratification_name, strata_names, 
                                     find_stem(self$transition_flows$from[flow]) %in% self$compartment_types_to_stratify,
@@ -952,13 +950,15 @@ StratifiedModel <- R6Class(
           entry_fraction_name <- create_stratified_name("entry_fraction", stratification_name, stratum)
           if (stratification_name == "age" & as.character(stratum) == "0") {
             self$parameters[entry_fraction_name] <- 1
+            next
           }
           else if (stratification_name == "age") {
             self$parameters[entry_fraction_name] <- 0
+            next
           }
           
-          # should change this code to be more like approach to parameter adjustment, or perhaps add a normal function
-          else if (stratum %in% names(requested_proportions$adjustments)) {
+          # should change this code to be more like approach to parameter adjustment, or perhaps add a normalise function
+          if (stratum %in% names(requested_proportions$adjustments)) {
             self$parameters[entry_fraction_name] <- requested_proportions$adjustments[[stratum]]
             self$output_to_user(paste("assigning specified proportion of starting population to", stratum))
           }
@@ -970,15 +970,12 @@ StratifiedModel <- R6Class(
       }
     },  
     
-    # cycle through parameter stratification requests with the last one overwriting earlier ones in the list
+    # find the adjustment request that is relevant to a particular unadjusted parameter and stratum, otherwise allow return of null
     add_adjusted_parameter = function(unadjusted_parameter, stratification_name, stratum, strata_names, adjustment_requests) {
       self$output_to_user(paste("\tmodifying", unadjusted_parameter, "for", stratum, "stratum of", stratification_name))
-      parameter_adjustment_name <- NULL
       
-      # for each request for adjustment, if there are any
+      # find the parameter that is an extension of the base parameter type requested
       for (parameter_request in names(adjustment_requests)) {
-        
-        # if the parameter being considered is an extension of the base parameter type requested
         if (startsWith(unadjusted_parameter, parameter_request)) {
           parameter_adjustment_name <- create_stratified_name(unadjusted_parameter, stratification_name, stratum)
 
@@ -991,9 +988,9 @@ StratifiedModel <- R6Class(
           if (stratum %in% adjustment_requests[[parameter_request]]$overwrite) {
             self$overwrite_parameters <- c(self$overwrite_parameters, parameter_adjustment_name)
           }
+          return(parameter_adjustment_name)
         }
       }
-      parameter_adjustment_name
     },
     
     # adjust stratified parameter value
