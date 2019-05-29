@@ -802,6 +802,91 @@ StratifiedModel <- R6Class(
       self$output_to_user(self$transition_flows)
     },
     
+    # stratify entry/recruitment/birth flows
+    stratify_entry_flows = function(stratification_name, strata_names, requested_proportions, report) {
+      entry_fractions <- list()
+      
+      # work out parameter values for stratifying the entry proportion adjustments
+      if (self$entry_compartment %in% self$compartment_types_to_stratify) {
+        for (stratum in strata_names) {
+          entry_fraction_name <- create_stratified_name("entry_fraction", stratification_name, stratum)
+          if (stratification_name == "age" & as.character(stratum) == "0") {
+            entry_fractions[entry_fraction_name] <- 1
+            next
+          }
+          else if (stratification_name == "age") {
+            entry_fractions[entry_fraction_name] <- 0
+            next
+          }
+          else if (stratum %in% names(requested_proportions$adjustments)) {
+            entry_fractions[entry_fraction_name] <- requested_proportions$adjustments[[stratum]]
+            self$output_to_user(paste("assigning specified proportion of starting population to", stratum))
+          }
+          else {
+            entry_fractions[entry_fraction_name] <- 1 / length(strata_names)
+            self$output_to_user(paste("assuming", as.character(entry_fractions[entry_fraction_name]), "of starting population to be assigned to", stratum, "stratum by default"))
+          }
+        }
+        self$parameters <- c(normalise_list(entry_fractions), self$parameters)
+      }
+    },  
+    
+    # add compartment-specific death flows to death data frame
+    stratify_death_flows = function(stratification_name, strata_names, adjustment_requests, report) {
+      for (flow in which(self$death_flows$implement)) {
+        if (find_stem(self$death_flows$from[flow]) %in% self$compartment_types_to_stratify) {
+          for (stratum in strata_names) {
+            parameter_name <- self$add_adjusted_parameter(self$death_flows$parameter[flow], stratification_name, stratum, adjustment_requests)
+            if (is.null(parameter_name)) {
+              parameter_name <- self$death_flows$parameter[flow]
+            }
+            self$death_flows <- rbind(self$death_flows, 
+                                      data.frame(type=self$death_flows$type[flow], 
+                                                 parameter=parameter_name, 
+                                                 from=create_stratified_name(self$death_flows$from[flow], stratification_name, stratum), 
+                                                 implement=TRUE, stringsAsFactors=FALSE))
+            self$death_flows$implement[flow] <- FALSE
+          }
+        }
+      }
+    },    
+    
+    # stratify the approach to universal, population-wide deaths (which can be made to vary by stratum)
+    stratify_universal_death_rate = function(stratification_name, strata_names, adjustment_requests, report) {
+      
+      # take each parameter that refers to the universal death rate and adjust it for each stratum according to user request
+      for (parameter in names(self$parameters)) {
+        if (find_stem(parameter) == "universal_death_rate") {
+          for (stratum in strata_names) {
+            self$add_adjusted_parameter(parameter, stratification_name, stratum, adjustment_requests)
+          }
+        }
+      }
+    },
+    
+    # find the adjustment request that is relevant to a particular unadjusted parameter and stratum, otherwise allow return of null
+    add_adjusted_parameter = function(unadjusted_parameter, stratification_name, stratum, adjustment_requests) {
+      self$output_to_user(paste("\tmodifying", unadjusted_parameter, "for", stratum, "stratum of", stratification_name))
+      
+      # find the adjustment request that is an extension of the base parameter type being considered
+      for (parameter_request in names(adjustment_requests)) {
+        if (startsWith(unadjusted_parameter, parameter_request)) {
+          parameter_adjustment_name <- create_stratified_name(unadjusted_parameter, stratification_name, stratum)
+          
+          # implement user request if requested (note that otherwise parameter will now be left out and assumed to be 1 during integration)
+          if (stratum %in% names(adjustment_requests[[parameter_request]]$adjustments)) {
+            self$parameters[parameter_adjustment_name] <- adjustment_requests[[parameter_request]]$adjustments[as.character(stratum)]
+          }
+          
+          # overwrite parameters higher up the tree by listing which ones to be overwritten
+          if (stratum %in% adjustment_requests[[parameter_request]]$overwrite) {
+            self$overwrite_parameters <- c(self$overwrite_parameters, parameter_adjustment_name)
+          }
+          return(parameter_adjustment_name)
+        }
+      }
+    },
+    
     # work out infectiousness adjustments and set as model attributes
     apply_heterogeneous_infectiousness = function(stratification_name, strata_request, infectiousness_adjustments) {
       if (length(infectiousness_adjustments) == 0) {
@@ -842,39 +927,6 @@ StratifiedModel <- R6Class(
       }
     },
 
-    # stratify the approach to universal, population-wide deaths (which can be made to vary by stratum)
-    stratify_universal_death_rate = function(stratification_name, strata_names, adjustment_requests, report) {
-
-      # take each parameter that refers to the universal death rate and adjust it for each stratum according to user request
-      for (parameter in names(self$parameters)) {
-        if (find_stem(parameter) == "universal_death_rate") {
-          for (stratum in strata_names) {
-            self$add_adjusted_parameter(parameter, stratification_name, stratum, strata_names, adjustment_requests)
-          }
-        }
-      }
-    },
-
-    # add compartment-specific death flows to death data frame
-    stratify_death_flows = function(stratification_name, strata_names, adjustment_requests, report) {
-      for (flow in which(self$death_flows$implement)) {
-        if (find_stem(self$death_flows$from[flow]) %in% self$compartment_types_to_stratify) {
-          for (stratum in strata_names) {
-            parameter_name <- self$add_adjusted_parameter(self$death_flows$parameter[flow], stratification_name, stratum, strata_names, adjustment_requests)
-            if (is.null(parameter_name)) {
-              parameter_name <- self$death_flows$parameter[flow]
-            }
-            self$death_flows <- rbind(self$death_flows, 
-                                      data.frame(type=self$death_flows$type[flow], 
-                                                 parameter=parameter_name, 
-                                                 from=create_stratified_name(self$death_flows$from[flow], stratification_name, stratum), 
-                                                 implement=TRUE, stringsAsFactors=FALSE))
-            self$death_flows$implement[flow] <- FALSE
-          }
-        }
-      }
-    },    
-    
     # add additional stratified flow to flow data frame
     add_stratified_flows = function(flow, stratification_name, strata_names, stratify_from, stratify_to, adjustment_requests, report) {
       
@@ -886,7 +938,7 @@ StratifiedModel <- R6Class(
           
           # find parameter name
           parameter_name <- self$add_adjusted_parameter(
-            self$transition_flows$parameter[flow], stratification_name, stratum, strata_names, adjustment_requests)
+            self$transition_flows$parameter[flow], stratification_name, stratum, adjustment_requests)
           if (is.null(parameter_name)) {
             parameter_name <- self$sort_absent_parameter_request(stratification_name, strata_names, stratum, stratify_from, stratify_to, flow)
           }
@@ -931,59 +983,7 @@ StratifiedModel <- R6Class(
       }
       parameter_name
     },
-    
-    # stratify entry/recruitment/birth flows
-    stratify_entry_flows = function(stratification_name, strata_names, requested_proportions, report) {
-      entry_fractions <- list()
-      
-      # work out parameter values for stratifying the entry proportion adjustments
-      if (self$entry_compartment %in% self$compartment_types_to_stratify) {
-        for (stratum in strata_names) {
-          entry_fraction_name <- create_stratified_name("entry_fraction", stratification_name, stratum)
-          if (stratification_name == "age" & as.character(stratum) == "0") {
-            entry_fractions[entry_fraction_name] <- 1
-            next
-          }
-          else if (stratification_name == "age") {
-            entry_fractions[entry_fraction_name] <- 0
-            next
-          }
-          if (stratum %in% names(requested_proportions$adjustments)) {
-            entry_fractions[entry_fraction_name] <- requested_proportions$adjustments[[stratum]]
-            self$output_to_user(paste("assigning specified proportion of starting population to", stratum))
-          }
-          else {
-            entry_fractions[entry_fraction_name] <- 1 / length(strata_names)
-            self$output_to_user(paste("assuming", as.character(1 / length(strata_names)), "of starting population to be assigned to", stratum, "stratum by default"))
-          }
-        }
-        self$parameters <- c(normalise_list(entry_fractions), self$parameters)
-      }
-    },  
-    
-    # find the adjustment request that is relevant to a particular unadjusted parameter and stratum, otherwise allow return of null
-    add_adjusted_parameter = function(unadjusted_parameter, stratification_name, stratum, strata_names, adjustment_requests) {
-      self$output_to_user(paste("\tmodifying", unadjusted_parameter, "for", stratum, "stratum of", stratification_name))
-      
-      # find the parameter that is an extension of the base parameter type requested
-      for (parameter_request in names(adjustment_requests)) {
-        if (startsWith(unadjusted_parameter, parameter_request)) {
-          parameter_adjustment_name <- create_stratified_name(unadjusted_parameter, stratification_name, stratum)
 
-          # implement user request if requested (note that otherwise parameter will now be left out and assumed to be 1 during integration)
-          if (stratum %in% names(adjustment_requests[[parameter_request]]$adjustments)) {
-            self$parameters[parameter_adjustment_name] <- adjustment_requests[[parameter_request]]$adjustments[as.character(stratum)]
-          }
-          
-          # overwrite parameters higher up the tree by listing which ones to be overwritten
-          if (stratum %in% adjustment_requests[[parameter_request]]$overwrite) {
-            self$overwrite_parameters <- c(self$overwrite_parameters, parameter_adjustment_name)
-          }
-          return(parameter_adjustment_name)
-        }
-      }
-    },
-    
     # prior to integration commencing, work out what the components are of each parameter being implemented
     organise_parameter_stratifications = function() {
       
