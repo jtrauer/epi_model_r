@@ -123,10 +123,10 @@ EpiModel <- R6Class(
     # find the value of a parameter with time-variant values trumping constant ones
     find_parameter_value = function(parameter_name, time) {
       if (parameter_name %in% names(self$time_variants)) {
-        self$time_variants[parameter_name](time)
+        self$time_variants[[parameter_name]](time)
       }
       else {
-        self$parameters[parameter_name]
+        self$parameters[[parameter_name]]
       }
     },
     
@@ -443,7 +443,7 @@ EpiModel <- R6Class(
         flow <- self$transition_flows[f,]
         
         # find adjusted parameter value
-        adjusted_parameter <- self$adjust_parameter(flow$parameter)
+        adjusted_parameter <- self$adjust_parameter(flow$parameter, time)
         
         if (flow$implement) {
           
@@ -492,7 +492,7 @@ EpiModel <- R6Class(
       for (f in seq(nrow(self$death_flows))) {
         flow <- self$death_flows[f,]
         
-        adjusted_parameter <- self$adjust_parameter(flow$parameter)
+        adjusted_parameter <- self$adjust_parameter(flow$parameter, time)
         
         if (flow$implement) {
           from_compartment <- match(flow$from, names(self$compartment_values))
@@ -509,7 +509,7 @@ EpiModel <- R6Class(
     # apply the population-wide death rate to all compartments
     apply_universal_death_flow = function(ode_equations, compartment_values, time) {
       for (compartment in names(self$compartment_values)) {
-        adjusted_parameter <- self$adjust_parameter("universal_death_rate")
+        adjusted_parameter <- self$adjust_parameter("universal_death_rate", time)
         from_compartment <- match(compartment, names(self$compartment_values))
         net_flow <- adjusted_parameter * compartment_values[from_compartment]
         
@@ -957,8 +957,6 @@ StratifiedModel <- R6Class(
             entry_fractions[entry_fraction_name] <- 0
             next
           }
-          
-          # should change this code to be more like approach to parameter adjustment, or perhaps add a normalise function
           if (stratum %in% names(requested_proportions$adjustments)) {
             entry_fractions[entry_fraction_name] <- requested_proportions$adjustments[[stratum]]
             self$output_to_user(paste("assigning specified proportion of starting population to", stratum))
@@ -996,9 +994,9 @@ StratifiedModel <- R6Class(
     },
     
     # adjust stratified parameter value
-    adjust_parameter = function(parameter) {
+    adjust_parameter = function(parameter, time) {
       adjusted_parameter <- 1
-      
+
       # cycle through the parameter adjustments by finding the Xs in the strings, starting from the most stratified parameter
       for (x_instance in extract_reversed_x_positions(parameter)) {
         adjustment <- substr(parameter, 1, x_instance - 1)
@@ -1010,7 +1008,7 @@ StratifiedModel <- R6Class(
         
         # otherwise, progressively adjust
         else if (adjustment %in% names(self$parameters)) {
-          adjusted_parameter <- adjusted_parameter * self$parameters[[adjustment]]
+          adjusted_parameter <- adjusted_parameter * self$find_parameter_value(adjustment, time)
         }
       }
       adjusted_parameter
