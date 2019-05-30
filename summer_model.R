@@ -391,14 +391,14 @@ EpiModel <- R6Class(
     # integrate model odes  
     run_model = function () {
       self$output_to_user("\nnow integrating")
-      self$organise_parameter_stratifications()
+      self$prepare_stratified_parameter_calculations()
       self$outputs <- as.data.frame(lsodar(self$compartment_values, self$times, self$make_model_function(),
                                            rootfunc = self$set_stopping_conditions()))
       self$output_to_user("\nintegration complete")
     },   
     
     # for use in the stratified version
-    organise_parameter_stratifications = function() {},
+    prepare_stratified_parameter_calculations = function() {},
     
     # create derivative function
     make_model_function = function() {
@@ -447,7 +447,7 @@ EpiModel <- R6Class(
         flow <- self$transition_flows[f,]
         
         # find adjusted parameter value
-        adjusted_parameter <- self$get_stratified_parameter(flow$parameter, time)
+        adjusted_parameter <- self$get_parameter_value(flow$parameter, time)
         
         # find from compartment and "infectious population", which is 1 for standard flows
         infectious_population <- self$find_infectious_multiplier(flow$type)
@@ -491,7 +491,7 @@ EpiModel <- R6Class(
     apply_compartment_death_flows = function(ode_equations, compartment_values, time) {
       for (f in seq(nrow(self$death_flows))) {
         flow <- self$death_flows[f,]
-        adjusted_parameter <- self$get_stratified_parameter(flow$parameter, time)
+        adjusted_parameter <- self$get_parameter_value(flow$parameter, time)
         if (flow$implement) {
           from_compartment <- match(flow$from, names(self$compartment_values))
           net_flow <- adjusted_parameter * compartment_values[from_compartment]
@@ -507,7 +507,7 @@ EpiModel <- R6Class(
     # apply the population-wide death rate to all compartments
     apply_universal_death_flow = function(ode_equations, compartment_values, time) {
       for (compartment in names(self$compartment_values)) {
-        adjusted_parameter <- self$get_stratified_parameter("universal_death_rate", time)
+        adjusted_parameter <- self$get_parameter_value("universal_death_rate", time)
         from_compartment <- match(compartment, names(self$compartment_values))
         net_flow <- adjusted_parameter * compartment_values[from_compartment]
         
@@ -603,6 +603,11 @@ EpiModel <- R6Class(
     increment_compartment = function(ode_equations, compartment_number, increment) {
       ode_equations[compartment_number] <- ode_equations[compartment_number] + increment
       ode_equations
+    },
+    
+    # need to split this out as a function in order to allow stratification later
+    get_parameter_value = function(parameter, time) {
+      self$find_parameter_value(parameter, time)
     }
   )
 )
@@ -984,8 +989,11 @@ StratifiedModel <- R6Class(
       parameter_name
     },
 
+    # __________
+    # methods to be called during the process of model running
+    
     # prior to integration commencing, work out what the components are of each parameter being implemented
-    organise_parameter_stratifications = function() {
+    prepare_stratified_parameter_calculations = function() {
       
       # create list of all the parameters that we need to find the list of adjustments for
       parameters_to_adjust <- c(self$transition_flows$parameter[self$transition_flows$implement],
@@ -998,6 +1006,8 @@ StratifiedModel <- R6Class(
     
     # extract the components of the stratified parameter into a list structure
     find_parameter_components = function(parameter) {
+      
+      # collate all the parameter components into time-variant or constant
       self$parameter_components[[parameter]] <- list(time_variants = c(), constants = c(), constant_value = 1)
       for (x_instance in extract_reversed_x_positions(parameter)) {
         component <- substr(parameter, 1, x_instance - 1)
@@ -1017,6 +1027,8 @@ StratifiedModel <- R6Class(
           self$parameter_components[[parameter]]$constants <- c(component, self$parameter_components[[parameter]]$constants)
         }
       }
+      
+      # pre-calculate the constant component by multiplying through all the constant values
       for (constant_parameter in self$parameter_components[[parameter]]$constants) {
         self$parameter_components[[parameter]]$constant_value <- 
           self$parameter_components[[parameter]]$constant_value * self$parameters[[constant_parameter]]
@@ -1024,7 +1036,7 @@ StratifiedModel <- R6Class(
     },
 
     # calculate adjusted parameter value from pre-calculated product of constant components and individual time variants    
-    get_stratified_parameter = function(parameter, time) {
+    get_parameter_value = function(parameter, time) {
       adjusted_parameter <- self$parameter_components[[parameter]]$constant_value
       for (time_variant in self$parameter_components[[parameter]]$time_variants) {
         adjusted_parameter <- adjusted_parameter * self$time_variants[[time_variant]](time)
@@ -1053,8 +1065,7 @@ StratifiedModel <- R6Class(
           
           # increment infectious population
           self$tracked_quantities$infectious_population <-
-            self$tracked_quantities$infectious_population +
-            compartment_values[match(compartment, names(self$compartment_values))] * infectiousness_modifier
+            self$tracked_quantities$infectious_population + compartment_values[match(compartment, names(self$compartment_values))] * infectiousness_modifier
         }
       }
     }
