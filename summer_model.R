@@ -335,9 +335,6 @@ EpiModel <- R6Class(
           self$add_transition_flow(working_flow)
         }
         
-        # retain a copy of the original flows for the purposes of graphing, etc.
-        self$unstratified_flows <- self$transition_flows
-        
         # add quantities that will need to be tracked to the tracked quantities attribute
         if (grepl("infection", working_flow[1])) {
           self$tracked_quantities$infectious_population <- 0
@@ -346,6 +343,9 @@ EpiModel <- R6Class(
           self$tracked_quantities$total_population <- 0
         }
       }
+      
+      # retain a copy of the original flows for the purposes of graphing, etc.
+      self$unstratified_flows <- self$transition_flows
     },
     
     # add parameters and tracked quantities that weren't requested but will be needed
