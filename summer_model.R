@@ -10,8 +10,8 @@
 library(deSolve)
 library(R6)
 # library(tidyverse)
-# library(DiagrammeR)
-# library(DiagrammeRsvg)
+library(DiagrammeR)
+library(DiagrammeRsvg)
 library(rsvg)
 library(stringr)
 # this file contains the main model builder function, that is intended to be agnostic
@@ -921,6 +921,8 @@ StratifiedModel <- R6Class(
         ageing_rate <- 1 / (end_age - start_age)
         self$parameters[ageing_parameter_name] <- ageing_rate
         for (compartment in names(self$compartment_values)) {
+          tempName    = str_split(compartment, 'X')
+          compartment = paste(tempName[[1]][1],'X', tempName[[1]][2], sep="")
           self$transition_flows <- 
             rbind(self$transition_flows, 
                   data.frame(type="standard_flows", parameter=ageing_parameter_name, 
@@ -928,6 +930,7 @@ StratifiedModel <- R6Class(
                              to=create_stratified_name(compartment, "age", end_age),
                              implement=TRUE, stringsAsFactors=FALSE))
         }
+        self$transition_flows = unique(self$transition_flows)
         self$output_to_user(paste("ageing rate from age group", start_age, "to", end_age, "is", round(ageing_rate, self$reporting_sigfigs)))
       }
     },
@@ -1166,11 +1169,14 @@ ModelInterpreter <- R6Class(
       #Pick type of input into the function, depending on whether the type of flowchart is 
       if (type == 'stratified') {
         input_nodes <- names(self$model$compartment_values)
-        type_of_flow <- self$model$flows
+        
+        new_df <- self$model$transition_flows
+        type_of_flow <- new_df[which(new_df$implement == TRUE),]
       } 
       else if (type == 'unstratified') {
         input_nodes <- self$model$compartment_types
         type_of_flow <- self$model$unstratified_flows
+        
       }
       else {
         stop("Type needs to be either stratified or unstratified.")
