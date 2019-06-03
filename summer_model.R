@@ -10,8 +10,8 @@
 library(deSolve)
 library(R6)
 # library(tidyverse)
-# library(DiagrammeR)
-# library(DiagrammeRsvg)
+library(DiagrammeR)
+library(DiagrammeRsvg)
 library(rsvg)
 library(stringr)
 # this file contains the main model builder function, that is intended to be agnostic
