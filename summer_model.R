@@ -130,19 +130,6 @@ EpiModel <- R6Class(
       }
     },
 
-    # add a compartment by specifying its name and value to take 
-    add_compartment = function(new_compartment_name, new_compartment_value) {
-      self$compartment_values[new_compartment_name] <- new_compartment_value
-      self$output_to_user(paste("adding compartment:", new_compartment_name))
-    },
-    
-    # remove a compartment by taking the element out of the compartment values attribute
-    remove_compartment = function(compartment) {
-      self$removed_compartments <- c(self$removed_compartments, compartment)
-      self$compartment_values <- self$compartment_values[names(self$compartment_values) != compartment]
-      self$output_to_user(paste("removing compartment:", compartment))
-    },
-
     # short function to save the if statement in every call to output some information
     output_to_user = function(comment) {
       if (self$report_progress & is.character(comment)) {
@@ -622,6 +609,22 @@ StratifiedModel <- R6Class(
     heterogeneous_infectiousness = FALSE,
     compartment_types_to_stratify = c(),
     parameter_components = list(),
+    
+    # __________
+    # general methods
+    
+    # add a compartment by specifying its name and value to take 
+    add_compartment = function(new_compartment_name, new_compartment_value) {
+      self$compartment_values[new_compartment_name] <- new_compartment_value
+      self$output_to_user(paste("adding compartment:", new_compartment_name))
+    },
+    
+    # remove a compartment by taking the element out of the compartment values attribute
+    remove_compartment = function(compartment) {
+      self$removed_compartments <- c(self$removed_compartments, compartment)
+      self$compartment_values <- self$compartment_values[names(self$compartment_values) != compartment]
+      self$output_to_user(paste("removing compartment:", compartment))
+    },
     
     # master stratification method
     stratify = function(stratification_name, strata_request, compartment_types_to_stratify,
