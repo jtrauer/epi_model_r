@@ -497,12 +497,12 @@ EpiModel <- R6Class(
         adjusted_parameter <- self$get_parameter_value("universal_death_rate", time)
         from_compartment <- match(compartment, names(self$compartment_values))
         net_flow <- adjusted_parameter * compartment_values[from_compartment]
+        ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
         
         # track deaths in case births are meant to replace deaths
         if ("total_deaths" %in% names(self$tracked_quantities)) {
           self$tracked_quantities$total_deaths <- self$tracked_quantities$total_deaths + net_flow
         }
-        ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
       }
       ode_equations
     },
