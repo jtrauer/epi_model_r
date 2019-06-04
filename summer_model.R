@@ -10,8 +10,8 @@
 library(deSolve)
 library(R6)
 # library(tidyverse)
-library(DiagrammeR)
-library(DiagrammeRsvg)
+# library(DiagrammeR)
+# library(DiagrammeRsvg)
 library(rsvg)
 library(stringr)
 # this file contains the main model builder function, that is intended to be agnostic
@@ -228,19 +228,19 @@ EpiModel <- R6Class(
       
       # report on characteristics of inputs
       if (report_progress) {
-        writeLines(paste("\nIntegrating from time ", round(times[1], reporting_sigfigs), 
+        writeLines(paste("\nintegrating from time ", round(times[1], reporting_sigfigs), 
                          " to ", round(tail(times, 1), reporting_sigfigs), sep=""))
-        writeLines("\nUnstratified requested initial conditions are:")
+        writeLines("\nunstratified requested initial conditions are:")
         for (compartment in names(initial_conditions)) {
           writeLines(paste(compartment, ": ", 
                            as.character(round(as.numeric(initial_conditions[compartment]), reporting_sigfigs)), sep=""))
         }
-        writeLines("\nUnstratified parameter values are:")
+        writeLines("\nunstratified parameter values are:")
         for (parameter in names(parameters)) {
           writeLines(paste(parameter, ": ", as.character(round(as.numeric(parameters[parameter]), reporting_sigfigs)), sep=""))
         }
-        writeLines(paste("\nInfectious compartment is called:", infectious_compartment))
-        writeLines(paste("\nBirth approach is:", birth_approach))
+        writeLines(paste("\ninfectious compartment is called:", infectious_compartment))
+        writeLines(paste("\nbirth approach is:", birth_approach))
       }
     },
     
@@ -509,36 +509,21 @@ EpiModel <- R6Class(
     
     # apply a population-wide death rate to all compartments
     apply_birth_rate = function(ode_equations, compartment_values, time) {
-      
-      # work out the total births to apply dependent on the approach requested
+      ode_equations <- self$increment_compartment(ode_equations, match(self$entry_compartment, names(self$compartment_values)), 
+                                                  self$find_total_births(compartment_values))
+    },
+    
+    # work out the total births to apply dependent on the approach requested
+    find_total_births = function (compartment_values) {
       if (self$birth_approach == "add_crude_birth_rate") {
-        total_births <- self$parameters$crude_birth_rate * sum(compartment_values)
+        return(self$parameters$crude_birth_rate * sum(compartment_values))
       }
       else if (self$birth_approach == "replace_deaths") {
-        total_births <- self$tracked_quantities$total_deaths
+        return(total_births <- self$tracked_quantities$total_deaths)
       }
       else {
-        total_births <- 0
+        return(0)
       }
-      
-      # split the total births across entry compartments
-      for (compartment in names(compartment_values)) {
-        if (find_stem(compartment) == self$entry_compartment) {
-          
-          # calculate adjustment to original stem entry rate
-          entry_fraction <- 1
-          x_positions <- extract_x_positions(compartment)
-          if (!x_positions[1] == -1) {
-            for (x_instance in seq(length(x_positions) - 1)) {
-              adjustment <- paste("entry_fractionX", substr(compartment, x_positions[x_instance] + 1, x_positions[x_instance + 1] - 1), sep="")
-              entry_fraction <- entry_fraction * self$parameters[[adjustment]]
-            }
-          }
-          compartment_births <- entry_fraction * total_births
-          ode_equations <- self$increment_compartment(ode_equations, match(compartment, names(self$compartment_values)), compartment_births)
-        }
-      }
-      ode_equations
     },
     
     # find the multiplier to account for the infectious population in dynamic flows
@@ -1074,6 +1059,30 @@ StratifiedModel <- R6Class(
             self$tracked_quantities$infectious_population + compartment_values[match(compartment, names(self$compartment_values))] * infectiousness_modifier
         }
       }
+    },
+    
+    # apply a population-wide death rate to all compartments
+    apply_birth_rate_stratified = function(ode_equations, compartment_values, time) {
+      total_births = self$find_total_births(compartment_values)
+      
+      # split the total births across entry compartments
+      for (compartment in names(compartment_values)) {
+        if (find_stem(compartment) == self$entry_compartment) {
+          
+          # calculate adjustment to original stem entry rate
+          entry_fraction <- 1
+          x_positions <- extract_x_positions(compartment)
+          if (!x_positions[1] == -1) {
+            for (x_instance in seq(length(x_positions) - 1)) {
+              adjustment <- paste("entry_fractionX", substr(compartment, x_positions[x_instance] + 1, x_positions[x_instance + 1] - 1), sep="")
+              entry_fraction <- entry_fraction * self$parameters[[adjustment]]
+            }
+          }
+          compartment_births <- entry_fraction * total_births
+          ode_equations <- self$increment_compartment(ode_equations, match(compartment, names(self$compartment_values)), compartment_births)
+        }
+      }
+      ode_equations
     }
   )
 )
