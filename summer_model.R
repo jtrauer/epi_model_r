@@ -519,7 +519,7 @@ EpiModel <- R6Class(
         return(self$parameters$crude_birth_rate * sum(compartment_values))
       }
       else if (self$birth_approach == "replace_deaths") {
-        return(total_births <- self$tracked_quantities$total_deaths)
+        return(self$tracked_quantities$total_deaths)
       }
       else {
         return(0)
