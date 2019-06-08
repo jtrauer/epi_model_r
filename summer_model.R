@@ -618,7 +618,7 @@ StratifiedModel <- R6Class(
         stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests, report)
       
       # stratify the compartments
-      requested_proportions <- self$tidy_starting_proportions(strata_names, requested_proportions, report)
+      requested_proportions <- self$tidy_starting_proportions(strata_names, requested_proportions)
       self$stratify_compartments(stratification_name, strata_names, adjustment_requests, requested_proportions, report)
 
       # stratify the flows
@@ -661,7 +661,7 @@ StratifiedModel <- R6Class(
       
       # record stratification as attribute to model, find the names to apply strata and check compartment and parameter requests
       self$strata <- c(self$strata, stratification_name)
-      strata_names <- self$find_strata_names_from_input(stratification_name, strata_request, report)
+      strata_names <- self$find_strata_names_from_input(strata_request)
       self$check_compartment_request(compartment_types_to_stratify)
       self$check_parameter_adjustment_requests(adjustment_requests, strata_names)
       strata_names
@@ -673,8 +673,8 @@ StratifiedModel <- R6Class(
       if ("age" %in% self$strata) {
         stop("requested stratification by age, but this has specific behaviour and can only be applied once")
       }
-      else if (length(compartment_types_to_stratify) != 0) {
-        stop("requested age stratification, but compartment request should be passed as empty vector to apply to all compartments")
+      else if (length(compartment_types_to_stratify) > 0) {
+        stop("requested age stratification, but compartment request should be passed as empty vector in order to apply to all compartments")
       }
       else if (!is.numeric(strata_request)) {
         stop("inputs for age strata breakpoints are not numeric")
@@ -685,14 +685,14 @@ StratifiedModel <- R6Class(
                                   paste(rep(", ", length(strata_request)), strata_request, collapse=""), sep=""))
       }
       if (!0 %in% strata_request) {
+        self$output_to_user(paste("adding age stratum called '0' as not requested, to represent those aged less than", strata_request[1]))
         strata_request <- c(0, strata_request)
-        self$output_to_user(paste("adding age stratum called '0' as not requested, to represent those aged less than", strata_request[2]))
       }
       strata_request
     },
         
     # find the names of the stratifications from a particular user request
-    find_strata_names_from_input = function(stratification_name, strata_request, report) {
+    find_strata_names_from_input = function(strata_request) {
       if (length(strata_request) == 0) {
         stop("requested to stratify, but no strata provided")
       }
@@ -709,7 +709,7 @@ StratifiedModel <- R6Class(
         strata_names <- strata_request
       }
       for (name in strata_names) {
-        self$output_to_user(paste("stratum to add:", name))
+        self$output_to_user(paste("adding stratum:", name))
       }
       strata_names
     },
@@ -737,7 +737,7 @@ StratifiedModel <- R6Class(
       for (parameter in names(adjustment_requests)) {
         for (requested_stratum in names(adjustment_requests[[parameter]]$adjustments)) {
           if (!requested_stratum %in% as.character(strata_names)) {
-            stop(paste("stratum", requested_stratum, "requested in adjustments but unavailable, so ignored"))
+            stop(paste("stratum", requested_stratum, "requested in adjustments but unavailable"))
           }
         }
         for (stratum in as.character(strata_names)) {
@@ -750,7 +750,7 @@ StratifiedModel <- R6Class(
     },
     
     # prepare user inputs for starting proportions as needed
-    tidy_starting_proportions = function(strata_names, requested_proportions, report) {
+    tidy_starting_proportions = function(strata_names, requested_proportions) {
       
       # assume an equal proportion of the total for the compartment if not otherwise specified
       for (stratum in strata_names) {
@@ -758,7 +758,7 @@ StratifiedModel <- R6Class(
           starting_proportion <- 1 / length(strata_names)
           requested_proportions[as.character(stratum)] <- starting_proportion
           self$output_to_user(paste("no starting proportion requested for stratum", stratum,
-                                    "so allocated", round(as.numeric(starting_proportion), self$reporting_sigfigs), "of total"))
+                                    "so allocated", round(starting_proportion, self$reporting_sigfigs), "of total"))
         }
       }
       
