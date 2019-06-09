@@ -619,11 +619,11 @@ StratifiedModel <- R6Class(
       
       # stratify the compartments
       requested_proportions <- self$tidy_starting_proportions(strata_names, requested_proportions)
-      self$stratify_compartments(stratification_name, strata_names, adjustment_requests, requested_proportions, report)
+      self$stratify_compartments(stratification_name, strata_names, requested_proportions)
 
       # stratify the flows
       self$stratify_transition_flows(stratification_name, strata_names, adjustment_requests, report)
-      self$stratify_entry_flows(stratification_name, strata_names, requested_proportions, report)
+      self$stratify_entry_flows(stratification_name, strata_names, requested_proportions)
       if (nrow(self$death_flows) > 0) {
         self$stratify_death_flows(stratification_name, strata_names, adjustment_requests, report)
       }
@@ -767,7 +767,7 @@ StratifiedModel <- R6Class(
     },
     
     # compartment stratification
-    stratify_compartments = function(stratification_name, strata_names, adjustment_requests, requested_proportions, report) {
+    stratify_compartments = function(stratification_name, strata_names, requested_proportions) {
       
       # find the existing compartments that need stratification
       for (compartment in names(self$compartment_values)) {
@@ -796,7 +796,7 @@ StratifiedModel <- R6Class(
     },
     
     # stratify entry/recruitment/birth flows
-    stratify_entry_flows = function(stratification_name, strata_names, requested_proportions, report) {
+    stratify_entry_flows = function(stratification_name, strata_names, requested_proportions) {
       entry_fractions <- list()
       
       # work out parameter values for stratifying the entry proportion adjustments
