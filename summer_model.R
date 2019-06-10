@@ -1065,7 +1065,7 @@ StratifiedModel <- R6Class(
     },
     
     # apply a population-wide death rate to all compartments
-    apply_birth_rate_stratified = function(ode_equations, compartment_values, time) {
+    apply_birth_rate = function(ode_equations, compartment_values, time) {
       total_births = self$find_total_births(compartment_values)
       
       # split the total births across entry compartments
