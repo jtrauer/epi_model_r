@@ -625,7 +625,7 @@ StratifiedModel <- R6Class(
       
       # work out ageing flows (comes first so that the compartment names are still in the unstratified form)
       if (stratification_name == "age") {
-        self$set_ageing_rates(strata_names, report)
+        self$set_ageing_rates(strata_names)
       }
       
       # stratify the compartments
@@ -907,7 +907,7 @@ StratifiedModel <- R6Class(
     },
     
     # set intercompartmental flows for ageing from one stratum to the next
-    set_ageing_rates = function(strata_names, report) {
+    set_ageing_rates = function(strata_names) {
       for (stratum_number in seq(length(strata_names) - 1)) {
         start_age <- strata_names[stratum_number]
         end_age <- strata_names[stratum_number + 1]
