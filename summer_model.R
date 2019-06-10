@@ -39,6 +39,12 @@ find_stratum = function(stratified_string) {
   }
 }
 
+# function to chop off the last piece of the character vector after the last occurrence of X (i.e. the last stratification)
+remove_last_stratification = function(stratified_string) {
+  x_positions <- gregexpr(pattern = "X", stratified_string)[[1]]
+  substr(stratified_string, 1, x_positions[length(x_positions)] - 1)
+}
+
 # function to generate a standardised stratified compartment name
 create_stratified_name = function(stem, stratification_name, stratum_name) {
   paste(stem, create_stratum_name(stratification_name, stratum_name), sep = "")
