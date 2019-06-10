@@ -795,7 +795,7 @@ StratifiedModel <- R6Class(
         self$add_stratified_flows(flow, stratification_name, strata_names, 
                                   find_stem(self$transition_flows$from[flow]) %in% self$compartment_types_to_stratify,
                                   find_stem(self$transition_flows$to[flow]) %in% self$compartment_types_to_stratify,
-                                  adjustment_requests, report)
+                                  adjustment_requests)
       }
       self$output_to_user("stratified transition flows matrix:")
       self$output_to_user(self$transition_flows)
@@ -927,7 +927,7 @@ StratifiedModel <- R6Class(
     },
 
     # add additional stratified flow to flow data frame
-    add_stratified_flows = function(flow, stratification_name, strata_names, stratify_from, stratify_to, adjustment_requests, report) {
+    add_stratified_flows = function(flow, stratification_name, strata_names, stratify_from, stratify_to, adjustment_requests) {
       
       if (stratify_from | stratify_to) {
         self$output_to_user(paste("for flow from", self$transition_flows$from[flow], "to", self$transition_flows$to[flow], "in stratification", stratification_name))
