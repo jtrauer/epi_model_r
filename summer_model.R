@@ -625,7 +625,7 @@ StratifiedModel <- R6Class(
       self$stratify_transition_flows(stratification_name, strata_names, adjustment_requests, report)
       self$stratify_entry_flows(stratification_name, strata_names, requested_proportions)
       if (nrow(self$death_flows) > 0) {
-        self$stratify_death_flows(stratification_name, strata_names, adjustment_requests, report)
+        self$stratify_death_flows(stratification_name, strata_names, adjustment_requests)
       }
       self$stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests, report)
 
@@ -825,7 +825,7 @@ StratifiedModel <- R6Class(
     },  
     
     # add compartment-specific death flows to death data frame
-    stratify_death_flows = function(stratification_name, strata_names, adjustment_requests, report) {
+    stratify_death_flows = function(stratification_name, strata_names, adjustment_requests) {
       for (flow in which(self$death_flows$implement)) {
         if (find_stem(self$death_flows$from[flow]) %in% self$compartment_types_to_stratify) {
           for (stratum in strata_names) {
