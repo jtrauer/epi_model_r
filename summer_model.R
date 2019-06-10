@@ -623,6 +623,11 @@ StratifiedModel <- R6Class(
       strata_names <- self$prepare_and_check_stratification(
         stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests, report)
       
+      # work out ageing flows (comes first so that the compartment names are still in the unstratified form)
+      if (stratification_name == "age") {
+        self$set_ageing_rates(strata_names, report)
+      }
+      
       # stratify the compartments
       requested_proportions <- self$tidy_starting_proportions(strata_names, requested_proportions)
       self$stratify_compartments(stratification_name, strata_names, requested_proportions)
@@ -633,15 +638,10 @@ StratifiedModel <- R6Class(
       if (nrow(self$death_flows) > 0) {
         self$stratify_death_flows(stratification_name, strata_names, adjustment_requests)
       }
-      self$stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests, report)
+      self$stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests)
 
       # heterogeneous infectiousness adjustments
       self$apply_heterogeneous_infectiousness(stratification_name, strata_request, infectiousness_adjustments)
-      
-      # work out ageing flows (comes first so that the compartment names are still in the unstratified form)
-      if (stratification_name == "age") {
-        self$set_ageing_rates(strata_names, report)
-      }
     },
     
     # __________
@@ -851,7 +851,7 @@ StratifiedModel <- R6Class(
     },    
     
     # stratify the approach to universal, population-wide deaths (which can be made to vary by stratum)
-    stratify_universal_death_rate = function(stratification_name, strata_names, adjustment_requests, report) {
+    stratify_universal_death_rate = function(stratification_name, strata_names, adjustment_requests) {
       
       # take each parameter that refers to the universal death rate and adjust it for each stratum according to user request
       for (parameter in names(self$parameters)) {
@@ -913,10 +913,9 @@ StratifiedModel <- R6Class(
         end_age <- strata_names[stratum_number + 1]
         ageing_parameter_name <- paste("ageing", as.character(start_age), "to", as.character(end_age), sep="")
         ageing_rate <- 1 / (end_age - start_age)
+        self$output_to_user(paste("ageing rate from age group", start_age, "to", end_age, "is", round(ageing_rate, self$reporting_sigfigs)))
         self$parameters[ageing_parameter_name] <- ageing_rate
         for (compartment in names(self$compartment_values)) {
-          tempName    = str_split(compartment, 'X')
-          compartment = paste(tempName[[1]][1],'X', tempName[[1]][2], sep="")
           self$transition_flows <- 
             rbind(self$transition_flows, 
                   data.frame(type="standard_flows", parameter=ageing_parameter_name, 
@@ -924,8 +923,6 @@ StratifiedModel <- R6Class(
                              to=create_stratified_name(compartment, "age", end_age),
                              implement=TRUE, stringsAsFactors=FALSE))
         }
-        self$transition_flows = unique(self$transition_flows)
-        self$output_to_user(paste("ageing rate from age group", start_age, "to", end_age, "is", round(ageing_rate, self$reporting_sigfigs)))
       }
     },
 
