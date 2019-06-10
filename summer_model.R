@@ -1051,6 +1051,9 @@ StratifiedModel <- R6Class(
           # heterogeneous infectiousness adjustment
           if (self$heterogeneous_infectiousness) {
             for (adjustment in names(self$infectiousness_adjustments)) {
+              print(compartment)
+              print(adjustment)
+              
               if (grepl(adjustment, compartment)) {
                 infectiousness_modifier <- self$infectiousness_adjustments[[adjustment]]
               }
