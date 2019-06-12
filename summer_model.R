@@ -369,13 +369,13 @@ EpiModel <- R6Class(
     # simply add a flow to the data frame storing the flows
     add_transition_flow = function(flow) {
       self$transition_flows <- rbind(self$transition_flows, data.frame(type=flow[1], parameter=as.character(flow[2]), from=flow[3], to=flow[4], 
-                                                                       implement=TRUE, stringsAsFactors=FALSE))
+                                                                       implement=0, stringsAsFactors=FALSE))
     },
     
     # similarly for compartment-specific death flows    
     add_death_flow = function(flow) {
       self$death_flows <- rbind(self$death_flows, data.frame(type=flow[1], parameter=as.character(flow[2]), from=flow[3],
-                                                             implement=TRUE, stringsAsFactors=FALSE))
+                                                             implement=0, stringsAsFactors=FALSE))
     },
     
     # __________
@@ -436,7 +436,7 @@ EpiModel <- R6Class(
     
     # add fixed or infection-related flow to odes
     apply_transition_flows = function(ode_equations, compartment_values, time) {
-      for (f in which(self$transition_flows$implement)) {
+      for (f in which(self$transition_flows$implement == length(self$strata))) {
         flow <- self$transition_flows[f,]
         
         # find adjusted parameter value
@@ -791,14 +791,15 @@ StratifiedModel <- R6Class(
     
     # stratify flows depending on whether inflow, outflow or both need replication
     stratify_transition_flows = function(stratification_name, strata_names, adjustment_requests, report) {
-      for (flow in which(self$transition_flows$implement)) {
+      for (flow in which((self$transition_flows$implement == length(self$strata)-1))) {
         self$add_stratified_flows(flow, stratification_name, strata_names, 
                                   find_stem(self$transition_flows$from[flow]) %in% self$compartment_types_to_stratify,
                                   find_stem(self$transition_flows$to[flow]) %in% self$compartment_types_to_stratify,
                                   adjustment_requests)
       }
       self$output_to_user("stratified transition flows matrix:")
-      self$output_to_user(self$transition_flows)
+      #write.csv(self$transition_flows, file = 'transitions.csv')
+      #self$output_to_user(self$transition_flows)
     },
     
     # stratify entry/recruitment/birth flows
@@ -832,7 +833,7 @@ StratifiedModel <- R6Class(
     
     # add compartment-specific death flows to death data frame
     stratify_death_flows = function(stratification_name, strata_names, adjustment_requests) {
-      for (flow in which(self$death_flows$implement)) {
+      for (flow in which(self$death_flows$implement == length(self$strata) -1)) {
         if (find_stem(self$death_flows$from[flow]) %in% self$compartment_types_to_stratify) {
           for (stratum in strata_names) {
             parameter_name <- self$add_adjusted_parameter(self$death_flows$parameter[flow], stratification_name, stratum, adjustment_requests)
@@ -843,8 +844,8 @@ StratifiedModel <- R6Class(
                                       data.frame(type=self$death_flows$type[flow], 
                                                  parameter=parameter_name, 
                                                  from=create_stratified_name(self$death_flows$from[flow], stratification_name, stratum), 
-                                                 implement=TRUE, stringsAsFactors=FALSE))
-            self$death_flows$implement[flow] <- FALSE
+                                                 implement=length(self$strata), stringsAsFactors=FALSE))
+            self$death_flows$implement[flow] <- 0
           }
         }
       }
@@ -921,14 +922,13 @@ StratifiedModel <- R6Class(
                   data.frame(type="standard_flows", parameter=ageing_parameter_name, 
                              from=create_stratified_name(compartment, "age", start_age),
                              to=create_stratified_name(compartment, "age", end_age),
-                             implement=TRUE, stringsAsFactors=FALSE))
+                             implement=length(self$strata), stringsAsFactors=FALSE))
         }
       }
     },
 
     # add additional stratified flow to flow data frame
     add_stratified_flows = function(flow, stratification_name, strata_names, stratify_from, stratify_to, adjustment_requests) {
-      
       if (stratify_from | stratify_to) {
         self$output_to_user(paste("for flow from", self$transition_flows$from[flow], "to", self$transition_flows$to[flow], "in stratification", stratification_name))
         
@@ -958,11 +958,11 @@ StratifiedModel <- R6Class(
           
           # add the new flow
           self$transition_flows <- rbind(self$transition_flows,data.frame(
-            parameter=parameter_name, from=from_compartment, to=to_compartment, implement=TRUE, type=self$transition_flows$type[flow]))
+            parameter=parameter_name, from=from_compartment, to=to_compartment, implement=length(self$strata), type=self$transition_flows$type[flow]))
         }
         
         # remove old flow
-        self$transition_flows$implement[flow] <- FALSE
+        self$transition_flows$implement[flow] <- 0
       }
     },
     
@@ -983,15 +983,15 @@ StratifiedModel <- R6Class(
       parameter_name
     },
 
-    # __________
+    
     # methods to be called during the process of model running
     
     # prior to integration commencing, work out what the components are of each parameter being implemented
     prepare_stratified_parameter_calculations = function() {
       
       # create list of all the parameters that we need to find the list of adjustments for
-      parameters_to_adjust <- c(self$transition_flows$parameter[self$transition_flows$implement],
-                                self$death_flows$parameter[self$death_flows$implement],
+      parameters_to_adjust <- c(self$transition_flows$parameter[which(self$transition_flows$implement == length(self$strata))],
+                                self$death_flows$parameter[which(self$death_flows$implement == length(self$strata))],
                                 "universal_death_rate")
       for (parameter in parameters_to_adjust) {
         self$find_parameter_components(parameter)
@@ -1189,7 +1189,7 @@ ModelInterpreter <- R6Class(
         input_nodes <- names(self$model$compartment_values)
         
         new_df <- self$model$transition_flows
-        type_of_flow <- new_df[which(new_df$implement == TRUE),]
+        type_of_flow <- new_df[which(new_df$implement == length(self$model$strata)),]
       } 
       else if (type == 'unstratified') {
         input_nodes <- self$model$compartment_types

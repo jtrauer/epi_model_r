@@ -7,3 +7,5 @@ for
 .suo
 .idea*
 *.pdf
+*.csv
+summerTest.Rproj
