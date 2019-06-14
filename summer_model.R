@@ -586,6 +586,12 @@ EpiModel <- R6Class(
     # need to split this out as a function in order to allow stratification later
     get_parameter_value = function(parameter, time) {
       self$find_parameter_value(parameter, time)
+    },
+    
+    #method to store output in SqliteDB
+    storeDB = function(){
+      connection <- dbConnect(SQLite(), "outputs.db")
+      dbWriteTable(connection, 'outputs', sir_model$outputs, overwrite=TRUE)
     }
   )
 )
