@@ -484,8 +484,9 @@ EpiModel <- R6Class(
     apply_compartment_death_flows = function(ode_equations, compartment_values, time) {
       for (f in seq(nrow(self$death_flows))) {
         flow <- self$death_flows[f,]
-        adjusted_parameter <- self$get_parameter_value(flow$parameter, time)
-        if (flow$implement) {
+        print(length(self$strata))
+        if (flow$implement == length(self$strata)) {
+          print("got here 2")
           from_compartment <- match(flow$from, names(self$compartment_values))
           net_flow <- adjusted_parameter * compartment_values[from_compartment]
           ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
