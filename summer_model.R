@@ -852,7 +852,7 @@ StratifiedModel <- R6Class(
                                                  parameter=parameter_name, 
                                                  from=create_stratified_name(self$death_flows$from[flow], stratification_name, stratum), 
                                                  implement=length(self$strata), stringsAsFactors=FALSE))
-            self$death_flows$implement[flow] <- 0
+            self$death_flows$implement[flow] <- length(self$strata) - 1
           }
         }
       }
@@ -969,7 +969,7 @@ StratifiedModel <- R6Class(
         }
         
         # remove old flow
-        self$transition_flows$implement[flow] <- 0
+        self$transition_flows$implement[flow] <- length(self$strata) - 1
       }
     },
     
@@ -1188,15 +1188,22 @@ ModelInterpreter <- R6Class(
     
     # creates a flowchart - stratified flowchart unless otherwise specified
     # parameters can also be presented unless otherwise specified
-    create_flowchart = function(type = 'stratified', parameters = TRUE) {
+    create_flowchart = function(type = 'stratified', strata = NULL, parameters = TRUE) {
       
       
       #Pick type of input into the function, depending on whether the type of flowchart is 
       if (type == 'stratified') {
+        if (is.null(strata)){
         input_nodes <- names(self$model$compartment_values)
-        
         new_df <- self$model$transition_flows
         type_of_flow <- new_df[which(new_df$implement == length(self$model$strata)),]
+        }
+        else{
+          new_df <- self$model$transition_flows
+          type_of_flow <- new_df[which(new_df$implement == strata),]
+          input_nodes <- unique(type_of_flow$from,type_of_flow$to) 
+        }
+        
       } 
       else if (type == 'unstratified') {
         input_nodes <- self$model$compartment_types
@@ -1257,6 +1264,7 @@ ModelInterpreter <- R6Class(
       connections <- ''
       
       #The pathway between nodes is populated from type_of_flow, as well as the parameters
+        
       
       for (row in seq(nrow(type_of_flow))) {
         if (type_of_flow$implement[[row]]) {
