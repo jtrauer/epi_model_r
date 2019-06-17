@@ -9,3 +9,4 @@ for
 *.pdf
 *.csv
 summerTest.Rproj
+outputs.db
