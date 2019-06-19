@@ -746,8 +746,32 @@ StratifiedModel <- R6Class(
       }
     },
 
+    # alternative approach to working out which parameters to overwrite - can put a capital W at the string's end
     alternative_adjustment_request = function(adjustment_requests) {
-      adjustment_requests
+      revised_adjustments <- list()
+      for (parameter in names(adjustment_requests)) {
+        revised_adjustments[[parameter]] <- list()
+        if ("overwrite" %in% adjustment_requests[[parameter]]) {
+          revised_adjustments[[parameter]]$overwrite <- adjustment_requests[[parameter]]$overwrite
+        }
+        else {
+          revised_adjustments[[parameter]]$overwrite <- c()
+        }
+        for (stratum in names(adjustment_requests[[parameter]])) {
+          if (stratum == "overwrite") {
+            next
+          }
+          else if (substr(stratum, nchar(stratum), nchar(stratum)) == "W") {
+            revised_adjustments[[parameter]][substr(stratum, 1, nchar(stratum) - 1)] <- adjustment_requests[[parameter]][[stratum]]
+            revised_adjustments[[parameter]]$overwrite <- c(revised_adjustments[[parameter]]$overwrite, substr(stratum, 1, nchar(stratum) - 1))
+          }
+          else {
+            revised_adjustments[[parameter]][[stratum]] <- adjustment_requests[[parameter]][[stratum]]
+          }
+        }
+        adjustment_requests[[parameter]] <- revised_adjustments[[parameter]]
+      }
+      revised_adjustments
     },
     
     # check parameter adjustments have been requested appropriately
