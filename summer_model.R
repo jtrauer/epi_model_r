@@ -640,7 +640,7 @@ StratifiedModel <- R6Class(
       self$stratify_compartments(stratification_name, strata_names, requested_proportions)
 
       # stratify the flows
-      self$stratify_transition_flows(stratification_name, strata_names, adjustment_requests, report)
+      self$stratify_transition_flows(stratification_name, strata_names, adjustment_requests)
       self$stratify_entry_flows(stratification_name, strata_names, requested_proportions)
       if (nrow(self$death_flows) > 0) {
         self$stratify_death_flows(stratification_name, strata_names, adjustment_requests)
@@ -675,8 +675,9 @@ StratifiedModel <- R6Class(
       # record stratification as attribute to model, find the names to apply strata and check compartment and parameter requests
       self$strata <- c(self$strata, stratification_name)
       strata_names <- self$find_strata_names_from_input(strata_request)
+      adjustment_requests <- self$alternative_adjustment_request(adjustment_requests)
       self$check_compartment_request(compartment_types_to_stratify)
-      self$check_parameter_adjustment_requests(adjustment_requests, strata_names)
+      adjustment_requests <- self$check_parameter_adjustment_requests(adjustment_requests, strata_names)
       strata_names
     },
     
@@ -745,6 +746,10 @@ StratifiedModel <- R6Class(
       }
     },
 
+    alternative_adjustment_request = function(adjustment_requests) {
+      adjustment_requests
+    },
+    
     # check parameter adjustments have been requested appropriately
     check_parameter_adjustment_requests = function(adjustment_requests, strata_names) {
       for (parameter in names(adjustment_requests)) {
@@ -797,7 +802,7 @@ StratifiedModel <- R6Class(
     },
     
     # stratify flows depending on whether inflow, outflow or both need replication
-    stratify_transition_flows = function(stratification_name, strata_names, adjustment_requests, report) {
+    stratify_transition_flows = function(stratification_name, strata_names, adjustment_requests) {
       for (flow in which((self$transition_flows$implement == length(self$strata)-1))) {
         self$add_stratified_flows(flow, stratification_name, strata_names, 
                                   find_stem(self$transition_flows$from[flow]) %in% self$compartment_types_to_stratify,

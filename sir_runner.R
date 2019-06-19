@@ -17,10 +17,10 @@ sir_model <- StratifiedModel$new(seq(from=0, to=60/365, by=1/365),
                           list(c("standard_flows", "recovery", "infectious", "recovered"),
                                c("infection_density", "beta", "susceptible", "infectious"),
                                c("compartment_death", "infect_death", "infectious")),
-                          report_progress=TRUE)
+                          report_progress=FALSE)
 sir_model$stratify("hiv", c("negative", "positive"), c(),
-                    list(recovery=list(adjustments=list("negative"=0.7, "positive"=0.5)),
-                         infect_death=list(adjustments=list("negative"=0.5))),
+                    list(recovery=list("negative"=0.7, "positive"=0.5),
+                         infect_death=list("negative"=0.5)),
                   list("negative"=0.6, "positive"=0.4), report = FALSE)
 
 # sir_model$stratify("age", c(3, 2, 1), c(),
@@ -28,12 +28,12 @@ sir_model$stratify("hiv", c("negative", "positive"), c(),
 #                          recoveryXhiv_positive=list(adjustments=list("1"=2, "2"=365/13*.5, "3"=1), overwrite=c("2")),
 #                          universal_death_rate=list(adjustments=list("1"=1, "2"=2, "3"=3))), report=TRUE)
 
-sir_model$stratify("age", c(3, 2, 1), c(), report = TRUE)
+# sir_model$stratify("age", c(3, 2, 1), c(), report = TRUE)
 # sir_model$add_time_variant("recovery", create_arbitrary_time_variant_function)
 
 sir_model$run_model()
 
 interpreter <- ModelInterpreter$new(sir_model)
 interpreter$plot_compartment("infectious")
-interpreter$create_flowchart()
+# interpreter$create_flowchart()
 
