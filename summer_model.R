@@ -777,14 +777,14 @@ StratifiedModel <- R6Class(
     # check parameter adjustments have been requested appropriately
     check_parameter_adjustment_requests = function(adjustment_requests, strata_names) {
       for (parameter in names(adjustment_requests)) {
-        for (requested_stratum in names(adjustment_requests[[parameter]]$adjustments)) {
+        for (requested_stratum in names(adjustment_requests[[parameter]])) {
           if (!requested_stratum %in% as.character(strata_names)) {
             stop(paste("stratum", requested_stratum, "requested in adjustments but unavailable"))
           }
         }
         for (stratum in as.character(strata_names)) {
-          if (!stratum %in% names(adjustment_requests[[parameter]]$adjustments)) {
-            adjustment_requests[[parameter]]$adjustments[stratum] <- 1
+          if (!stratum %in% names(adjustment_requests[[parameter]])) {
+            adjustment_requests[[parameter]][[stratum]] <- 1
             self$output_to_user(paste("no request made for adjustment to", parameter, "within stratum", stratum, "so using parent value by default"))
           }
         }
@@ -854,8 +854,8 @@ StratifiedModel <- R6Class(
             entry_fractions[entry_fraction_name] <- 0
             next
           }
-          else if (stratum %in% names(requested_proportions$adjustments)) {
-            entry_fractions[entry_fraction_name] <- requested_proportions$adjustments[[stratum]]
+          else if (stratum %in% names(requested_proportions)) {
+            entry_fractions[entry_fraction_name] <- requested_proportions[[stratum]]
             self$output_to_user(paste("assigning specified proportion of starting population to", stratum))
           }
           else {
@@ -907,11 +907,12 @@ StratifiedModel <- R6Class(
       # find the adjustment request that is an extension of the base parameter type being considered
       for (parameter_request in names(adjustment_requests)) {
         if (startsWith(unadjusted_parameter, parameter_request)) {
+          self$output_to_user(paste("modifying", unadjusted_parameter, "for", stratum, "of", stratification_name))
           parameter_adjustment_name <- create_stratified_name(unadjusted_parameter, stratification_name, stratum)
           
           # implement user request if requested (note that otherwise parameter will now be left out and assumed to be 1 during integration)
-          if (stratum %in% names(adjustment_requests[[parameter_request]]$adjustments)) {
-            self$parameters[parameter_adjustment_name] <- adjustment_requests[[parameter_request]]$adjustments[as.character(stratum)]
+          if (stratum %in% names(adjustment_requests[[parameter_request]])) {
+            self$parameters[parameter_adjustment_name] <- adjustment_requests[[parameter_request]][[stratum]]
           }
           
           # overwrite parameters higher up the tree by listing which ones to be overwritten
@@ -1019,7 +1020,7 @@ StratifiedModel <- R6Class(
       parameter_name
     },
 
-    
+    # __________
     # methods to be called during the process of model running
     
     # prior to integration commencing, work out what the components are of each parameter being implemented
