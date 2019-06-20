@@ -14,21 +14,22 @@ add_vtp_latency_parameters = function(.parameters, change_time_unit=365.25) {
 
 get_age_specific_latency_parameters = function(.parameters, change_time_unit=365.25) {
   # get the age-specific latency parameters estimated by Ragonnet et al
-  age_stratified_parameters = list(early_progression=c("0"=6.6e-3, "5"=2.7e-3, "15"=2.7e-4),
-                                   stabilisation=c("0"=1.2e-2, "5"=1.2e-2, "15"=5.4e-3),
-                                   late_progression=c("0"=1.9e-11, "5"=6.4e-6, "15"=3.3e-6))
+  age_stratified_parameters = list(early_progression=list("0W"=6.6e-3, "5W"=2.7e-3, "15W"=2.7e-4),
+                                   stabilisation=list("0W"=1.2e-2, "5W"=1.2e-2, "15W"=5.4e-3),
+                                   late_progression=list("0W"=1.9e-11, "5W"=6.4e-6, "15W"=3.3e-6))
   return(age_stratified_parameters)
 }
-
 
 get_all_age_specific_latency_parameters = function(change_time_unit=365.25) {
   # collate all the latency parameters together from the previous function
   age_specific_parameters <- get_age_specific_latency_parameters()
   revised_parameters <- list()
   for (parameter in names(age_specific_parameters)) {
-    revised_parameters[[parameter]] <- list(adjustments=c(), overwrite=names(age_specific_parameters[[parameter]]))
-    for (age in names(age_specific_parameters[[parameter]]))
-      revised_parameters[[parameter]]$adjustments[[age]] <- age_specific_parameters[[parameter]][[age]] * change_time_unit
+    for (stratum in names(age_specific_parameters[[parameter]])) {
+      if (stratum != "overwrite") {
+        revised_parameters[[parameter]][[stratum]] <- age_specific_parameters[[parameter]][[stratum]] * change_time_unit
+      }
+    }
   }
   return(revised_parameters)
 }
@@ -62,7 +63,7 @@ tb_model <- StratifiedModel$new(
   parameters, flows, birth_approach="replace_deaths")
 
 
-tb_model$stratify("age", c(5, 15), c(), get_all_age_specific_latency_parameters())
+tb_model$stratify("age", c(5, 15), c(), get_age_specific_latency_parameters(), report=FALSE)
 
 tb_model$run_model()
 

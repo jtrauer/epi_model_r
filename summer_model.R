@@ -778,7 +778,7 @@ StratifiedModel <- R6Class(
     check_parameter_adjustment_requests = function(adjustment_requests, strata_names) {
       for (parameter in names(adjustment_requests)) {
         for (requested_stratum in names(adjustment_requests[[parameter]])) {
-          if (!requested_stratum %in% as.character(strata_names)) {
+          if (!requested_stratum %in% as.character(strata_names) & requested_stratum != "overwrite") {
             stop(paste("stratum", requested_stratum, "requested in adjustments but unavailable"))
           }
         }
@@ -912,11 +912,11 @@ StratifiedModel <- R6Class(
           
           # implement user request if requested (note that otherwise parameter will now be left out and assumed to be 1 during integration)
           if (stratum %in% names(adjustment_requests[[parameter_request]])) {
-            self$parameters[parameter_adjustment_name] <- adjustment_requests[[parameter_request]][[stratum]]
+            self$parameters[parameter_adjustment_name] <- adjustment_requests[[parameter_request]][[as.character(stratum)]]
           }
           
           # overwrite parameters higher up the tree by listing which ones to be overwritten
-          if (stratum %in% adjustment_requests[[parameter_request]]$overwrite) {
+          if (stratum %in% adjustment_requests[[parameter_request]]) {
             self$overwrite_parameters <- c(self$overwrite_parameters, parameter_adjustment_name)
           }
           return(parameter_adjustment_name)
