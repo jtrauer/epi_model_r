@@ -2,6 +2,7 @@
 import summer_model
 import matplotlib.pyplot
 import os
+import numpy
 
 
 def add_vtp_latency_parameters(parameters_, change_time_unit=365.25):
@@ -17,22 +18,33 @@ def add_vtp_latency_parameters(parameters_, change_time_unit=365.25):
     return parameters_
 
 
-def get_age_specific_latency_parameters(parameter, unit_change=365.25):
+def provide_age_specific_latency_parameters():
     """
-    get the age-specific latency parameters estimated by Ragonnet et al
+    simply list out all the latency progression parameters from Ragonnet et al as a dictionary
     """
-    age_stratified_parameters = \
-        {"early_progression": {"0W": 6.6e-3, "5W": 2.7e-3, "15W": 2.7e-4},
-         "stabilisation": {"0W": 1.2e-2, "5W": 1.2e-2, "15W": 5.4e-3},
-         "late_progression": {"0W": 1.9e-11, "5W": 6.4e-6, "15W": 3.3e-6}}
-    return {key: value * unit_change for key, value in age_stratified_parameters[parameter].items()}
+    return {"early_progression": {0: 6.6e-3, 5: 2.7e-3, 15: 2.7e-4},
+            "stabilisation": {0: 1.2e-2, 5: 1.2e-2, 15: 5.4e-3},
+            "late_progression": {0: 1.9e-11, 5: 6.4e-6, 15: 3.3e-6}}
+
+
+def get_adapted_age_specific_latency_parameters(parameter, unit_change=365.25, add_w=True):
+    """
+    adapt the latency parameters from the previous function according to whether they are needed as by year rather than
+    by day and whether we want the "W" string in front to over-write the previous values up the hierarchy
+    """
+    age_stratified_parameters = provide_age_specific_latency_parameters()
+    adapted_parameters = {}
+    for age_group in age_stratified_parameters[parameter]:
+        age_group_string = str(age_group) + "W" if add_w else str(age_group)
+        adapted_parameters[age_group_string] = age_stratified_parameters[parameter][age_group] * unit_change
+    return adapted_parameters
 
 
 def get_all_age_specific_latency_parameters(parameters_=("early_progression", "stabilisation", "late_progression")):
     """
     collate all the latency parameters together from the previous function
     """
-    return {parameter: get_age_specific_latency_parameters(parameter) for parameter in parameters_}
+    return {parameter: get_adapted_age_specific_latency_parameters(parameter) for parameter in parameters_}
 
 
 def add_standard_latency_flows(flows_):
@@ -136,3 +148,6 @@ if __name__ == "__main__":
     matplotlib.pyplot.xlim((1950., 2010.))
     matplotlib.pyplot.ylim((0.0, 2000.0))
     # matplotlib.pyplot.show()
+
+
+

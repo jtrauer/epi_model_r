@@ -8,5 +8,6 @@ for
 .idea*
 *.pdf
 *.csv
+*.pyc
 summerTest.Rproj
 outputs.db
