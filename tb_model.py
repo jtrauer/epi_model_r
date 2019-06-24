@@ -51,27 +51,6 @@ def add_standard_latency_flows(flows_):
     return flows_
 
 
-def sinusoidal_scaling_function(start_time, baseline_value, end_time, final_value):
-    """
-    with a view to implementing scale-up functions over time, use the cosine function to produce smooth scale-up
-    functions from one point to another
-    """
-    def sinusoidal_function(x):
-        if not isinstance(x, float):
-            raise ValueError("value fed into scaling function not a float")
-        elif start_time > end_time:
-            raise ValueError("start time is later than end time")
-        elif x < start_time:
-            return baseline_value
-        elif start_time < x < end_time:
-            return baseline_value + \
-                   (final_value - baseline_value) * \
-                   (0.5 - 0.5 * numpy.cos((x - start_time) * numpy.pi / (end_time - start_time)))
-        else:
-            return final_value
-    return sinusoidal_function
-
-
 def convert_competing_proportion_to_rate(competing_flows):
     """
     convert a proportion to a rate dependent on the other flows coming out of a compartment
@@ -121,8 +100,11 @@ if __name__ == "__main__":
 
     age_breakpoints = [0, 5, 15]
 
+    age_infectiousness = get_parameter_dict_from_function(logistic_scaling_function(15.0), age_breakpoints)
+
     tb_model.stratify("age", age_breakpoints, [],
                       adjustment_requests=get_adapted_age_parameters(age_breakpoints),
+                      # infectiousness_adjustments=age_infectiousness,
                       report=False)
     tb_model.run_model()
 

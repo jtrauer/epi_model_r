@@ -128,6 +128,39 @@ def create_step_function_from_dict(input_dict):
     return step_function
 
 
+def sinusoidal_scaling_function(start_time, baseline_value, end_time, final_value):
+    """
+    with a view to implementing scale-up functions over time, use the cosine function to produce smooth scale-up
+    functions from one point to another
+    """
+    def sinusoidal_function(x):
+        if not isinstance(x, float):
+            raise ValueError("value fed into scaling function not a float")
+        elif start_time > end_time:
+            raise ValueError("start time is later than end time")
+        elif x < start_time:
+            return baseline_value
+        elif start_time <= x <= end_time:
+            return baseline_value + \
+                   (final_value - baseline_value) * \
+                   (0.5 - 0.5 * numpy.cos((x - start_time) * numpy.pi / (end_time - start_time)))
+        else:
+            return final_value
+    return sinusoidal_function
+
+
+def logistic_scaling_function(parameter):
+    """
+    a specific sigmoidal form of function that scales up from zero to one around the point of parameter
+    won't be useful in all situations and is specifically for age-specific infectiousness - should be the same as in
+    Romain's BMC Medicine manuscript
+    """
+    def sigmoidal_function(x):
+        return 1.0 - 1.0 / (1.0 + numpy.exp(-(parameter - x)))
+
+    return sigmoidal_function
+
+
 def get_average_value_function(input_function, start_value, end_value):
     """
     use numeric integration to find the average value of a function between two extremes
@@ -146,7 +179,7 @@ def get_parameter_dict_from_function(input_function, breakpoints, upper_value=10
     for param_breakpoints in range(len(breakpoints)):
         param_values.append(get_average_value_function(
             input_function, breakpoints_with_upper[param_breakpoints], breakpoints_with_upper[param_breakpoints + 1]))
-    return {key: value for key, value in zip(breakpoints, param_values)}
+    return {str(key): value for key, value in zip(breakpoints, param_values)}
 
 
 def create_flowchart(model_object, strata=-1, stratify=True, name="flow_chart"):
