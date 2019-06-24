@@ -3,6 +3,8 @@ import summer_model
 import matplotlib.pyplot
 import os
 import numpy
+import scipy.integrate
+import copy
 
 
 def add_vtp_latency_parameters(parameters_, change_time_unit=365.25):
@@ -27,17 +29,49 @@ def provide_age_specific_latency_parameters():
             "late_progression": {0: 1.9e-11, 5: 6.4e-6, 15: 3.3e-6}}
 
 
-def get_adapted_age_specific_latency_parameters(parameter, unit_change=365.25, add_w=True):
+def get_average_value_function(input_function, start_value, end_value):
     """
-    adapt the latency parameters from the previous function according to whether they are needed as by year rather than
+    use numeric integration to find the average value of a function between two extremes
+    """
+    return scipy.integrate.quad(input_function, start_value, end_value)[0] / (end_value - start_value)
+
+
+def get_parameter_dict_from_function(input_function, breakpoints, upper_value=100.0):
+    """
+
+    """
+    breakpoints_with_upper = copy.copy(breakpoints)
+    breakpoints_with_upper.append(upper_value)
+    param_values = []
+    for param_breakpoints in range(len(breakpoints)):
+        param_values.append(get_average_value_function(
+            input_function, breakpoints_with_upper[param_breakpoints], breakpoints_with_upper[param_breakpoints + 1]))
+    return {key: value for key, value in zip(breakpoints, param_values)}
+
+
+def get_adapted_age_specific_latency_parameters(parameter_, unit_change=365.25, add_w=True):
+    """
+    adapt the latency parameters from the earlier function according to whether they are needed as by year rather than
     by day and whether we want the "W" string in front to over-write the previous values up the hierarchy
     """
-    age_stratified_parameters = provide_age_specific_latency_parameters()
     adapted_parameters = {}
-    for age_group in age_stratified_parameters[parameter]:
+    for age_group in parameter_:
         age_group_string = str(age_group) + "W" if add_w else str(age_group)
-        adapted_parameters[age_group_string] = age_stratified_parameters[parameter][age_group] * unit_change
+        adapted_parameters[age_group_string] = parameter_[age_group] * unit_change
     return adapted_parameters
+
+
+def get_adapted_age_parameters(
+        age_breakpoints, parameter_names=("early_progression", "stabilisation", "late_progression")):
+    """
+    get age-specific parameters adapted to any specification of age breakpoints
+    """
+    adapted_parameter_dict = {}
+    for parameter in parameter_names:
+        adapted_parameter_dict[parameter] = \
+            get_adapted_age_specific_latency_parameters(get_parameter_dict_from_function(
+                create_step_function_from_dict(provide_age_specific_latency_parameters()[parameter]), age_breakpoints))
+    return adapted_parameter_dict
 
 
 def create_step_function_from_dict(input_dict):
@@ -60,11 +94,15 @@ def create_step_function_from_dict(input_dict):
     return step_function
 
 
-def get_all_age_specific_latency_parameters(parameters_=("early_progression", "stabilisation", "late_progression")):
+def get_all_age_specific_latency_parameters():
     """
     collate all the latency parameters together from the previous function
     """
-    return {parameter: get_adapted_age_specific_latency_parameters(parameter) for parameter in parameters_}
+    output_dict = {}
+    age_stratified_parameters = provide_age_specific_latency_parameters()
+    for parameter_ in age_stratified_parameters:
+        output_dict[parameter_] = get_adapted_age_specific_latency_parameters(age_stratified_parameters[parameter_])
+    return output_dict
 
 
 def add_standard_latency_flows(flows_):
@@ -146,13 +184,14 @@ if __name__ == "__main__":
 
     tb_model.time_variants["case_detection"] = detect_rate
 
-    print(get_all_age_specific_latency_parameters())
-    tb_model.stratify("age", [5, 15], [],
-                      adjustment_requests=get_all_age_specific_latency_parameters(),
+    age_breakpoints = [0, 5, 15]
+
+    tb_model.stratify("age", age_breakpoints, [],
+                      adjustment_requests=get_adapted_age_parameters(age_breakpoints),
                       report=False)
     tb_model.run_model()
 
-    print(os.getcwd())
+    # print(os.getcwd())
     # tb_model.transition_flows.to_csv("_.csv")
 
     # get outputs
@@ -167,15 +206,7 @@ if __name__ == "__main__":
 
     matplotlib.pyplot.xlim((1950., 2010.))
     matplotlib.pyplot.ylim((0.0, 2000.0))
-    # matplotlib.pyplot.show()
+    matplotlib.pyplot.show()
 
-    parameters = provide_age_specific_latency_parameters()
-    for parameter in parameters:
-        step_function = create_step_function_from_dict(parameters[parameter])
-
-        ages = list(numpy.linspace(0., 50., 20))
-        parameter_values = [step_function(age) for age in ages]
-        # matplotlib.pyplot.plot(ages, parameter_values)
-        # matplotlib.pyplot.show()
 
 
