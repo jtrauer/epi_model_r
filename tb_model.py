@@ -1,5 +1,5 @@
 
-import summer_model
+from summer_model import *
 import matplotlib.pyplot
 import os
 import numpy
@@ -7,17 +7,12 @@ import scipy.integrate
 import copy
 
 
-def add_vtp_latency_parameters(parameters_, change_time_unit=365.25):
+def provide_aggregated_latency_parameters():
     """
     function to add the latency parameters estimated by Ragonnet et al from our paper in Epidemics to the existing
     parameter dictionary
     """
-    vtp_latency_parameters = \
-        {"early_progression": 1.1e-3,
-         "stabilisation": 1.0e-2,
-         "late_progression": 5.5e-6}
-    parameters_.update({key: value * change_time_unit for key, value in vtp_latency_parameters.items()})
-    return parameters_
+    return {"early_progression": 1.1e-3, "stabilisation": 1.0e-2, "late_progression": 5.5e-6}
 
 
 def provide_age_specific_latency_parameters():
@@ -29,80 +24,20 @@ def provide_age_specific_latency_parameters():
             "late_progression": {0: 1.9e-11, 5: 6.4e-6, 15: 3.3e-6}}
 
 
-def get_average_value_function(input_function, start_value, end_value):
-    """
-    use numeric integration to find the average value of a function between two extremes
-    """
-    return scipy.integrate.quad(input_function, start_value, end_value)[0] / (end_value - start_value)
-
-
-def get_parameter_dict_from_function(input_function, breakpoints, upper_value=100.0):
-    """
-
-    """
-    breakpoints_with_upper = copy.copy(breakpoints)
-    breakpoints_with_upper.append(upper_value)
-    param_values = []
-    for param_breakpoints in range(len(breakpoints)):
-        param_values.append(get_average_value_function(
-            input_function, breakpoints_with_upper[param_breakpoints], breakpoints_with_upper[param_breakpoints + 1]))
-    return {key: value for key, value in zip(breakpoints, param_values)}
-
-
-def get_adapted_age_specific_latency_parameters(parameter_, unit_change=365.25, add_w=True):
-    """
-    adapt the latency parameters from the earlier function according to whether they are needed as by year rather than
-    by day and whether we want the "W" string in front to over-write the previous values up the hierarchy
-    """
-    adapted_parameters = {}
-    for age_group in parameter_:
-        age_group_string = str(age_group) + "W" if add_w else str(age_group)
-        adapted_parameters[age_group_string] = parameter_[age_group] * unit_change
-    return adapted_parameters
-
-
 def get_adapted_age_parameters(
-        age_breakpoints, parameter_names=("early_progression", "stabilisation", "late_progression")):
+        age_breakpoints_, parameter_names=("early_progression", "stabilisation", "late_progression")):
     """
     get age-specific parameters adapted to any specification of age breakpoints
     """
     adapted_parameter_dict = {}
     for parameter in parameter_names:
         adapted_parameter_dict[parameter] = \
-            get_adapted_age_specific_latency_parameters(get_parameter_dict_from_function(
-                create_step_function_from_dict(provide_age_specific_latency_parameters()[parameter]), age_breakpoints))
+            add_w_to_param_names(
+                change_parameter_unit(
+                    get_parameter_dict_from_function(
+                        create_step_function_from_dict(
+                            provide_age_specific_latency_parameters()[parameter]), age_breakpoints_)))
     return adapted_parameter_dict
-
-
-def create_step_function_from_dict(input_dict):
-    """
-    create a step function out of dictionary with numeric keys and values, where the keys determine the values of the
-    independent variable at which the steps between the output values occur
-    """
-    dict_keys = list(input_dict.keys())
-    dict_keys.sort()
-    dict_values = [input_dict[key] for key in dict_keys]
-
-    def step_function(argument):
-        if argument >= dict_keys[-1]:
-            return dict_values[-1]
-        else:
-            for key in range(len(dict_keys)):
-                if argument < dict_keys[key + 1]:
-                    return dict_values[key]
-
-    return step_function
-
-
-def get_all_age_specific_latency_parameters():
-    """
-    collate all the latency parameters together from the previous function
-    """
-    output_dict = {}
-    age_stratified_parameters = provide_age_specific_latency_parameters()
-    for parameter_ in age_stratified_parameters:
-        output_dict[parameter_] = get_adapted_age_specific_latency_parameters(age_stratified_parameters[parameter_])
-    return output_dict
 
 
 def add_standard_latency_flows(flows_):
@@ -162,7 +97,7 @@ if __name__ == "__main__":
          "infect_death": (1.0 - case_fatality_rate) / untreated_disease_duration,
          "universal_death_rate": 1.0 / 50.0,
          "case_detection": 0.0}
-    parameters = add_vtp_latency_parameters(parameters)
+    parameters.update(change_parameter_unit(provide_aggregated_latency_parameters()))
 
     times = numpy.linspace(1800., 2020.0, 201).tolist()
     flows = [{"type": "infection_frequency", "parameter": "beta", "origin": "susceptible", "to": "early_latent"},
@@ -171,7 +106,7 @@ if __name__ == "__main__":
              {"type": "compartment_death", "parameter": "infect_death", "origin": "infectious"}]
     flows = add_standard_latency_flows(flows)
 
-    tb_model = summer_model.StratifiedModel(
+    tb_model = StratifiedModel(
         times, ["susceptible", "early_latent", "late_latent", "infectious", "recovered"], {"infectious": 1e-3},
         parameters, flows, birth_approach="replace_deaths")
 

@@ -1,5 +1,5 @@
 import numpy
-from scipy.integrate import odeint, solve_ivp
+from scipy.integrate import odeint, solve_ivp, quad
 import matplotlib.pyplot
 import copy
 import pandas
@@ -91,6 +91,62 @@ def num_str(f):
     if abs_f > 5e-6:
         return "%.6f" % f
     return str(f)
+
+
+def add_w_to_param_names(parameter_dict):
+    """
+    add a W string to the end of the parameter name to indicate that we should over-write up the chain
+    """
+    return {str(age_group) + "W": value for age_group, value in parameter_dict.items()}
+
+
+def change_parameter_unit(parameter_dict, unit_change=365.25):
+    """
+    adapt the latency parameters from the earlier functions according to whether they are needed as by year rather than
+    by day
+    """
+    return {param_key: param_value * unit_change for param_key, param_value in parameter_dict.items()}
+
+
+def create_step_function_from_dict(input_dict):
+    """
+    create a step function out of dictionary with numeric keys and values, where the keys determine the values of the
+    independent variable at which the steps between the output values occur
+    """
+    dict_keys = list(input_dict.keys())
+    dict_keys.sort()
+    dict_values = [input_dict[key] for key in dict_keys]
+
+    def step_function(argument):
+        if argument >= dict_keys[-1]:
+            return dict_values[-1]
+        else:
+            for key in range(len(dict_keys)):
+                if argument < dict_keys[key + 1]:
+                    return dict_values[key]
+
+    return step_function
+
+
+def get_average_value_function(input_function, start_value, end_value):
+    """
+    use numeric integration to find the average value of a function between two extremes
+    """
+    return quad(input_function, start_value, end_value)[0] / (end_value - start_value)
+
+
+def get_parameter_dict_from_function(input_function, breakpoints, upper_value=100.0):
+    """
+    create a dictionary of parameter values from a continuous function, an arbitrary upper value and some breakpoints
+    within which to evaluate the function
+    """
+    breakpoints_with_upper = copy.copy(breakpoints)
+    breakpoints_with_upper.append(upper_value)
+    param_values = []
+    for param_breakpoints in range(len(breakpoints)):
+        param_values.append(get_average_value_function(
+            input_function, breakpoints_with_upper[param_breakpoints], breakpoints_with_upper[param_breakpoints + 1]))
+    return {key: value for key, value in zip(breakpoints, param_values)}
 
 
 def create_flowchart(model_object, strata=-1, stratify=True, name="flow_chart"):
