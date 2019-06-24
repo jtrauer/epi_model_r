@@ -99,19 +99,22 @@ if __name__ == "__main__":
     tb_model.time_variants["case_detection"] = detect_rate
 
     age_breakpoints = [0, 5, 15]
-
     age_infectiousness = get_parameter_dict_from_function(logistic_scaling_function(15.0), age_breakpoints)
+    #
+    # x_values = numpy.linspace(0.0, 40.0, 1e3)
+    # y_values = [logistic_scaling_function(15.0)(x) for x in x_values]
+    # matplotlib.pyplot.plot(x_values, y_values)
+    # matplotlib.pyplot.savefig("age_infectiousness_scaling")
+
 
     tb_model.stratify("age", age_breakpoints, [],
                       adjustment_requests=get_adapted_age_parameters(age_breakpoints),
-                      # infectiousness_adjustments=age_infectiousness,
+                      infectiousness_adjustments=age_infectiousness,
                       report=False)
     tb_model.run_model()
 
-    # print(os.getcwd())
-    # tb_model.transition_flows.to_csv("_.csv")
 
-    # get outputs
+    # get outputs - from here on the code is essentially rubbish - will be using PowerBI to view outputs
     infectious_population = tb_model.outputs[:, tb_model.compartment_names.index("infectiousXage_0")] + \
                             tb_model.outputs[:, tb_model.compartment_names.index("infectiousXage_5")] + \
                             tb_model.outputs[:, tb_model.compartment_names.index("infectiousXage_15")]
