@@ -1,10 +1,12 @@
 
 from summer_model import *
+from db import InputDB
 import matplotlib.pyplot
 import os
 import numpy
 import scipy.integrate
 import copy
+from curve import scale_up_function
 
 
 def provide_aggregated_latency_parameters():
@@ -92,7 +94,16 @@ if __name__ == "__main__":
     tb_model.add_transition_flow(
         {"type": "standard_flows", "parameter": "case_detection", "origin": "infectious", "to": "recovered"})
 
-    cdr_scaleup = sinusoidal_scaling_function(1950.0, 0.0, 2010.0, 0.6)
+    # loading time-variant case detection rate
+    input_database = InputDB(report=True)
+    res = input_database.db_query("gtb_2015", column="c_cdr", is_filter="country", value="Mongolia")
+    cdr_mongolia = res["c_cdr"].values / 1e2
+    cdr_mongolia = numpy.concatenate(([0.0], cdr_mongolia))
+    res = input_database.db_query("gtb_2015", column="year", is_filter="country", value="Mongolia")
+    cdr_mongolia_year = res["year"].values
+    cdr_mongolia_year = numpy.concatenate(([1950.], cdr_mongolia_year))
+    cdr_scaleup = scale_up_function(cdr_mongolia_year, cdr_mongolia, smoothness=0.2, method=5)
+
     prop_to_rate = convert_competing_proportion_to_rate(1.0 / untreated_disease_duration)
     detect_rate = return_function_of_function(cdr_scaleup, prop_to_rate)
 
@@ -106,6 +117,9 @@ if __name__ == "__main__":
     # matplotlib.pyplot.plot(x_values, y_values)
     # matplotlib.pyplot.savefig("age_infectiousness_scaling")
 
+    # cdr_values = [cdr_scaleup(x) for x in times]
+    # matplotlib.pyplot.plot(times, cdr_values)
+    # matplotlib.pyplot.savefig("mongolia_cdr_scaling")
 
     tb_model.stratify("age", age_breakpoints, [],
                       adjustment_requests=get_adapted_age_parameters(age_breakpoints),
@@ -113,20 +127,15 @@ if __name__ == "__main__":
                       report=False)
     tb_model.run_model()
 
-
     # get outputs - from here on the code is essentially rubbish - will be using PowerBI to view outputs
     infectious_population = tb_model.outputs[:, tb_model.compartment_names.index("infectiousXage_0")] + \
                             tb_model.outputs[:, tb_model.compartment_names.index("infectiousXage_5")] + \
                             tb_model.outputs[:, tb_model.compartment_names.index("infectiousXage_15")]
 
     matplotlib.pyplot.plot(times, infectious_population * 1e5)
-    # print(infectious_population * 1e5)
-
-    # tb_model.death_flows.to_csv("tb_model_deaths.csv")
-
-    matplotlib.pyplot.xlim((1950., 2010.))
-    matplotlib.pyplot.ylim((0.0, 2000.0))
-    matplotlib.pyplot.show()
+    matplotlib.pyplot.xlim((1980., 2010.))
+    matplotlib.pyplot.ylim((0.0, 500.0))
+    matplotlib.pyplot.savefig("mongolia_cdr_output")
 
 
 

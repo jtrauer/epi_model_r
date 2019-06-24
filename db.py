@@ -4,6 +4,7 @@ import pandas as pd
 import glob
 import numpy as np
 import matplotlib.pyplot as plt
+from curve import scale_up_function
 
 
 class InputDB:
@@ -89,18 +90,18 @@ if __name__ == "__main__":
     # input_database.load_xlsx()
     # input_database.load_csv()
 
-    res = input.db_query("gtb_2015", column='c_cdr', filter="country", value="Mongolia")
-    cdr_mongolia = res['c_cdr'].values
-    res = input.db_query("gtb_2015", column='year', filter="country", value="Mongolia")
-    cdr_mongolia_year = res['year'].values
+    res = input_database.db_query("gtb_2015", column="c_cdr", is_filter="country", value="Mongolia")
+    cdr_mongolia = res["c_cdr"].values
+    res = input_database.db_query("gtb_2015", column="year", is_filter="country", value="Mongolia")
+    cdr_mongolia_year = res["year"].values
     spl = scale_up_function(cdr_mongolia_year, cdr_mongolia, smoothness=0.2, method=5)
     times = list(np.linspace(1950, 2014, 1e3))
     scaled_up_cdr = []
     for t in times:
         scaled_up_cdr.append(spl(t))
     # print(scaled_up_cdr)
-    plt.plot(cdr_mongolia_year, cdr_mongolia, 'ro', times, scaled_up_cdr)
-    plt.title('CDR from GTB 2015')
+    plt.plot(cdr_mongolia_year, cdr_mongolia, "ro", times, scaled_up_cdr)
+    plt.title("CDR from GTB 2015")
     plt.show()
 
     # res = input_database.db_query("bcg_2015", is_filter="Cname", value="Bhutan")

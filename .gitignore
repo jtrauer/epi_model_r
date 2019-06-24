@@ -9,5 +9,7 @@ for
 *.pdf
 *.csv
 *.pyc
+*.png
+*.db
 summerTest.Rproj
 outputs.db
