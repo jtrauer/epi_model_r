@@ -40,6 +40,26 @@ def get_adapted_age_specific_latency_parameters(parameter, unit_change=365.25, a
     return adapted_parameters
 
 
+def create_step_function_from_dict(input_dict):
+    """
+    create a step function out of dictionary with numeric keys and values, where the keys determine the values of the
+    independent variable at which the steps between the output values occur
+    """
+    dict_keys = list(input_dict.keys())
+    dict_keys.sort()
+    dict_values = [input_dict[key] for key in dict_keys]
+
+    def step_function(argument):
+        if argument >= dict_keys[-1]:
+            return dict_values[-1]
+        else:
+            for key in range(len(dict_keys)):
+                if argument < dict_keys[key + 1]:
+                    return dict_values[key]
+
+    return step_function
+
+
 def get_all_age_specific_latency_parameters(parameters_=("early_progression", "stabilisation", "late_progression")):
     """
     collate all the latency parameters together from the previous function
@@ -149,5 +169,13 @@ if __name__ == "__main__":
     matplotlib.pyplot.ylim((0.0, 2000.0))
     # matplotlib.pyplot.show()
 
+    parameters = provide_age_specific_latency_parameters()
+    for parameter in parameters:
+        step_function = create_step_function_from_dict(parameters[parameter])
+
+        ages = list(numpy.linspace(0., 50., 20))
+        parameter_values = [step_function(age) for age in ages]
+        # matplotlib.pyplot.plot(ages, parameter_values)
+        # matplotlib.pyplot.show()
 
 
