@@ -125,17 +125,25 @@ if __name__ == "__main__":
                       adjustment_requests=get_adapted_age_parameters(age_breakpoints),
                       infectiousness_adjustments=age_infectiousness,
                       report=False)
-    tb_model.run_model()
+    tb_model.stratify("smear",
+                      ["smearpos", "smearneg", "extrapul"],
+                      ["infectious"], adjustment_requests=[], report=False)
 
-    # get outputs - from here on the code is essentially rubbish - will be using PowerBI to view outputs
-    infectious_population = tb_model.outputs[:, tb_model.compartment_names.index("infectiousXage_0")] + \
-                            tb_model.outputs[:, tb_model.compartment_names.index("infectiousXage_5")] + \
-                            tb_model.outputs[:, tb_model.compartment_names.index("infectiousXage_15")]
+    create_flowchart(tb_model, name="mongolia_flowchart")
+    tb_model.transition_flows.to_csv("transitions.csv")
 
-    matplotlib.pyplot.plot(times, infectious_population * 1e5)
-    matplotlib.pyplot.xlim((1980., 2010.))
-    matplotlib.pyplot.ylim((0.0, 500.0))
-    matplotlib.pyplot.savefig("mongolia_cdr_output")
+    # tb_model.run_model()
+    #
+    # # get outputs - from here on the code is essentially rubbish - will be using PowerBI to view outputs
+    # infectious_population = tb_model.outputs[:, tb_model.compartment_names.index("infectiousXage_0")] + \
+    #                         tb_model.outputs[:, tb_model.compartment_names.index("infectiousXage_5")] + \
+    #                         tb_model.outputs[:, tb_model.compartment_names.index("infectiousXage_15")]
+    #
+    # matplotlib.pyplot.plot(times, infectious_population * 1e5)
+    # matplotlib.pyplot.xlim((1980., 2010.))
+    # matplotlib.pyplot.ylim((0.0, 500.0))
+    # matplotlib.pyplot.show()
+    # matplotlib.pyplot.savefig("mongolia_cdr_output")
 
 
 

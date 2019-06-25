@@ -1034,6 +1034,12 @@ class StratifiedModel(EpiModel):
                      "implement": len(self.strata)},
                     ignore_index=True)
 
+        # if flow applies to a transition that isn't involved in the stratification, still increment for flow diagram
+        else:
+            new_flow = self.transition_flows.loc[flow, :].to_dict()
+            new_flow["implement"] += 1
+            self.transition_flows = self.transition_flows.append(new_flow, ignore_index=True)
+
     def sort_absent_parameter_request(self, stratification_name, strata_names, stratum, stratify_from, stratify_to,
                                       flow):
         """
@@ -1044,9 +1050,8 @@ class StratifiedModel(EpiModel):
         if not stratify_from and stratify_to:
             self.output_to_user("\tsplitting existing parameter value %s into %s equal parts"
                                 % (self.transition_flows.parameter[flow], len(strata_names)))
-            self.parameters[
-                create_stratified_name(self.transition_flows.parameter[flow], stratification_name, stratum)] = \
-                1.0 / len(strata_names)
+            parameter_name = create_stratified_name(self.transition_flows.parameter[flow], stratification_name, stratum)
+            self.parameters[parameter_name] = 1.0 / len(strata_names)
 
         # otherwise if no request, retain the existing parameter
         else:
