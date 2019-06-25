@@ -370,7 +370,7 @@ EpiModel <- R6Class(
     # simply add a flow to the data frame storing the flows
     add_transition_flow = function(flow) {
       self$transition_flows <- rbind(self$transition_flows, data.frame(type=flow[1], parameter=as.character(flow[2]), from=flow[3], to=flow[4], 
-                                                                       implement=0, stringsAsFactors=FALSE))
+                                                                       implement=length(self$stratifications), stringsAsFactors=FALSE))
     },
     
     # similarly for compartment-specific death flows    
@@ -966,6 +966,7 @@ StratifiedModel <- R6Class(
 
     # add additional stratified flow to flow data frame
     add_stratified_flows = function(flow, stratification_name, strata_names, stratify_from, stratify_to, adjustment_requests) {
+      parameter_name <- NULL
       if (stratify_from | stratify_to) {
         self$output_to_user(paste("for flow from", self$transition_flows$from[flow], "to", self$transition_flows$to[flow], "in stratification", stratification_name))
         
@@ -1001,6 +1002,11 @@ StratifiedModel <- R6Class(
         # remove old flow
         self$transition_flows$implement[flow] <- length(self$strata) - 1
       }
+      else {
+        retained_flow <- self$transition_flows[flow,]
+        retained_flow$implement <- retained_flow$implement + 1
+        self$transition_flows <- rbind(self$transition_flows, retained_flow, stringsAsFactors=FALSE)
+      }
     },
     
     # work out what to do if a specific parameter adjustment has not been requested
@@ -1009,7 +1015,8 @@ StratifiedModel <- R6Class(
       # default behaviour for parameters not requested is to split the parameter into equal parts from compartment not split but to compartment is
       if (!stratify_from & stratify_to) {
         self$output_to_user(paste("\tsplitting existing parameter value", self$transition_flows$parameter[flow], "into", length(strata_names), "equal parts"))
-        self$parameters[create_stratified_name(self$transition_flows$parameter[flow], stratification_name, stratum)] <- 1 / length(strata_names)
+        parameter_name <- create_stratified_name(self$transition_flows$parameter[flow], stratification_name, stratum)
+        self$parameters[parameter_name] <- 1 / length(strata_names)
       }
       
       # otherwise if no request, retain the existing parameter
