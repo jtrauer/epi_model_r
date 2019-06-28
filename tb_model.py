@@ -73,7 +73,9 @@ def unpivot_outputs(model_object):
     take outputs in the form they come out of the model object and convert them into a "long", "melted" or "unpiovted"
     format in order to more easily plug to PowerBI
     """
-    output_dataframe = pd.DataFrame(model_object.outputs, columns=model_object.compartment_names).melt()
+    output_dataframe = pd.DataFrame(model_object.outputs, columns=model_object.compartment_names)
+    output_dataframe["times"] = model_object.times
+    output_dataframe = output_dataframe.melt("times")
     for n_stratification in range(len(model_object.strata) + 1):
         column_name = "compartment" if n_stratification == 0 else model_object.strata[n_stratification - 1]
         output_dataframe[column_name] = \
@@ -82,6 +84,7 @@ def unpivot_outputs(model_object):
             output_dataframe[column_name] = \
                 output_dataframe.apply(lambda row: row[column_name].split("_")[1], axis=1)
     return output_dataframe.drop(columns="variable")
+
 
 if __name__ == "__main__":
 
@@ -164,7 +167,8 @@ if __name__ == "__main__":
     # print(infectious_population[time_2016] * 1e5)
     # print(cdr_mongolia)
 
-    # pbi_outputs = unpivot_outputs(tb_model)
+    pbi_outputs = unpivot_outputs(tb_model)
+    print(pbi_outputs)
 
     # tb_model.store_database()
     #
