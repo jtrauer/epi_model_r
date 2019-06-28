@@ -7,6 +7,7 @@ import numpy
 import scipy.integrate
 import copy
 from curve import scale_up_function
+import pandas as pd
 
 
 def provide_aggregated_latency_parameters():
@@ -73,7 +74,7 @@ if __name__ == "__main__":
     case_fatality_rate = 0.4
     untreated_disease_duration = 3.0
     parameters = \
-        {"beta": 10.0,
+        {"beta": 40.0,
          "recovery": case_fatality_rate / untreated_disease_duration,
          "infect_death": (1.0 - case_fatality_rate) / untreated_disease_duration,
          "universal_death_rate": 1.0 / 50.0,
@@ -97,7 +98,10 @@ if __name__ == "__main__":
     # loading time-variant case detection rate
     input_database = InputDB(report=True)
     res = input_database.db_query("gtb_2015", column="c_cdr", is_filter="country", value="Mongolia")
-    cdr_mongolia = res["c_cdr"].values / 1e2
+
+    cdr_adjustment_factor = 0.6
+
+    cdr_mongolia = res["c_cdr"].values / 1e2 * cdr_adjustment_factor
     cdr_mongolia = numpy.concatenate(([0.0], cdr_mongolia))
     res = input_database.db_query("gtb_2015", column="year", is_filter="country", value="Mongolia")
     cdr_mongolia_year = res["year"].values
@@ -111,7 +115,7 @@ if __name__ == "__main__":
 
     age_breakpoints = [0, 5, 15]
     age_infectiousness = get_parameter_dict_from_function(logistic_scaling_function(15.0), age_breakpoints)
-    #
+
     # x_values = numpy.linspace(0.0, 40.0, 1e3)
     # y_values = [logistic_scaling_function(15.0)(x) for x in x_values]
     # matplotlib.pyplot.plot(x_values, y_values)
@@ -125,23 +129,35 @@ if __name__ == "__main__":
                       adjustment_requests=get_adapted_age_parameters(age_breakpoints),
                       infectiousness_adjustments=age_infectiousness,
                       report=False)
-    tb_model.stratify("smear",
-                      ["smearpos", "smearneg", "extrapul"],
-                      ["infectious"], adjustment_requests=[], report=False)
+    # tb_model.stratify("smear",
+    #                   ["smearpos", "smearneg", "extrapul"],
+    #                   ["infectious"], adjustment_requests=[], report=False)
 
     create_flowchart(tb_model, name="mongolia_flowchart")
-    tb_model.transition_flows.to_csv("transitions.csv")
+    # tb_model.transition_flows.to_csv("transitions.csv")
 
-    # tb_model.run_model()
+    tb_model.run_model()
+
+    # get outputs - from here on the code is essentially rubbish - will be using PowerBI to view outputs
+    infectious_population = tb_model.outputs[:, tb_model.compartment_names.index("infectiousXage_0")] + \
+                            tb_model.outputs[:, tb_model.compartment_names.index("infectiousXage_5")] + \
+                            tb_model.outputs[:, tb_model.compartment_names.index("infectiousXage_15")]
+
+    # crude manual calibration
+    time_2016 = [i for i in range(len(tb_model.times)) if tb_model.times[i] > 2016.][0]
+    print(time_2016)
+    print(infectious_population[time_2016] * 1e5)
+    print(cdr_mongolia)
+
+    # working code on converting to output structure that is more compatible with powerbi requirements
+    # pbi_outputs = pd.DataFrame(tb_model.outputs, columns=tb_model.compartment_names).melt()
+    # print(pbi_outputs.variable[0].split("X"))
     #
-    # # get outputs - from here on the code is essentially rubbish - will be using PowerBI to view outputs
-    # infectious_population = tb_model.outputs[:, tb_model.compartment_names.index("infectiousXage_0")] + \
-    #                         tb_model.outputs[:, tb_model.compartment_names.index("infectiousXage_5")] + \
-    #                         tb_model.outputs[:, tb_model.compartment_names.index("infectiousXage_15")]
+    # tb_model.store_database()
     #
     # matplotlib.pyplot.plot(times, infectious_population * 1e5)
-    # matplotlib.pyplot.xlim((1980., 2010.))
-    # matplotlib.pyplot.ylim((0.0, 500.0))
+    # matplotlib.pyplot.xlim((1980., 2020.))
+    # matplotlib.pyplot.ylim((0.0, 1e3))
     # matplotlib.pyplot.show()
     # matplotlib.pyplot.savefig("mongolia_cdr_output")
 
