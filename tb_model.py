@@ -170,6 +170,11 @@ if __name__ == "__main__":
     pbi_outputs = unpivot_outputs(tb_model)
     print(pbi_outputs)
 
+    # create_flowchart(tb_model)
+
+    tb_model.plot_compartment_size(['latent'])
+    tb_model.plot_compartment_size(['infectious'], 1.e5)
+
     # tb_model.store_database()
     #
     # matplotlib.pyplot.plot(times, infectious_population * 1e5)

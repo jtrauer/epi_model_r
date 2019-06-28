@@ -657,7 +657,7 @@ class EpiModel:
         output_df.insert(0, 'times', self.times)
         output_df.to_sql("outputs", con=engine, if_exists="replace", index=False)
 
-    def plot_compartment_size(self, compartment_tags):
+    def plot_compartment_size(self, compartment_tags, multiplier=1.):
         """
         Plot the aggregate population of the compartments, the name of which contains all items of the list
         compartment_tags
@@ -668,7 +668,7 @@ class EpiModel:
             if all(elem in comp_name for elem in compartment_tags):
                  index_to_plot.append(i)
 
-        outputs_plot = matplotlib.pyplot.plot(self.times, self.outputs[:, index_to_plot].sum(axis=1))
+        outputs_plot = matplotlib.pyplot.plot(self.times, multiplier*self.outputs[:, index_to_plot].sum(axis=1))
         matplotlib.pyplot.show()
 
 
