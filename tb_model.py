@@ -68,6 +68,21 @@ def return_function_of_function(inner_function, outer_function):
     return lambda value: outer_function(inner_function(value))
 
 
+def unpivot_outputs(model_object):
+    """
+    take outputs in the form they come out of the model object and convert them into a "long", "melted" or "unpiovted"
+    format in order to more easily plug to PowerBI
+    """
+    output_dataframe = pd.DataFrame(model_object.outputs, columns=model_object.compartment_names).melt()
+    for n_stratification in range(len(model_object.strata) + 1):
+        column_name = "compartment" if n_stratification == 0 else model_object.strata[n_stratification - 1]
+        output_dataframe[column_name] = \
+            output_dataframe.apply(lambda row: row.variable.split("X")[n_stratification], axis=1)
+        if n_stratification > 0:
+            output_dataframe[column_name] = \
+                output_dataframe.apply(lambda row: row[column_name].split("_")[1], axis=1)
+    return output_dataframe.drop(columns="variable")
+
 if __name__ == "__main__":
 
     # set basic parameters, flows and times, except for latency flows and parameters, then functionally add latency
@@ -133,7 +148,7 @@ if __name__ == "__main__":
     #                   ["smearpos", "smearneg", "extrapul"],
     #                   ["infectious"], adjustment_requests=[], report=False)
 
-    create_flowchart(tb_model, name="mongolia_flowchart")
+    # create_flowchart(tb_model, name="mongolia_flowchart")
     # tb_model.transition_flows.to_csv("transitions.csv")
 
     tb_model.run_model()
@@ -144,15 +159,13 @@ if __name__ == "__main__":
                             tb_model.outputs[:, tb_model.compartment_names.index("infectiousXage_15")]
 
     # crude manual calibration
-    time_2016 = [i for i in range(len(tb_model.times)) if tb_model.times[i] > 2016.][0]
-    print(time_2016)
-    print(infectious_population[time_2016] * 1e5)
-    print(cdr_mongolia)
+    # time_2016 = [i for i in range(len(tb_model.times)) if tb_model.times[i] > 2016.][0]
+    # print(time_2016)
+    # print(infectious_population[time_2016] * 1e5)
+    # print(cdr_mongolia)
 
-    # working code on converting to output structure that is more compatible with powerbi requirements
-    # pbi_outputs = pd.DataFrame(tb_model.outputs, columns=tb_model.compartment_names).melt()
-    # print(pbi_outputs.variable[0].split("X"))
-    #
+    # pbi_outputs = unpivot_outputs(tb_model)
+
     # tb_model.store_database()
     #
     # matplotlib.pyplot.plot(times, infectious_population * 1e5)
