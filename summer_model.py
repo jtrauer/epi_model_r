@@ -657,6 +657,21 @@ class EpiModel:
         output_df.insert(0, 'times', self.times)
         output_df.to_sql("outputs", con=engine, if_exists="replace", index=False)
 
+    def plot_compartment_size(self, compartment_tags):
+        """
+        Plot the aggregate population of the compartments, the name of which contains all items of the list
+        compartment_tags
+        :param compartment_tags: a list of string variables
+        """
+        index_to_plot = []
+        for i, comp_name in enumerate(self.compartment_names):
+            if all(elem in comp_name for elem in compartment_tags):
+                 index_to_plot.append(i)
+
+        outputs_plot = matplotlib.pyplot.plot(self.times, self.outputs[:, index_to_plot].sum(axis=1))
+        matplotlib.pyplot.show()
+
+
 
 class StratifiedModel(EpiModel):
     def add_compartment(self, new_compartment_name, new_compartment_value):
@@ -1185,8 +1200,6 @@ if __name__ == "__main__":
 
     create_flowchart(sir_model, strata=len(sir_model.strata))
 
-    outputs_plot = matplotlib.pyplot.plot(sir_model.times, sir_model.outputs[:, 2] + sir_model.outputs[:, 3])
-
     # print(len(sir_model.times))
     # print(sir_model.outputs[1])
 
@@ -1194,7 +1207,8 @@ if __name__ == "__main__":
 
     print(sir_model.transition_flows)
 
-    matplotlib.pyplot.show()
+    sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
+
     # print(sir_model.times)
     #
     # print(sir_model.outputs[:, 0])
