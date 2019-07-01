@@ -128,7 +128,7 @@ if __name__ == "__main__":
 
     function_dataframe = pd.DataFrame(times)
     function_dataframe["cdr_values"] = [cdr_scaleup(t) for t in times]
-    store_database(function_dataframe,table_name='function')
+    store_database(function_dataframe, table_name="functions")
 
     prop_to_rate = convert_competing_proportion_to_rate(1.0 / untreated_disease_duration)
     detect_rate = return_function_of_function(cdr_scaleup, prop_to_rate)
@@ -173,12 +173,11 @@ if __name__ == "__main__":
 
     pbi_outputs = unpivot_outputs(tb_model)
     store_database(pbi_outputs, table_name="pbi_outputs")
-    print(pbi_outputs)
 
     # create_flowchart(tb_model)
 
-    tb_model.plot_compartment_size(["early_latent", "late_latent"])
-    tb_model.plot_compartment_size(["infectious"], 1e5)
+    # tb_model.plot_compartment_size(["early_latent", "late_latent"])
+    # tb_model.plot_compartment_size(["infectious"], 1e5)
 
     # tb_model.store_database()
     #
