@@ -184,6 +184,13 @@ def get_parameter_dict_from_function(input_function, breakpoints, upper_value=10
     return {str(key): value for key, value in zip(breakpoints, param_values)}
 
 
+def store_database(outputs, table_name='outputs'):
+    """
+    store outputs from the model in sql database for use in producing outputs later
+    """
+    engine = create_engine("sqlite:///outputs.db", echo=False)
+    outputs.to_sql(table_name, con=engine, if_exists="replace", index=False)
+
 def create_flowchart(model_object, strata=-1, stratify=True, name="flow_chart"):
     """
     use graphviz module to create flow diagram of compartments and intercompartmental flows.
@@ -648,14 +655,6 @@ class EpiModel:
         """
         return self.find_parameter_value(parameter, time)
 
-    def store_database(self):
-        """
-        store outputs from the model in sql database for use in producing outputs later
-        """
-        engine = create_engine("sqlite:///outputs.db", echo=False)
-        output_df = pandas.DataFrame(self.outputs, columns=self.compartment_names)
-        output_df.insert(0, 'times', self.times)
-        output_df.to_sql("outputs", con=engine, if_exists="replace", index=False)
 
     def plot_compartment_size(self, compartment_tags, multiplier=1.):
         """
