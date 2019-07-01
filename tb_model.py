@@ -168,13 +168,13 @@ if __name__ == "__main__":
     # print(cdr_mongolia)
 
     pbi_outputs = unpivot_outputs(tb_model)
-    store_database(pbi_outputs, table_name='pbi_outputs')
-    print(pbi_outputs)
+    store_database(pbi_outputs, table_name="pbi_outputs")
+    # print(pbi_outputs)
 
     # create_flowchart(tb_model)
 
-    tb_model.plot_compartment_size(['latent'])
-    tb_model.plot_compartment_size(['infectious'], 1.e5)
+    tb_model.plot_compartment_size(["early_latent", "late_latent"])
+    tb_model.plot_compartment_size(["infectious"], 1e5)
 
     # tb_model.store_database()
     #

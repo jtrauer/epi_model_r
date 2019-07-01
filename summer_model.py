@@ -191,6 +191,7 @@ def store_database(outputs, table_name='outputs'):
     engine = create_engine("sqlite:///outputs.db", echo=False)
     outputs.to_sql(table_name, con=engine, if_exists="replace", index=False)
 
+
 def create_flowchart(model_object, strata=-1, stratify=True, name="flow_chart"):
     """
     use graphviz module to create flow diagram of compartments and intercompartmental flows.
@@ -655,21 +656,17 @@ class EpiModel:
         """
         return self.find_parameter_value(parameter, time)
 
-
     def plot_compartment_size(self, compartment_tags, multiplier=1.):
         """
-        Plot the aggregate population of the compartments, the name of which contains all items of the list
+        plot the aggregate population of the compartments, the name of which contains all items of the list
         compartment_tags
         :param compartment_tags: a list of string variables
+        :multiplier: scalar value to multiply the compartment values by
         """
-        index_to_plot = []
-        for i, comp_name in enumerate(self.compartment_names):
-            if all(elem in comp_name for elem in compartment_tags):
-                 index_to_plot.append(i)
-
-        outputs_plot = matplotlib.pyplot.plot(self.times, multiplier*self.outputs[:, index_to_plot].sum(axis=1))
+        indices_to_plot = \
+            [i for i in range(len(self.compartment_names)) if find_stem(self.compartment_names[i]) in compartment_tags]
+        matplotlib.pyplot.plot(self.times, multiplier * self.outputs[:, indices_to_plot].sum(axis=1))
         matplotlib.pyplot.show()
-
 
 
 class StratifiedModel(EpiModel):
