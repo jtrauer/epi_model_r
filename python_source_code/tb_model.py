@@ -126,6 +126,9 @@ if __name__ == "__main__":
     cdr_mongolia_year = numpy.concatenate(([1950.], cdr_mongolia_year))
     cdr_scaleup = scale_up_function(cdr_mongolia_year, cdr_mongolia, smoothness=0.2, method=5)
 
+    function_dataframe = pd.DataFrame(times)
+    function_dataframe["cdr_values"] = [cdr_scaleup(t) for t in times]
+
     prop_to_rate = convert_competing_proportion_to_rate(1.0 / untreated_disease_duration)
     detect_rate = return_function_of_function(cdr_scaleup, prop_to_rate)
 
