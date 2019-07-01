@@ -1,11 +1,12 @@
 
-import summer_model
+import python_source_code.summer_model
 import matplotlib.pyplot as plt
 import os
 import numpy
-import pymc as pm
-from db import InputDB
+from python_source_code.db import InputDB
 import pandas as pd
+
+import pymc as pm
 from pymc import MCMC
 from pymc import DiscreteUniform, Exponential, deterministic, Poisson, Uniform, geweke
 #from pymc.Matplot import plot
@@ -110,7 +111,7 @@ def unc_run(beta):
                  {"type": "compartment_death", "parameter": "infect_death", "origin": "infectious"}]
         flows = add_standard_latency_flows(flows)
 
-        tb_model = summer_model.StratifiedModel(
+        tb_model = python_source_code.summer_model.StratifiedModel(
             times, ["susceptible", "early_latent", "late_latent", "infectious", "recovered"], {"infectious": 1e-3},
             parameters, flows, birth_approach="replace_deaths")
 
@@ -161,10 +162,10 @@ if __name__ == "__main__":
     # matplotlib.pyplot.ylim((0.0, 2000.0))
     # matplotlib.pyplot.show()
     input = InputDB()
-    res = input.db_query(table_name='gtb_2016', column='e_inc_100k', filter='country', value='Bhutan')
+    res = input.db_query(table_name='gtb_2016', column='e_inc_100k', is_filter='country', value='Bhutan')
     target_inc = res.values.flatten()
     #print(target_inc)
-    res = input.db_query(table_name='gtb_2016', column='year', filter='country', value='Bhutan')
+    res = input.db_query(table_name='gtb_2016', column='year', is_filter='country', value='Bhutan')
     target_inc_year = res.values.flatten()
     target_inc_df = pd.DataFrame(target_inc_year, target_inc)
 
