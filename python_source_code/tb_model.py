@@ -109,11 +109,11 @@ def build_working_tb_model(beta):
              {"type": "compartment_death", "parameter": "infect_death", "origin": "infectious"}]
     flows = add_standard_latency_flows(flows)
 
-    tb_model = StratifiedModel(
+    tb_model_ = StratifiedModel(
         times_, ["susceptible", "early_latent", "late_latent", "infectious", "recovered"], {"infectious": 1e-3},
         parameters, flows, birth_approach="replace_deaths")
 
-    tb_model.add_transition_flow(
+    tb_model_.add_transition_flow(
         {"type": "standard_flows", "parameter": "case_detection", "origin": "infectious", "to": "recovered"})
 
     # loading time-variant case detection rate
@@ -130,7 +130,7 @@ def build_working_tb_model(beta):
     cdr_scaleup = scale_up_function(cdr_mongolia_year, cdr_mongolia, smoothness=0.2, method=5)
     prop_to_rate = convert_competing_proportion_to_rate(1.0 / untreated_disease_duration)
     detect_rate = return_function_of_function(cdr_scaleup, prop_to_rate)
-    tb_model.time_variants["case_detection"] = detect_rate
+    tb_model_.time_variants["case_detection"] = detect_rate
 
     # store scaling functions in database if required
     # function_dataframe = pd.DataFrame(times)
@@ -140,16 +140,16 @@ def build_working_tb_model(beta):
     # add age stratification
     age_breakpoints = [0, 5, 15]
     age_infectiousness = get_parameter_dict_from_function(logistic_scaling_function(15.0), age_breakpoints)
-    tb_model.stratify("age", age_breakpoints, [],
+    tb_model_.stratify("age", age_breakpoints, [],
                       adjustment_requests=get_adapted_age_parameters(age_breakpoints),
                       infectiousness_adjustments=age_infectiousness,
                       report=False)
 
-    # tb_model.stratify("smear",
+    # tb_model_.stratify("smear",
     #                   ["smearpos", "smearneg", "extrapul"],
     #                   ["infectious"], adjustment_requests=[], report=False)
 
-    return tb_model
+    return tb_model_
 
 
 if __name__ == "__main__":
