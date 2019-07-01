@@ -16,6 +16,7 @@ os.environ["PATH"] += os.pathsep + 'C:/Program Files (x86)/Graphviz2.38/bin'
 # set path - romain desktop
 os.environ["PATH"] += os.pathsep + 'C:/Users/rrag0004/Models/graphviz-2.38/release/bin'
 
+
 def find_stem(stratified_string):
     """
     find the stem of the compartment name as the text leading up to the first occurrence of "X"
@@ -656,12 +657,16 @@ class EpiModel:
         """
         return self.find_parameter_value(parameter, time)
 
+    """
+    simple output methods (most outputs will be managed outside of the python code)
+    """
+
     def plot_compartment_size(self, compartment_tags, multiplier=1.):
         """
         plot the aggregate population of the compartments, the name of which contains all items of the list
         compartment_tags
         :param compartment_tags: a list of string variables
-        :multiplier: scalar value to multiply the compartment values by
+        :param multiplier: scalar value to multiply the compartment values by
         """
         indices_to_plot = \
             [i for i in range(len(self.compartment_names)) if find_stem(self.compartment_names[i]) in compartment_tags]
