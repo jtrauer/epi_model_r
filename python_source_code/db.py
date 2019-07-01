@@ -27,7 +27,7 @@ class InputDB:
                "strategy_2014", "strategy_2015", "strategy_2016", "diabetes", "gtb_2015", "gtb_2016", "latent_2016",
                "tb_hiv_2016", "spending_inputs", "constants", "time_variants"]
 
-    def load_csv(self, input_path="xls/*.csv"):
+    def load_csv(self, input_path="../xls/*.csv"):
         """
         load csvs from input_path
         """
@@ -36,7 +36,7 @@ class InputDB:
             data_frame = pd.read_csv(filename)
             data_frame.to_sql(filename.split("\\")[1].split(".")[0], con=self.engine, if_exists="replace")
 
-    def load_xlsx(self, input_path="xls/*.xlsx"):
+    def load_xlsx(self, input_path="../xls/*.xlsx"):
         """
         load excel spreadsheet from input_path
         """
