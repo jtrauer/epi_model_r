@@ -189,7 +189,7 @@ def store_database(outputs, table_name='outputs'):
     """
     store outputs from the model in sql database for use in producing outputs later
     """
-    engine = create_engine("sqlite:///outputs.db", echo=False)
+    engine = create_engine("sqlite:///../databases/outputs.db", echo=False)
     outputs.to_sql(table_name, con=engine, if_exists="replace", index=False)
 
 
