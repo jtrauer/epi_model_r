@@ -161,10 +161,8 @@ if __name__ == "__main__":
 
     tb_model.run_model()
 
-    # get outputs - from here on the code is essentially rubbish - will be using PowerBI to view outputs
-    infectious_population = tb_model.outputs[:, tb_model.compartment_names.index("infectiousXage_0")] + \
-                            tb_model.outputs[:, tb_model.compartment_names.index("infectiousXage_5")] + \
-                            tb_model.outputs[:, tb_model.compartment_names.index("infectiousXage_15")]
+    # get outputs
+    infectious_population = tb_model.get_total_compartment_size(["infectious"])
 
     # print statements to enable crude manual calibration
     # time_2016 = [i for i in range(len(tb_model.times)) if tb_model.times[i] > 2016.][0]
