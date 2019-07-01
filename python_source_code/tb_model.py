@@ -86,20 +86,23 @@ def unpivot_outputs(model_object):
     return output_dataframe.drop(columns="variable")
 
 
-if __name__ == "__main__":
+def build_working_tb_model(beta):
+    """
+    current working tb model with some characteristics of mongolia applied at present
+    """
+    times_ = numpy.linspace(1800., 2020.0, 201).tolist()
 
     # set basic parameters, flows and times, except for latency flows and parameters, then functionally add latency
     case_fatality_rate = 0.4
     untreated_disease_duration = 3.0
     parameters = \
-        {"beta": 40.0,
+        {"beta": beta,
          "recovery": case_fatality_rate / untreated_disease_duration,
          "infect_death": (1.0 - case_fatality_rate) / untreated_disease_duration,
          "universal_death_rate": 1.0 / 50.0,
          "case_detection": 0.0}
     parameters.update(change_parameter_unit(provide_aggregated_latency_parameters()))
 
-    times = numpy.linspace(1800., 2020.0, 201).tolist()
     flows = [{"type": "infection_frequency", "parameter": "beta", "origin": "susceptible", "to": "early_latent"},
              {"type": "infection_frequency", "parameter": "beta", "origin": "recovered", "to": "early_latent"},
              {"type": "standard_flows", "parameter": "recovery", "origin": "infectious", "to": "recovered"},
@@ -107,7 +110,7 @@ if __name__ == "__main__":
     flows = add_standard_latency_flows(flows)
 
     tb_model = StratifiedModel(
-        times, ["susceptible", "early_latent", "late_latent", "infectious", "recovered"], {"infectious": 1e-3},
+        times_, ["susceptible", "early_latent", "late_latent", "infectious", "recovered"], {"infectious": 1e-3},
         parameters, flows, birth_approach="replace_deaths")
 
     tb_model.add_transition_flow(
@@ -117,43 +120,41 @@ if __name__ == "__main__":
     input_database = InputDB(report=True)
     res = input_database.db_query("gtb_2015", column="c_cdr", is_filter="country", value="Mongolia")
 
+    # add scaling case detection rate
     cdr_adjustment_factor = 0.6
-
     cdr_mongolia = res["c_cdr"].values / 1e2 * cdr_adjustment_factor
     cdr_mongolia = numpy.concatenate(([0.0], cdr_mongolia))
     res = input_database.db_query("gtb_2015", column="year", is_filter="country", value="Mongolia")
     cdr_mongolia_year = res["year"].values
     cdr_mongolia_year = numpy.concatenate(([1950.], cdr_mongolia_year))
     cdr_scaleup = scale_up_function(cdr_mongolia_year, cdr_mongolia, smoothness=0.2, method=5)
-
-    function_dataframe = pd.DataFrame(times)
-    function_dataframe["cdr_values"] = [cdr_scaleup(t) for t in times]
-    store_database(function_dataframe, table_name="functions")
-
     prop_to_rate = convert_competing_proportion_to_rate(1.0 / untreated_disease_duration)
     detect_rate = return_function_of_function(cdr_scaleup, prop_to_rate)
-
     tb_model.time_variants["case_detection"] = detect_rate
 
+    # store scaling functions in database if required
+    # function_dataframe = pd.DataFrame(times)
+    # function_dataframe["cdr_values"] = [cdr_scaleup(t) for t in times]
+    # store_database(function_dataframe, table_name="functions")
+
+    # add age stratification
     age_breakpoints = [0, 5, 15]
     age_infectiousness = get_parameter_dict_from_function(logistic_scaling_function(15.0), age_breakpoints)
-
-    # x_values = numpy.linspace(0.0, 40.0, 1e3)
-    # y_values = [logistic_scaling_function(15.0)(x) for x in x_values]
-    # matplotlib.pyplot.plot(x_values, y_values)
-    # matplotlib.pyplot.savefig("age_infectiousness_scaling")
-
-    # cdr_values = [cdr_scaleup(x) for x in times]
-    # matplotlib.pyplot.plot(times, cdr_values)
-    # matplotlib.pyplot.savefig("mongolia_cdr_scaling")
-
     tb_model.stratify("age", age_breakpoints, [],
                       adjustment_requests=get_adapted_age_parameters(age_breakpoints),
                       infectiousness_adjustments=age_infectiousness,
                       report=False)
+
     # tb_model.stratify("smear",
     #                   ["smearpos", "smearneg", "extrapul"],
     #                   ["infectious"], adjustment_requests=[], report=False)
+
+    return tb_model
+
+
+if __name__ == "__main__":
+
+    tb_model = build_working_tb_model(40.0)
 
     # create_flowchart(tb_model, name="mongolia_flowchart")
     # tb_model.transition_flows.to_csv("transitions.csv")
@@ -165,20 +166,24 @@ if __name__ == "__main__":
                             tb_model.outputs[:, tb_model.compartment_names.index("infectiousXage_5")] + \
                             tb_model.outputs[:, tb_model.compartment_names.index("infectiousXage_15")]
 
-    # crude manual calibration
+    # print statements to enable crude manual calibration
     # time_2016 = [i for i in range(len(tb_model.times)) if tb_model.times[i] > 2016.][0]
     # print(time_2016)
     # print(infectious_population[time_2016] * 1e5)
     # print(cdr_mongolia)
 
-    pbi_outputs = unpivot_outputs(tb_model)
-    store_database(pbi_outputs, table_name="pbi_outputs")
+    # output the results into a format that will be easily loadable into PowerBI
+    # pbi_outputs = unpivot_outputs(tb_model)
+    # store_database(pbi_outputs, table_name="pbi_outputs")
 
+    # easy enough to output a flow diagram if needed:
     # create_flowchart(tb_model)
 
+    # output some basic quantities if not bothered with the PowerBI bells and whistles
     # tb_model.plot_compartment_size(["early_latent", "late_latent"])
     # tb_model.plot_compartment_size(["infectious"], 1e5)
 
+    # store outputs into database
     # tb_model.store_database()
     #
     # matplotlib.pyplot.plot(times, infectious_population * 1e5)
