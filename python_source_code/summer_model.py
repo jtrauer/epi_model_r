@@ -6,6 +6,7 @@ import pandas
 from graphviz import Digraph
 from sqlalchemy import create_engine
 import os
+from sqlalchemy import FLOAT
 
 # set path - sachin
 os.environ["PATH"] += os.pathsep + 'C:/Users/swas0001/graphviz-2.38/release/bin'
@@ -189,8 +190,11 @@ def store_database(outputs, table_name='outputs'):
     """
     store outputs from the model in sql database for use in producing outputs later
     """
-    engine = create_engine("sqlite:///../databases/outputs.db", echo=False)
-    outputs.to_sql(table_name, con=engine, if_exists="replace", index=False)
+    engine = create_engine("sqlite:///../databases/outputs.db", echo=True)
+    if table_name == 'functions':
+        outputs.to_sql(table_name, con=engine, if_exists="replace", index=False, dtype={"cdr_values": FLOAT()})
+    else:
+        outputs.to_sql(table_name, con=engine, if_exists="replace", index=False)
 
 
 def create_flowchart(model_object, strata=-1, stratify=True, name="flow_chart"):
