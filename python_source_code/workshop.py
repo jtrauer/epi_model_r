@@ -1,4 +1,4 @@
-from summer_model import *
+from python_source_code.summer_model import *
 
 my_model = StratifiedModel(
     times=numpy.linspace(1800., 2020.0, 201).tolist(),

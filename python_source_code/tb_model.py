@@ -1,12 +1,12 @@
 
-from summer_model import *
-from db import InputDB
+from python_source_code.summer_model import *
+from python_source_code.db import InputDB
 import matplotlib.pyplot
 import os
 import numpy
 import scipy.integrate
 import copy
-from curve import scale_up_function
+from python_source_code.curve import scale_up_function
 import pandas as pd
 
 

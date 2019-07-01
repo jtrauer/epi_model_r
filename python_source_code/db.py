@@ -4,7 +4,7 @@ import pandas as pd
 import glob
 import numpy as np
 import matplotlib.pyplot as plt
-from curve import scale_up_function
+from python_source_code.curve import scale_up_function
 
 
 class InputDB:
@@ -12,7 +12,7 @@ class InputDB:
     methods for loading input xls files
     """
 
-    def __init__(self, database_name="Inputs.db", report=False):
+    def __init__(self, database_name="../databases/Inputs.db", report=False):
         """
         initialise sqlite database
         """
@@ -87,8 +87,8 @@ class InputDB:
 if __name__ == "__main__":
 
     input_database = InputDB(report=True)
-    # input_database.load_xlsx()
-    # input_database.load_csv()
+    input_database.load_xlsx()
+    input_database.load_csv()
 
     res = input_database.db_query("gtb_2015", column="c_cdr", is_filter="country", value="Mongolia")
     cdr_mongolia = res["c_cdr"].values

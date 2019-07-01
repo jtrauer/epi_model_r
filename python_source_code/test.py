@@ -88,6 +88,7 @@ def return_function_of_function(inner_function, outer_function):
     """
     return lambda value: outer_function(inner_function(value))
 
+
 def unc_run(beta):
  # set basic parameters, flows and times, except for latency flows and parameters, then functionally add latency
     #for b in beta.tag.test_value:
