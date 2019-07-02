@@ -243,22 +243,24 @@ def create_flowchart(model_object, strata=-1, stratify=True, name="flow_chart"):
 
         # find the compartment names that will be used to make the graph
         new_labels = list(set().union(type_of_flow["origin"].values, type_of_flow["to"].values))
+        node_color = '#F0FFFF'
         for label in new_labels:
             if label in broken_down_nodes[0]:
-                node_color='#F0FFFF'
+                node_color = '#F0FFFF'
             if label in broken_down_nodes[1]:
-                node_color='#FAEBD7'
+                node_color = '#FAEBD7'
             if label in broken_down_nodes[2]:
-                node_color='#E9967A'
+                node_color = '#E9967A'
             model_object.flow_diagram.node(label, fillcolor=node_color)
     else:
         for label in model_object.compartment_names:
+            node_color = '#F0FFFF'
             if label in broken_down_nodes[0]:
-                node_color='#F0FFFF'
+                node_color = '#F0FFFF'
             if label in broken_down_nodes[1]:
-                node_color='#FAEBD7'
+                node_color = '#FAEBD7'
             if label in broken_down_nodes[2]:
-                node_color='#E9967A'
+                node_color = '#E9967A'
             model_object.flow_diagram.node(label, fillcolor=node_color)
 
     # build the graph edges
