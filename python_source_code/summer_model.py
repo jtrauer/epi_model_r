@@ -244,10 +244,22 @@ def create_flowchart(model_object, strata=-1, stratify=True, name="flow_chart"):
         # find the compartment names that will be used to make the graph
         new_labels = list(set().union(type_of_flow["origin"].values, type_of_flow["to"].values))
         for label in new_labels:
-            model_object.flow_diagram.node(label)
+            if label in broken_down_nodes[0]:
+                node_color='#F0FFFF'
+            if label in broken_down_nodes[1]:
+                node_color='#FAEBD7'
+            if label in broken_down_nodes[2]:
+                node_color='#E9967A'
+            model_object.flow_diagram.node(label, fillcolor=node_color)
     else:
         for label in model_object.compartment_names:
-            model_object.flow_diagram.node(label)
+            if label in broken_down_nodes[0]:
+                node_color='#F0FFFF'
+            if label in broken_down_nodes[1]:
+                node_color='#FAEBD7'
+            if label in broken_down_nodes[2]:
+                node_color='#E9967A'
+            model_object.flow_diagram.node(label, fillcolor=node_color)
 
     # build the graph edges
     for row in type_of_flow.iterrows():
@@ -1206,7 +1218,7 @@ if __name__ == "__main__":
                        {"recovery": {"negative": 0.7, "positive": 0.5},
                         "infect_death": {"negative": 0.5}},
                        {"negative": 0.6}, report=False)
-    # sir_model.stratify("age", [1, 10, 3], [], {}, report=False)
+    sir_model.stratify("age", [1, 10, 3], [], {}, report=False)
 
     sir_model.run_model()
 
@@ -1219,7 +1231,7 @@ if __name__ == "__main__":
 
     print(sir_model.transition_flows)
 
-    sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
+    #sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
 
     # print(sir_model.times)
     #
