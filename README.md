@@ -1,4 +1,4 @@
-# SUMMER (Python)
+# SUMMER (Python) Handbook
 Scalable, Universal Mathematical Modelling in R.
 
 This repository is a Python-coded version of the jtrauer/summer repository, coded in R.
@@ -31,7 +31,14 @@ have an extensive background in mathematical modelling
 * Future extensibility to a broader range of capabilities as our group implements further elaboration of the modelling
 platform
 
-# Object-oriented structure
+## Code
+The code base is provided in R and Python as two open-source platforms that are most commonly used in infectious disease
+modelling applications. Python is more naturally suited to object-oriented programming, such that the R code requires
+the R6 package as a dependency through much of its structure. The code in the two languages is intended to be as
+equivalent as possible. In general Python lists are implemented as R vectors and Python dictionaries are implemented as
+R lists.
+
+## Object-oriented structure
 SUMMER considers epidemiological models as objects with attributes and methods relevant to the general construction of
 a epidemiological models typically used to simulate infectious disease transmission dynamics. When a model object is
 instantiated, it is created with a set of features that allow for the construction of a compartmental model in a
@@ -43,7 +50,18 @@ manual construction of models of any degree of complexity, while the additional 
 class allow for rapid and reliable stratification of the model compartments created in EpiModel without the need for the
 repetitive code or the use of loops.
 
-## EpiModel class
-As mentioned, the base EpiModel class allows for the construction of standard compartmental epidemiological models
-implemented in ODEs.
+The general approach to using the model objects is described below, but the details of how individual arguments should
+formatted, etc. is provided in the docstrings to each method of the model object(s).
 
+# Workflow of model creation
+## Base model construction
+As mentioned, the base EpiModel class allows for the construction of standard compartmental epidemiological models
+implemented in ODEs. The object constructor must be provided with arguments that include:
+1. The times at which the model is to be evaluated
+2. The names of the types of compartments to be provided to the model
+3. The distribution of initial conditions of the population
+4. Model parameters for the calculations of flows
+5. Intercompartmental flows
+6. A range of optional arguments pertaining to modelling and reporting features
+These first five arguments are required, but can typically be provided as empty data structures to be subsequently
+populated using object methods.
