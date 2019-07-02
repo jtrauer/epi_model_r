@@ -1,7 +1,5 @@
-# SUMMER (Python) Handbook
-Scalable, Universal Mathematical Modelling in R.
-
-This repository is a Python-coded version of the jtrauer/summer repository, coded in R.
+# SUMMER Handbook
+Scalable, Universal Mathematical Modelling in R (and now Python!)
 
 We encourage wide use of this repository with acknowledgement, although this user guide remains incomplete and it is
 anticipated that the code base will be developed by our team with time.
@@ -69,6 +67,17 @@ These first five arguments are required, but intercompartmental flows can be pro
 with specific flows later. Note also that not all compartments must have an initial value provided at the construction
 stage, as assumptions will be made later.
 
-### Starting population
+### Initial conditions
+The process of setting the initial values of the model runs as follows:
+1. All compartments requested in construction are set to values of zero, so that compartments that are not requested in
+the initial conditions constructor argument will still retain a value of zero, even if not specifically requested
+2. Each requested compartment in the keys/names of the initial conditions request are looped through and checked to
+ensure that they are available compartments. If they are, the value is set to the request.
+3. If the user has requested to sum initial conditions to total, the remainder of the total population that has not yet
+been allocated will be assigned to the requested starting compartment. If this is a negative value (i.e. if more
+population has been allocated than the already requested starting population), an error will be displayed. The starting
+compartment is assigned as a user input, but if no user input is requested, then the compartment to which population
+recruitment occurs will be used.
+
 
 

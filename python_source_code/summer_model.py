@@ -303,7 +303,7 @@ class EpiModel:
     def __init__(self, times, compartment_types, initial_conditions, parameters, requested_flows,
                  initial_conditions_to_total=True, infectious_compartment="infectious", birth_approach="no_birth",
                  verbose=False, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1,
-                 default_starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint"):
+                 starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint"):
         """
         construction method to create a basic (and at this stage unstratified) compartmental model, including checking
         that the arguments have been provided correctly (in a separate method called here)
@@ -334,7 +334,7 @@ class EpiModel:
             name of the compartment that births come in to
         :param starting_population: numeric
             value for the total starting population to be supplemented to if initial_conditions_to_total requested
-        :param default_starting_compartment: str
+        :param starting_compartment: str
             optional name of the compartment to add population recruitment to
         :param equilibrium_stopping_tolerance: float
             value at which relative changes in compartment size trigger stopping when equilibrium reached
@@ -355,20 +355,20 @@ class EpiModel:
         self.check_and_report_attributes(
             times, compartment_types, initial_conditions, parameters, requested_flows, initial_conditions_to_total,
             infectious_compartment, birth_approach, verbose, reporting_sigfigs, entry_compartment,
-            starting_population, default_starting_compartment, equilibrium_stopping_tolerance, integration_type)
+            starting_population, starting_compartment, equilibrium_stopping_tolerance, integration_type)
 
         # stop ide complaining about attributes being defined outside __init__, even though they aren't
         self.times, self.compartment_types, self.initial_conditions, self.parameters, self.requested_flows, \
-            self.initial_conditions_to_total, self.infectious_compartment, self.birth_approach, self.verbose, \
-            self.reporting_sigfigs, self.entry_compartment, self.starting_population, \
-            self.default_starting_compartment, self.default_starting_population, self.equilibrium_stopping_tolerance, \
-            self.unstratified_flows, self.outputs, self.integration_type, self.flow_diagram = (None for _ in range(19))
+        self.initial_conditions_to_total, self.infectious_compartment, self.birth_approach, self.verbose, \
+        self.reporting_sigfigs, self.entry_compartment, self.starting_population, \
+        self.starting_compartment, self.default_starting_population, self.equilibrium_stopping_tolerance, \
+        self.unstratified_flows, self.outputs, self.integration_type, self.flow_diagram = (None for _ in range(19))
 
         # convert input arguments to model attributes
         for attribute in \
                 ["times", "compartment_types", "initial_conditions", "parameters", "initial_conditions_to_total",
                  "infectious_compartment", "birth_approach", "verbose", "reporting_sigfigs", "entry_compartment",
-                 "starting_population", "default_starting_compartment", "infectious_compartment",
+                 "starting_population", "starting_compartment", "infectious_compartment",
                  "equilibrium_stopping_tolerance", "integration_type"]:
             setattr(self, attribute, eval(attribute))
 
@@ -470,12 +470,15 @@ class EpiModel:
     def find_remainder_compartment(self):
         """
         find the compartment to put the remaining population that hasn't been assigned yet when summing to total
+
+        :return: str
+            name of the compartment to assign the remaining population size to
         """
-        if len(self.default_starting_compartment) > 0 and \
-                self.default_starting_compartment not in self.compartment_types:
+        if len(self.starting_compartment) > 0 and \
+                self.starting_compartment not in self.compartment_types:
             raise ValueError("starting compartment to populate with initial values not found in available compartments")
-        elif len(self.default_starting_compartment) > 0:
-            return self.default_starting_compartment
+        elif len(self.starting_compartment) > 0:
+            return self.starting_compartment
         else:
             self.output_to_user("no default starting compartment requested for unallocated population, " +
                                 "so will be allocated to entry compartment %s" % self.entry_compartment)
@@ -774,13 +777,13 @@ class StratifiedModel(EpiModel):
     def __init__(self, times, compartment_types, initial_conditions, parameters, requested_flows,
                  initial_conditions_to_total=True, infectious_compartment="infectious", birth_approach="no_birth",
                  verbose=False, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1,
-                 default_starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint"):
+                 starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint"):
         EpiModel.__init__(self, times, compartment_types, initial_conditions, parameters, requested_flows,
                           initial_conditions_to_total=initial_conditions_to_total,
                           infectious_compartment=infectious_compartment, birth_approach=birth_approach,
                           verbose=verbose, reporting_sigfigs=reporting_sigfigs, entry_compartment=entry_compartment,
                           starting_population=starting_population,
-                          default_starting_compartment=default_starting_compartment,
+                          starting_compartment=starting_compartment,
                           equilibrium_stopping_tolerance=equilibrium_stopping_tolerance,
                           integration_type=integration_type)
 
