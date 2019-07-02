@@ -3,7 +3,7 @@ from scipy.integrate import odeint, solve_ivp, quad
 import matplotlib.pyplot
 import copy
 import pandas as pd
-# from graphviz import Digraph
+from graphviz import Digraph
 from sqlalchemy import create_engine
 import os
 from sqlalchemy import FLOAT
@@ -1338,6 +1338,8 @@ class StratifiedModel(EpiModel):
 
 
 if __name__ == "__main__":
+
+    # example code to test out many aspects of SUMMER function - intended to be equivalent to the example in R
     sir_model = StratifiedModel(
         numpy.linspace(0, 60 / 365, 61).tolist(),
         ["susceptible", "infectious", "recovered"],
@@ -1356,19 +1358,8 @@ if __name__ == "__main__":
 
     sir_model.run_model()
 
-    # create_flowchart(sir_model, strata=len(sir_model.strata))
+    create_flowchart(sir_model, strata=len(sir_model.strata))
 
-    # print(len(sir_model.times))
-    # print(sir_model.outputs[1])
-
-    # print(sir_model.outputs)
-
-    # print(sir_model.transition_flows)
-
-    #sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
-
-    # print(sir_model.times)
-    #
-    # print(sir_model.outputs[:, 0])
+    sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
 
 
