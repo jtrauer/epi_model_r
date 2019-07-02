@@ -303,7 +303,8 @@ class EpiModel:
     def __init__(self, times, compartment_types, initial_conditions, parameters, requested_flows,
                  initial_conditions_to_total=True, infectious_compartment="infectious", birth_approach="no_birth",
                  verbose=False, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1,
-                 starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint"):
+                 starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint",
+                 output_connections={}):
         """
         construction method to create a basic (and at this stage unstratified) compartmental model, including checking
         that the arguments have been provided correctly (in a separate method called here)
@@ -347,7 +348,7 @@ class EpiModel:
         self.death_flows = pd.DataFrame(columns=("type", "parameter", "origin", "implement"))
 
         # attributes with specific format that are independent of user inputs
-        self.tracked_quantities, self.output_connections, self.time_variants = ({} for _ in range(3))
+        self.tracked_quantities, self.time_variants = ({} for _ in range(2))
         self.derived_outputs = {"times": []}
         self.compartment_values, self.compartment_names = ([] for _ in range(2))
 
@@ -362,14 +363,15 @@ class EpiModel:
             self.initial_conditions_to_total, self.infectious_compartment, self.birth_approach, self.verbose, \
             self.reporting_sigfigs, self.entry_compartment, self.starting_population, \
             self.starting_compartment, self.default_starting_population, self.equilibrium_stopping_tolerance, \
-            self.unstratified_flows, self.outputs, self.integration_type, self.flow_diagram = (None for _ in range(19))
+            self.unstratified_flows, self.outputs, self.integration_type, self.flow_diagram, self.output_connections = \
+            (None for _ in range(20))
 
         # convert input arguments to model attributes
         for attribute in \
                 ["times", "compartment_types", "initial_conditions", "parameters", "initial_conditions_to_total",
                  "infectious_compartment", "birth_approach", "verbose", "reporting_sigfigs", "entry_compartment",
                  "starting_population", "starting_compartment", "infectious_compartment",
-                 "equilibrium_stopping_tolerance", "integration_type"]:
+                 "equilibrium_stopping_tolerance", "integration_type", "output_connections"]:
             setattr(self, attribute, eval(attribute))
 
         # set initial conditions and implement flows
@@ -495,7 +497,6 @@ class EpiModel:
 
         # check flow requested correctly
         for flow in _requested_flows:
-            print(flow)
             if flow["parameter"] not in self.parameters:
                 raise ValueError("flow parameter not found in parameter list")
             if flow["origin"] not in self.compartment_types:
@@ -533,6 +534,7 @@ class EpiModel:
         # for each derived output to be recorded, initialise a tracked quantities key to zero
         for output in self.output_connections:
             self.tracked_quantities[output] = 0.0
+            self.derived_outputs[output] = []
 
         # parameters essential for stratification
         self.parameters["entry_fractions"] = 1.0
@@ -559,7 +561,7 @@ class EpiModel:
 
     def run_model(self):
         """
-        integrate model odes
+        main function to integrate model odes, called externally in the master running script
         """
         self.output_to_user("now integrating")
         self.prepare_stratified_parameter_calculations()
@@ -603,57 +605,78 @@ class EpiModel:
         """
         pass
 
-    def apply_all_flow_types_to_odes(self, ode_equations, compartment_values, time):
+    def apply_all_flow_types_to_odes(self, _ode_equations, _compartment_values, _time):
         """
         apply all flow types to a vector of zeros (deaths must come before births in case births replace deaths)
-        """
-        ode_equations = self.apply_transition_flows(ode_equations, compartment_values, time)
-        ode_equations = self.apply_compartment_death_flows(ode_equations, compartment_values, time)
-        ode_equations = self.apply_universal_death_flow(ode_equations, compartment_values, time)
-        return self.apply_birth_rate(ode_equations, compartment_values, time)
 
-    def apply_transition_flows(self, ode_equations, compartment_values, time):
+        :param _ode_equations: list
+            comes in as a list of zeros with length equal to that of the compartments
+        :param _compartment_values: numpy.ndarray
+            working values of the compartment sizes
+        :param _time:
+            current integration time
+        :return: ode equations as list
+            updated ode equations in same format but with all flows implemented
         """
-        add fixed or infection-related flow to odes
+        _ode_equations = self.apply_transition_flows(_ode_equations, _compartment_values, _time)
+        _ode_equations = self.apply_compartment_death_flows(_ode_equations, _compartment_values, _time)
+        _ode_equations = self.apply_universal_death_flow(_ode_equations, _compartment_values, _time)
+        return self.apply_birth_rate(_ode_equations, _compartment_values, _time)
+
+    def apply_transition_flows(self, _ode_equations, _compartment_values, _time):
         """
-        for f in self.transition_flows[self.transition_flows.implement == len(self.strata)].index:
+        apply fixed or infection-related intercompartmental transition flows to odes
+
+        :parameters and return: see previous method apply_all_flow_types_to_odes
+        """
+        for n_flow in self.transition_flows[self.transition_flows.implement == len(self.strata)].index:
 
             # find adjusted parameter value
-            adjusted_parameter = self.get_parameter_value(self.transition_flows.parameter[f], time)
+            adjusted_parameter = self.get_parameter_value(self.transition_flows.parameter[n_flow], _time)
 
             # find from compartment and "infectious population", which is 1 for standard flows
-            infectious_population = self.find_infectious_multiplier(self.transition_flows.type[f])
+            infectious_population = self.find_infectious_multiplier(self.transition_flows.type[n_flow])
 
-            # calculate the flow and apply to the odes
-            from_compartment = self.compartment_names.index(self.transition_flows.origin[f])
-            net_flow = adjusted_parameter * compartment_values[from_compartment] * infectious_population
-            ode_equations = increment_compartment(ode_equations, from_compartment, -net_flow)
-            ode_equations = increment_compartment(
-                ode_equations, self.compartment_names.index(self.transition_flows.to[f]), net_flow)
+            # calculate the n_flow and apply to the odes
+            from_compartment = self.compartment_names.index(self.transition_flows.origin[n_flow])
+            net_flow = adjusted_parameter * _compartment_values[from_compartment] * infectious_population
+            _ode_equations = increment_compartment(_ode_equations, from_compartment, -net_flow)
+            _ode_equations = increment_compartment(
+                _ode_equations, self.compartment_names.index(self.transition_flows.to[n_flow]), net_flow)
 
-            # track any quantities dependent on flow rates
-            self.track_derived_outputs(f, net_flow)
+            # track any quantities dependent on n_flow rates
+            self.track_derived_outputs(n_flow, net_flow)
 
         # add another element to the derived outputs vector
-        self.extend_derived_outputs(time)
+        self.extend_derived_outputs(_time)
 
-        # return flow rates
-        return ode_equations
+        # return n_flow rates
+        return _ode_equations
 
-    def track_derived_outputs(self, n_flow, net_flow):
+    def track_derived_outputs(self, _n_flow, _net_flow):
         """
-        calculate derived quantities to be tracked
+        calculate derived quantities to be tracked, which are stored as the self.derived_outputs dictionary for the
+        current working time step
+
+        :param _n_flow: int
+            row number of the flow being considered in the preceding method
+        :param _net_flow: float
+            previously calculated magnitude of the transition flow
         """
         for output_type in self.output_connections:
-            if self.output_connections[output_type]["origin"] in self.transition_flows.origin[n_flow] \
-                    and self.output_connections[output_type]["to"] in self.transition_flows.to[n_flow]:
-                self.tracked_quantities[output_type] += net_flow
+            if self.output_connections[output_type]["origin"] in self.transition_flows.origin[_n_flow] \
+                    and self.output_connections[output_type]["to"] in self.transition_flows.to[_n_flow]:
+                self.tracked_quantities[output_type] += _net_flow
 
-    def extend_derived_outputs(self, time):
+    def extend_derived_outputs(self, _time):
         """
-        add the derived quantities being tracked to the end of the tracking vector
+        add the derived quantities being tracked to the end of the tracking vector, taking the self.derived_outputs
+        dictionary for a single time point and updating the derived outputs dictionary of lists for all time points
+
+        :param _time: float
+            current time in integration process
         """
-        self.derived_outputs["times"].append(time)
+        self.derived_outputs["times"].append(_time)
         for output_type in self.output_connections:
             self.derived_outputs[output_type].append(self.tracked_quantities[output_type])
 
@@ -784,7 +807,8 @@ class StratifiedModel(EpiModel):
     def __init__(self, times, compartment_types, initial_conditions, parameters, requested_flows,
                  initial_conditions_to_total=True, infectious_compartment="infectious", birth_approach="no_birth",
                  verbose=False, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1,
-                 starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint"):
+                 starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint",
+                 output_connections={}):
         EpiModel.__init__(self, times, compartment_types, initial_conditions, parameters, requested_flows,
                           initial_conditions_to_total=initial_conditions_to_total,
                           infectious_compartment=infectious_compartment, birth_approach=birth_approach,
@@ -792,7 +816,7 @@ class StratifiedModel(EpiModel):
                           starting_population=starting_population,
                           starting_compartment=starting_compartment,
                           equilibrium_stopping_tolerance=equilibrium_stopping_tolerance,
-                          integration_type=integration_type)
+                          integration_type=integration_type, output_connections=output_connections)
 
         self.strata, self.removed_compartments, self.overwrite_parameters, self.compartment_types_to_stratify = \
             [[] for _ in range(4)]
@@ -1280,6 +1304,7 @@ if __name__ == "__main__":
         [{"type": "standard_flows", "parameter": "recovery", "origin": "infectious", "to": "recovered"},
          {"type": "infection_density", "parameter": "beta", "origin": "susceptible", "to": "infectious"},
          {"type": "compartment_death", "parameter": "infect_death", "origin": "infectious"}],
+        output_connections={"incidence": {"origin": "susceptible", "to": "infectious"}},
         verbose=False, integration_type="solve_ivp")
     sir_model.stratify("hiv", ["negative", "positive"], [],
                        {"recovery": {"negative": 0.7, "positive": 0.5},

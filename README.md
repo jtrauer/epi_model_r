@@ -87,5 +87,7 @@ compartment_death
 * origin: the name of the compartment from which the flow arises
 * to: the name of the compartment that the transition goes towards, no applicable to death flows
 
-
-
+## Model running
+Model running is called through the run_model to the model object once constructed
+In Python, odeint and solve_ivp have been implemented, where solve_ivp can be used to stop model integration once
+equilibrium has been reached (if requested, both available from the scipy.integrate module).
