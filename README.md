@@ -91,3 +91,19 @@ compartment_death
 Model running is called through the run_model to the model object once constructed
 In Python, odeint and solve_ivp have been implemented, where solve_ivp can be used to stop model integration once
 equilibrium has been reached (if requested, both available from the scipy.integrate module).
+
+## Tracking outputs
+For outputs such as incidence and total mortality, a dictionary/list can be passed (output_connections) to request
+tracking of specific model quantities emerging from the model. The key/name of the quantity is its name, while the value
+is a dictionary/list specifying the origin and destination ("to") compartment. For example, in an SIR model in Python,
+this would be specified as: {"incidence": {"origin": "susceptible", "to": "infectious"}}
+
+## Birth rates
+There are currently three options for calculating the rate of birth implemented in SUMMER, although we will aim to
+introduce further approaches in the future. The implemented options are:
+* no_birth: No births/recruitment is implemented
+* add_crude_birth_rate: The parameter "crude_birth_rate" is multiplied by the total population size to determine the
+birth/recruitment rate
+* replace_deaths: Under this approach the total rate of all deaths to be tracked throughout model integration (which is
+implemented automatically if this approach is requested) and these deaths re-enter the model as births
+Whichever approach is adopted, births are then implemented to the compartment nominated as the entry_compartment.

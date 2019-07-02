@@ -680,47 +680,59 @@ class EpiModel:
         for output_type in self.output_connections:
             self.derived_outputs[output_type].append(self.tracked_quantities[output_type])
 
-    def apply_compartment_death_flows(self, ode_equations, compartment_values, time):
+    def apply_compartment_death_flows(self, _ode_equations, _compartment_values, _time):
         """
         equivalent method to for transition flows above, but for deaths
+
+        :parameters and return: see previous method apply_all_flow_types_to_odes
         """
-        for f in self.death_flows[self.death_flows.implement == len(self.strata)].index:
-            adjusted_parameter = self.get_parameter_value(self.death_flows.parameter[f], time)
-            from_compartment = self.compartment_names.index(self.death_flows.origin[f])
-            net_flow = adjusted_parameter * compartment_values[from_compartment]
-            ode_equations = increment_compartment(ode_equations, from_compartment, -net_flow)
+
+        for n_flow in self.death_flows[self.death_flows.implement == len(self.strata)].index:
+            adjusted_parameter = self.get_parameter_value(self.death_flows.parameter[n_flow], _time)
+            from_compartment = self.compartment_names.index(self.death_flows.origin[n_flow])
+            net_flow = adjusted_parameter * _compartment_values[from_compartment]
+            _ode_equations = increment_compartment(_ode_equations, from_compartment, -net_flow)
             if "total_deaths" in self.tracked_quantities:
                 self.tracked_quantities["total_deaths"] += net_flow
-        return ode_equations
+        return _ode_equations
 
-    def apply_universal_death_flow(self, ode_equations, compartment_values, time):
+    def apply_universal_death_flow(self, _ode_equations, _compartment_values, _time):
         """
         apply the population-wide death rate to all compartments
+
+        :parameters and return: see previous method apply_all_flow_types_to_odes
         """
         for compartment in self.compartment_names:
-            adjusted_parameter = self.get_parameter_value("universal_death_rate", time)
+            adjusted_parameter = self.get_parameter_value("universal_death_rate", _time)
             from_compartment = self.compartment_names.index(compartment)
-            net_flow = adjusted_parameter * compartment_values[from_compartment]
-            ode_equations = increment_compartment(ode_equations, from_compartment, -net_flow)
+            net_flow = adjusted_parameter * _compartment_values[from_compartment]
+            _ode_equations = increment_compartment(_ode_equations, from_compartment, -net_flow)
 
-            # track deaths in case births are meant to replace deaths
+            # track deaths in case births need to replace deaths
             if "total_deaths" in self.tracked_quantities:
                 self.tracked_quantities["total_deaths"] += net_flow
-        return ode_equations
+        return _ode_equations
 
-    def apply_birth_rate(self, ode_equations, compartment_values, time):
+    def apply_birth_rate(self, _ode_equations, _compartment_values, _time):
         """
         apply a birth rate to the entry compartments
-        """
-        return increment_compartment(ode_equations, self.compartment_names.index(self.entry_compartment),
-                                     self.find_total_births(compartment_values))
 
-    def find_total_births(self, compartment_values):
+        :parameters and return: see previous method apply_all_flow_types_to_odes
+        """
+        return increment_compartment(_ode_equations, self.compartment_names.index(self.entry_compartment),
+                                     self.find_total_births(_compartment_values))
+
+    def find_total_births(self, _compartment_values):
         """
         work out the total births to apply dependent on the approach requested
+
+        :param _compartment_values:
+            as for preceding methods
+        :return: float
+            total rate of births to be implemented in the model
         """
         if self.birth_approach == "add_crude_birth_rate":
-            return self.parameters["crude_birth_rate"] * sum(compartment_values)
+            return self.parameters["crude_birth_rate"] * sum(_compartment_values)
         elif self.birth_approach == "replace_deaths":
             return self.tracked_quantities["total_deaths"]
         else:
@@ -729,38 +741,58 @@ class EpiModel:
     def find_infectious_multiplier(self, flow_type):
         """
         find the multiplier to account for the infectious population in dynamic flows
+
+        :param flow_type: str
+            type of flow, as per the standard naming approach to flow types for the dataframes flow attribute
+        :return:
+            the total infectious quantity, whether that be the number or proportion of infectious persons
+            needs to return as one for flows that are not transmission dynamic infectiousness flows
         """
         if flow_type == "infection_density":
             return self.tracked_quantities["infectious_population"]
         elif flow_type == "infection_frequency":
             return self.tracked_quantities["infectious_population"] / self.tracked_quantities["total_population"]
         else:
-            return 1
+            return 1.0
 
-    def update_tracked_quantities(self, compartment_values):
+    def update_tracked_quantities(self, _compartment_values):
         """
         update quantities that emerge during model running (not pre-defined functions of time)
+
+        :param _compartment_values:
+            as for preceding methods
         """
         for quantity in self.tracked_quantities:
             self.tracked_quantities[quantity] = 0.0
             if quantity == "infectious_population":
-                self.find_infectious_population(compartment_values)
+                self.find_infectious_population(_compartment_values)
             elif quantity == "total_population":
-                self.tracked_quantities["total_population"] = sum(compartment_values)
+                self.tracked_quantities["total_population"] = sum(_compartment_values)
 
-    def find_infectious_population(self, compartment_values):
+    def find_infectious_population(self, _compartment_values):
         """
         calculations to find the effective infectious population
+
+        :param _compartment_values:
+            as for preceding methods
         """
         for compartment in [comp for comp in self.compartment_names if find_stem(comp) == self.infectious_compartment]:
             self.tracked_quantities["infectious_population"] += \
-                compartment_values[self.compartment_names.index(compartment)]
+                _compartment_values[self.compartment_names.index(compartment)]
 
-    def get_parameter_value(self, parameter, time):
+    def get_parameter_value(self, _parameter, _time):
         """
-        very simple, but need to split this out as a function in order to allow stratification later
+        very simple, essentially place-holding, but need to split this out as a function in order to
+        stratification later
+
+        :param _parameter: str
+            parameter name
+        :param _time: float
+            current integration time
+        :return: float
+            parameter value
         """
-        return self.find_parameter_value(parameter, time)
+        return self.find_parameter_value(_parameter, _time)
 
     """
     simple output methods (most outputs will be managed outside of the python code)
@@ -769,7 +801,9 @@ class EpiModel:
     def get_total_compartment_size(self, compartment_tags):
         """
         find the total values of the compartments listed by the user
-        :param compartment_tags: list of string variables for the compartment stems of interest
+
+        :param compartment_tags: list
+            list of string variables for the compartment stems of interest
         """
         indices_to_plot = \
             [i for i in range(len(self.compartment_names)) if find_stem(self.compartment_names[i]) in compartment_tags]
@@ -779,8 +813,12 @@ class EpiModel:
         """
         plot the aggregate population of the compartments, the name of which contains all items of the list
         compartment_tags
-        :param compartment_tags: a list of string variables
-        :param multiplier: scalar value to multiply the compartment values by
+        kept very simple for now, because output visualisation will generally be done outside of Python
+
+        :param compartment_tags: list
+            ilst of string variables for the compartments to plot
+        :param multiplier: float
+            scalar value to multiply the compartment values by
         """
         matplotlib.pyplot.plot(self.times, multiplier * self.get_total_compartment_size(compartment_tags))
         matplotlib.pyplot.show()
@@ -1240,16 +1278,16 @@ class StratifiedModel(EpiModel):
         for constant_parameter in self.parameter_components[parameter]["constants"]:
             self.parameter_components[parameter]["constant_value"] *= self.parameters[constant_parameter]
 
-    def get_parameter_value(self, parameter, time):
+    def get_parameter_value(self, _parameter, _time):
         """
         calculate adjusted parameter value from pre-calculated product of constant components and time variants
         """
-        adjusted_parameter = self.parameter_components[parameter]["constant_value"]
-        for time_variant in self.parameter_components[parameter]["time_variants"]:
-            adjusted_parameter *= self.time_variants[time_variant](time)
+        adjusted_parameter = self.parameter_components[_parameter]["constant_value"]
+        for time_variant in self.parameter_components[_parameter]["time_variants"]:
+            adjusted_parameter *= self.time_variants[time_variant](_time)
         return adjusted_parameter
 
-    def find_infectious_population(self, compartment_values):
+    def find_infectious_population(self, _compartment_values):
         """
         calculations to find the effective infectious population
         """
@@ -1267,14 +1305,14 @@ class StratifiedModel(EpiModel):
                         infectiousness_modifier = self.infectiousness_adjustments[adjustment]
 
                 self.tracked_quantities["infectious_population"] += \
-                    compartment_values[self.compartment_names.index(compartment)] * \
+                    _compartment_values[self.compartment_names.index(compartment)] * \
                     infectiousness_modifier
 
-    def apply_birth_rate(self, ode_equations, compartment_values, time):
+    def apply_birth_rate(self, ode_equations, _compartment_values, _time):
         """
         apply a population-wide death rate to all compartments
         """
-        total_births = self.find_total_births(compartment_values)
+        total_births = self.find_total_births(_compartment_values)
 
         # split the total births across entry compartments
         for compartment in self.compartment_names:
