@@ -57,11 +57,18 @@ formatted, etc. is provided in the docstrings to each method of the model object
 ## Base model construction
 As mentioned, the base EpiModel class allows for the construction of standard compartmental epidemiological models
 implemented in ODEs. The object constructor must be provided with arguments that include:
-1. The times at which the model is to be evaluated
+1. The times at which the model outputs are to be evaluated
+    * Note that time units are arbitrary and the user should recall what time unit is being used and ensure parameter
+    value units and requested time are requested with the same time unit in mind (e.g. day, year, etc.)
 2. The names of the types of compartments to be provided to the model
 3. The distribution of initial conditions of the population
 4. Model parameters for the calculations of flows
 5. Intercompartmental flows
 6. A range of optional arguments pertaining to modelling and reporting features
-These first five arguments are required, but can typically be provided as empty data structures to be subsequently
-populated using object methods.
+These first five arguments are required, but intercompartmental flows can be provided as an empty list and populated
+with specific flows later. Note also that not all compartments must have an initial value provided at the construction
+stage, as assumptions will be made later.
+
+### Starting population
+
+

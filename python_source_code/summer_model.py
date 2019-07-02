@@ -2,8 +2,8 @@ import numpy
 from scipy.integrate import odeint, solve_ivp, quad
 import matplotlib.pyplot
 import copy
-import pandas
-from graphviz import Digraph
+import pandas as pd
+# from graphviz import Digraph
 from sqlalchemy import create_engine
 import os
 from sqlalchemy import FLOAT
@@ -272,64 +272,104 @@ def create_flowchart(model_object, strata=-1, stratify=True, name="flow_chart"):
 
 class EpiModel:
     """
-    model construction methods
+    most general methods
     """
 
     def find_parameter_value(self, parameter_name, time):
         """
         find the value of a parameter with time-variant values trumping constant ones
+
+        :param parameter_name: string for the name of the parameter of interest
+        :param time: model integration time (if needed)
+        :return: parameter value, whether constant or time variant
         """
-        if parameter_name in self.time_variants:
-            return self.time_variants[parameter_name](time)
-        else:
-            return self.parameters[parameter_name]
+        return self.time_variants[parameter_name](time) if parameter_name in self.time_variants \
+            else self.parameters[parameter_name]
 
     def output_to_user(self, comment):
         """
         short function to save the if statement in every call to output some information, may be adapted later and was
         more important to the R version of the repository
+
+        :param: comment: string for the comment to be displayed to the user
         """
-        if self.report:
+        if self.verbose:
             print(comment)
+
+    """
+    model construction methods
+    """
 
     def __init__(self, times, compartment_types, initial_conditions, parameters, requested_flows,
                  initial_conditions_to_total=True, infectious_compartment="infectious", birth_approach="no_birth",
-                 report=False, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1,
+                 verbose=False, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1,
                  default_starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint"):
+        """
+        construction method to create a basic (and at this stage unstratified) compartmental model, including checking
+        that the arguments have been provided correctly (in a separate method called here)
 
-        # set flow attributes as pandas dataframes with set column names
-        self.transition_flows = pandas.DataFrame(columns=["type", "parameter", "origin", "to", "implement"])
-        self.death_flows = pandas.DataFrame(columns=["type", "parameter", "origin", "implement"])
+        :param times: list
+            time steps at which outputs are to be evaluated
+        :param compartment_types: list
+            strings representing the compartments of the model
+        :param initial_conditions: dict
+            keys are compartment types, values are starting population values for each compartment
+            note that not all compartment_types must be included as keys here
+        :param parameters: dict
+            constant parameter values
+        :param requested_flows: list of dicts in standard format
+            list with each element being a model flow, with fixed key names according to the type of flow implemented
+        :param initial_conditions_to_total: bool
+            whether to add the initial conditions up to a certain total if this value hasn't yet been reached through
+            the initial_conditions argument
+        :param infectious_compartment: str
+            name of the infectious compartment for calculation of intercompartmental infection flows
+        :param birth_approach: str
+            approach to allowing entry flows into the model, must be add_crude_birth_rate, replace_deaths or no_births
+        :param verbose: bool
+            whether to output progress in model construction as this process proceeds
+        :param reporting_sigfigs: int
+            number of significant figures to output to when reporting progress
+        :param entry_compartment: str
+            name of the compartment that births come in to
+        :param starting_population: numeric
+            value for the total starting population to be supplemented to if initial_conditions_to_total requested
+        :param default_starting_compartment: str
+            optional name of the compartment to add population recruitment to
+        :param equilibrium_stopping_tolerance: float
+            value at which relative changes in compartment size trigger stopping when equilibrium reached
+        :param integration_type: str
+            integration approach for numeric solution to odes, must be odeint or solveivp currently
+        """
+
+        # set flow attributes as pandas dataframes with fixed column names
+        self.transition_flows = pd.DataFrame(columns=("type", "parameter", "origin", "to", "implement"))
+        self.death_flows = pd.DataFrame(columns=("type", "parameter", "origin", "implement"))
 
         # attributes with specific format that are independent of user inputs
-        self.tracked_quantities, self.output_connections, self.time_variants = \
-            [{} for _ in range(3)]
+        self.tracked_quantities, self.output_connections, self.time_variants = ({} for _ in range(3))
         self.derived_outputs = {"times": []}
-        self.compartment_values, self.compartment_names = \
-            [[] for _ in range(2)]
-
-        # features that should not be changed
-        self.available_birth_approaches = ["add_crude_birth_rate", "replace_deaths", "no_births"]
+        self.compartment_values, self.compartment_names = ([] for _ in range(2))
 
         # ensure requests are fed in correctly
         self.check_and_report_attributes(
             times, compartment_types, initial_conditions, parameters, requested_flows, initial_conditions_to_total,
-            infectious_compartment, birth_approach, report, reporting_sigfigs, entry_compartment,
+            infectious_compartment, birth_approach, verbose, reporting_sigfigs, entry_compartment,
             starting_population, default_starting_compartment, equilibrium_stopping_tolerance, integration_type)
 
         # stop ide complaining about attributes being defined outside __init__, even though they aren't
         self.times, self.compartment_types, self.initial_conditions, self.parameters, self.requested_flows, \
-            self.initial_conditions_to_total, self.infectious_compartment, self.birth_approach, self.report, \
+            self.initial_conditions_to_total, self.infectious_compartment, self.birth_approach, self.verbose, \
             self.reporting_sigfigs, self.entry_compartment, self.starting_population, \
             self.default_starting_compartment, self.default_starting_population, self.equilibrium_stopping_tolerance, \
-            self.unstratified_flows, self.outputs, self.integration_type, self.flow_diagram = [None for _ in range(19)]
+            self.unstratified_flows, self.outputs, self.integration_type, self.flow_diagram = (None for _ in range(19))
 
         # convert input arguments to model attributes
-        for attribute in ["times", "compartment_types", "initial_conditions", "parameters",
-                          "initial_conditions_to_total", "infectious_compartment", "birth_approach", "report",
-                          "reporting_sigfigs", "entry_compartment", "starting_population",
-                          "default_starting_compartment", "infectious_compartment", "equilibrium_stopping_tolerance",
-                          "integration_type"]:
+        for attribute in \
+                ["times", "compartment_types", "initial_conditions", "parameters", "initial_conditions_to_total",
+                 "infectious_compartment", "birth_approach", "verbose", "reporting_sigfigs", "entry_compartment",
+                 "starting_population", "default_starting_compartment", "infectious_compartment",
+                 "equilibrium_stopping_tolerance", "integration_type"]:
             setattr(self, attribute, eval(attribute))
 
         # set initial conditions and implement flows
@@ -342,62 +382,76 @@ class EpiModel:
         self.add_default_quantities()
 
     def check_and_report_attributes(
-            self, times, compartment_types, initial_conditions, parameters, requested_flows,
-            initial_conditions_to_total, infectious_compartment, birth_approach, report, reporting_sigfigs,
-            entry_compartment, starting_population, default_starting_compartment, equilibrium_stopping_tolerance,
-            integration_type):
+            self, _times, _compartment_types, _initial_conditions, _parameters, _requested_flows,
+            _initial_conditions_to_total, _infectious_compartment, _birth_approach, _verbose, _reporting_sigfigs,
+            _entry_compartment, _starting_population, _default_starting_compartment, _equilibrium_stopping_tolerance,
+            _integration_type):
         """
         check all input data have been requested correctly
+
+        :parameters: all parameters have come directly from the construction (__init__) method unchanged and have been
+            renamed with a preceding _ character
         """
 
         # check that variables are of the expected type
-        for expected_numeric_variable in ["reporting_sigfigs", "starting_population"]:
+        for expected_numeric_variable in ["_reporting_sigfigs", "_starting_population"]:
             if not isinstance(eval(expected_numeric_variable), int):
                 raise TypeError("expected integer for %s" % expected_numeric_variable)
-        for expected_list in ["times", "compartment_types", "requested_flows"]:
+        for expected_list in ["_times", "_compartment_types", "_requested_flows"]:
             if not isinstance(eval(expected_list), list):
                 raise TypeError("expected list for %s" % expected_list)
         for expected_string in \
-                ["infectious_compartment", "birth_approach", "entry_compartment", "default_starting_compartment",
-                 "integration_type"]:
+                ["_infectious_compartment", "_birth_approach", "_entry_compartment", "_default_starting_compartment",
+                 "_integration_type"]:
             if not isinstance(eval(expected_string), str):
                 raise TypeError("expected string for %s" % expected_string)
-        for expected_boolean in ["initial_conditions_to_total", "report"]:
+        for expected_boolean in ["_initial_conditions_to_total", "_verbose"]:
             if not isinstance(eval(expected_boolean), bool):
                 raise TypeError("expected boolean for %s" % expected_boolean)
 
         # check some specific requirements
-        if infectious_compartment not in compartment_types:
+        if _infectious_compartment not in _compartment_types:
             ValueError("infectious compartment name is not one of the listed compartment types")
-        if birth_approach not in self.available_birth_approaches:
+        if _birth_approach not in ("add_crude_birth_rate", "replace_deaths", "no_births"):
             ValueError("requested birth approach unavailable")
-        if sorted(times) != times:
+        if sorted(_times) != _times:
             self.output_to_user("requested integration times are not sorted, now sorting")
             self.times = sorted(self.times)
 
         # report on characteristics of inputs
-        if report:
-            print("integrating from time %s to %s"
-                  % (round(times[0], reporting_sigfigs), round(times[-1], reporting_sigfigs)))
+        if _verbose:
+            print("integration times are from %s to %s (time units are always arbitrary)"
+                  % (round(_times[0], _reporting_sigfigs), round(_times[-1], _reporting_sigfigs)))
             print("unstratified requested initial conditions are:")
-            for compartment in initial_conditions:
-                print("\t%s: %s" % (compartment, initial_conditions[compartment]))
-            print("infectious compartment is called '%s'" % infectious_compartment)
-            print("birth approach is %s" % birth_approach)
+            for compartment in _initial_conditions:
+                print("\t%s: %s" % (compartment, _initial_conditions[compartment]))
+            print("infectious compartment is called '%s'" % _infectious_compartment)
+            print("birth approach is %s" % _birth_approach)
 
-    def set_initial_conditions(self, initial_conditions_to_total):
+    def set_initial_conditions(self, _initial_conditions_to_total):
         """
         set starting compartment values
+
+        :param _initial_conditions_to_total: bool
+            unchanged from argument to __init__
         """
 
-        # set starting values of unstratified compartments to requested value, or zero if no value requested
+        # keep copy of the compartment types for when the compartment names are stratified later
         self.compartment_names = copy.copy(self.compartment_types)
+
+        # start from making sure all compartments are set to zero values
         self.compartment_values = [0.0] * len(self.compartment_names)
-        for compartment in [comp for comp in self.compartment_types if comp in self.initial_conditions]:
-            self.compartment_values[self.compartment_names.index(compartment)] = self.initial_conditions[compartment]
+
+        # set starting values of unstratified compartments to requested value
+        for compartment in self.initial_conditions:
+            if compartment in self.compartment_types:
+                self.compartment_values[self.compartment_names.index(compartment)] = \
+                    self.initial_conditions[compartment]
+            else:
+                raise ValueError("compartment %s requested in initial conditions not found in model compartment types")
 
         # sum to a total value if requested
-        if initial_conditions_to_total:
+        if _initial_conditions_to_total:
             self.sum_initial_compartments_to_total()
 
     def sum_initial_compartments_to_total(self):
@@ -719,12 +773,12 @@ class StratifiedModel(EpiModel):
 
     def __init__(self, times, compartment_types, initial_conditions, parameters, requested_flows,
                  initial_conditions_to_total=True, infectious_compartment="infectious", birth_approach="no_birth",
-                 report=False, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1,
+                 verbose=False, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1,
                  default_starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint"):
         EpiModel.__init__(self, times, compartment_types, initial_conditions, parameters, requested_flows,
                           initial_conditions_to_total=initial_conditions_to_total,
                           infectious_compartment=infectious_compartment, birth_approach=birth_approach,
-                          report=report, reporting_sigfigs=reporting_sigfigs, entry_compartment=entry_compartment,
+                          verbose=verbose, reporting_sigfigs=reporting_sigfigs, entry_compartment=entry_compartment,
                           starting_population=starting_population,
                           default_starting_compartment=default_starting_compartment,
                           equilibrium_stopping_tolerance=equilibrium_stopping_tolerance,
@@ -740,12 +794,12 @@ class StratifiedModel(EpiModel):
     """
 
     def stratify(self, stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests=(),
-                 requested_proportions={}, infectiousness_adjustments=(), report=True):
+                 requested_proportions={}, infectiousness_adjustments=(), verbose=True):
         """
         initial preparation and checks
         """
         strata_names, adjustment_requests = self.prepare_and_check_stratification(
-            stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests, report)
+            stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests, verbose)
 
         # work out ageing flows (comes first so that the compartment names are still in the unstratified form)
         if stratification_name == "age":
@@ -766,11 +820,11 @@ class StratifiedModel(EpiModel):
         self.apply_heterogeneous_infectiousness(stratification_name, strata_request, infectiousness_adjustments)
 
     def prepare_and_check_stratification(self, stratification_name, strata_request, compartment_types_to_stratify,
-                                         adjustment_requests, report):
+                                         adjustment_requests, verbose):
         """
         initial preparation and checks
         """
-        self.report = report
+        self.verbose = verbose
         if stratification_name == "age":
             strata_request = self.check_age_stratification(strata_request, compartment_types_to_stratify)
         else:
@@ -1208,30 +1262,31 @@ class StratifiedModel(EpiModel):
 
 
 if __name__ == "__main__":
-    sir_model = StratifiedModel(numpy.linspace(0, 60 / 365, 61).tolist(),
-                         ["susceptible", "infectious", "recovered"],
-                         {"infectious": 0.001},
-                         {"beta": 400, "recovery": 365 / 13, "infect_death": 1},
-                         [{"type": "standard_flows", "parameter": "recovery", "origin": "infectious", "to": "recovered"},
-                          {"type": "infection_density", "parameter": "beta", "origin": "susceptible", "to": "infectious"},
-                          {"type": "compartment_death", "parameter": "infect_death", "origin": "infectious"}],
-                         report=False, integration_type="solve_ivp")
+    sir_model = StratifiedModel(
+        numpy.linspace(0, 60 / 365, 61).tolist(),
+        ["susceptible", "infectious", "recovered"],
+        {"infectious": 0.001},
+        {"beta": 400, "recovery": 365 / 13, "infect_death": 1},
+        [{"type": "standard_flows", "parameter": "recovery", "origin": "infectious", "to": "recovered"},
+         {"type": "infection_density", "parameter": "beta", "origin": "susceptible", "to": "infectious"},
+         {"type": "compartment_death", "parameter": "infect_death", "origin": "infectious"}],
+        verbose=True, integration_type="solve_ivp")
     sir_model.stratify("hiv", ["negative", "positive"], [],
                        {"recovery": {"negative": 0.7, "positive": 0.5},
                         "infect_death": {"negative": 0.5}},
-                       {"negative": 0.6}, report=False)
-    sir_model.stratify("age", [1, 10, 3], [], {}, report=False)
+                       {"negative": 0.6}, verbose=False)
+    sir_model.stratify("age", [1, 10, 3], [], {}, verbose=False)
 
     sir_model.run_model()
 
-    create_flowchart(sir_model, strata=len(sir_model.strata))
+    # create_flowchart(sir_model, strata=len(sir_model.strata))
 
     # print(len(sir_model.times))
     # print(sir_model.outputs[1])
 
     # print(sir_model.outputs)
 
-    print(sir_model.transition_flows)
+    # print(sir_model.transition_flows)
 
     #sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
 

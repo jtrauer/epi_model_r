@@ -141,9 +141,9 @@ def build_working_tb_model(beta):
     age_breakpoints = [0, 5, 15]
     age_infectiousness = get_parameter_dict_from_function(logistic_scaling_function(15.0), age_breakpoints)
     tb_model_.stratify("age", age_breakpoints, [],
-                      adjustment_requests=get_adapted_age_parameters(age_breakpoints),
-                      infectiousness_adjustments=age_infectiousness,
-                      report=False)
+                       adjustment_requests=get_adapted_age_parameters(age_breakpoints),
+                       infectiousness_adjustments=age_infectiousness,
+                       verbose=False)
 
     # tb_model_.stratify("smear",
     #                   ["smearpos", "smearneg", "extrapul"],
