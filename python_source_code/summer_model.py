@@ -356,7 +356,8 @@ class EpiModel:
         self.check_and_report_attributes(
             times, compartment_types, initial_conditions, parameters, requested_flows, initial_conditions_to_total,
             infectious_compartment, birth_approach, verbose, reporting_sigfigs, entry_compartment,
-            starting_population, starting_compartment, equilibrium_stopping_tolerance, integration_type)
+            starting_population, starting_compartment, equilibrium_stopping_tolerance, integration_type,
+            output_connections)
 
         # stop ide complaining about attributes being defined outside __init__, even though they aren't
         self.times, self.compartment_types, self.initial_conditions, self.parameters, self.requested_flows, \
@@ -387,7 +388,7 @@ class EpiModel:
             self, _times, _compartment_types, _initial_conditions, _parameters, _requested_flows,
             _initial_conditions_to_total, _infectious_compartment, _birth_approach, _verbose, _reporting_sigfigs,
             _entry_compartment, _starting_population, _default_starting_compartment, _equilibrium_stopping_tolerance,
-            _integration_type):
+            _integration_type, _output_connections):
         """
         check all input data have been requested correctly
 
@@ -419,6 +420,9 @@ class EpiModel:
         if sorted(_times) != _times:
             self.output_to_user("requested integration times are not sorted, now sorting")
             self.times = sorted(self.times)
+        for output in _output_connections:
+            if any(item not in ("origin", "to") for item in _output_connections[output]):
+                raise ValueError("output connections incorrect specified, need an 'origin' and possibly a 'to' key")
 
         # report on characteristics of inputs
         if _verbose:
