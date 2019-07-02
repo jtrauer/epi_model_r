@@ -359,10 +359,10 @@ class EpiModel:
 
         # stop ide complaining about attributes being defined outside __init__, even though they aren't
         self.times, self.compartment_types, self.initial_conditions, self.parameters, self.requested_flows, \
-        self.initial_conditions_to_total, self.infectious_compartment, self.birth_approach, self.verbose, \
-        self.reporting_sigfigs, self.entry_compartment, self.starting_population, \
-        self.starting_compartment, self.default_starting_population, self.equilibrium_stopping_tolerance, \
-        self.unstratified_flows, self.outputs, self.integration_type, self.flow_diagram = (None for _ in range(19))
+            self.initial_conditions_to_total, self.infectious_compartment, self.birth_approach, self.verbose, \
+            self.reporting_sigfigs, self.entry_compartment, self.starting_population, \
+            self.starting_compartment, self.default_starting_population, self.equilibrium_stopping_tolerance, \
+            self.unstratified_flows, self.outputs, self.integration_type, self.flow_diagram = (None for _ in range(19))
 
         # convert input arguments to model attributes
         for attribute in \
@@ -484,13 +484,18 @@ class EpiModel:
                                 "so will be allocated to entry compartment %s" % self.entry_compartment)
             return self.entry_compartment
 
-    def implement_flows(self, requested_flows):
+    def implement_flows(self, _requested_flows):
         """
         add all flows to create data frames from input lists
+
+        :param _requested_flows: dict
+            unchanged from argument to __init__
+        :return:
         """
 
         # check flow requested correctly
-        for flow in requested_flows:
+        for flow in _requested_flows:
+            print(flow)
             if flow["parameter"] not in self.parameters:
                 raise ValueError("flow parameter not found in parameter list")
             if flow["origin"] not in self.compartment_types:
@@ -532,19 +537,21 @@ class EpiModel:
         # parameters essential for stratification
         self.parameters["entry_fractions"] = 1.0
 
-    def add_transition_flow(self, flow):
+    def add_transition_flow(self, _flow):
         """
-        simply add a flow to the pandas dataframe storing the flows
+        add a flow (row) to the pandas dataframe storing the flows
         """
-        flow["implement"] = 0
-        self.transition_flows = self.transition_flows.append(flow, ignore_index=True)
 
-    def add_death_flow(self, flow):
+        # implement value starts at zero for unstratified and is then progressively incremented
+        _flow["implement"] = 0
+        self.transition_flows = self.transition_flows.append(_flow, ignore_index=True)
+
+    def add_death_flow(self, _flow):
         """
         similarly for compartment-specific death flows
         """
-        flow["implement"] = 0
-        self.death_flows = self.death_flows.append(flow, ignore_index=True)
+        _flow["implement"] = 0
+        self.death_flows = self.death_flows.append(_flow, ignore_index=True)
 
     """
     methods for model running
@@ -1273,7 +1280,7 @@ if __name__ == "__main__":
         [{"type": "standard_flows", "parameter": "recovery", "origin": "infectious", "to": "recovered"},
          {"type": "infection_density", "parameter": "beta", "origin": "susceptible", "to": "infectious"},
          {"type": "compartment_death", "parameter": "infect_death", "origin": "infectious"}],
-        verbose=True, integration_type="solve_ivp")
+        verbose=False, integration_type="solve_ivp")
     sir_model.stratify("hiv", ["negative", "positive"], [],
                        {"recovery": {"negative": 0.7, "positive": 0.5},
                         "infect_death": {"negative": 0.5}},

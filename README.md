@@ -79,5 +79,13 @@ population has been allocated than the already requested starting population), a
 compartment is assigned as a user input, but if no user input is requested, then the compartment to which population
 recruitment occurs will be used.
 
+### Flow requests
+Intercompartmental or death flows are requested as a dict/list. The keys/names of the request must be:
+* type: to specify the type of the flow being requested as standard_flows, infection_density, infection_frequency or
+compartment_death
+* parameter: to provide the parameter name that the model should use to calculate the transition rate during integration
+* origin: the name of the compartment from which the flow arises
+* to: the name of the compartment that the transition goes towards, no applicable to death flows
+
 
 
