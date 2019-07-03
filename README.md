@@ -67,6 +67,14 @@ These first five arguments are required, but intercompartmental flows can be pro
 with specific flows later. Note also that not all compartments must have an initial value provided at the construction
 stage, as assumptions will be made later.
 
+### Compartment names and user-submitted strings
+Compartment names can be any strings, although in general any user-submitted strings provided to SUMMER should:
+* Avoid the use of the characters "X" and "_", which trigger specific behaviours by SUMMER
+* Be lower case (as future development may use further upper case letters in addition to X)
+* Not duplicate strings that were previously used
+* Strings that are as descriptive as possible are encouraged
+Typical compartment names might include "susceptible", "infectious", "recovered"
+
 ### Initial conditions
 The process of setting the initial values of the model runs as follows:
 1. All compartments requested in construction are set to values of zero, so that compartments that are not requested in
@@ -87,18 +95,18 @@ compartment_death
 * origin: the name of the compartment from which the flow arises
 * to: the name of the compartment that the transition goes towards, no applicable to death flows
 
-## Model running
+### Model running
 Model running is called through the run_model to the model object once constructed
 In Python, odeint and solve_ivp have been implemented, where solve_ivp can be used to stop model integration once
 equilibrium has been reached (if requested, both available from the scipy.integrate module).
 
-## Tracking outputs
+### Tracking outputs
 For outputs such as incidence and total mortality, a dictionary/list can be passed (output_connections) to request
 tracking of specific model quantities emerging from the model. The key/name of the quantity is its name, while the value
 is a dictionary/list specifying the origin and destination ("to") compartment. For example, in an SIR model in Python,
 this would be specified as: {"incidence": {"origin": "susceptible", "to": "infectious"}}
 
-## Birth rates
+### Birth rates
 There are currently three options for calculating the rate of birth implemented in SUMMER, although we will aim to
 introduce further approaches in the future. The implemented options are:
 * no_birth: No births/recruitment is implemented
@@ -107,3 +115,20 @@ birth/recruitment rate
 * replace_deaths: Under this approach the total rate of all deaths to be tracked throughout model integration (which is
 implemented automatically if this approach is requested) and these deaths re-enter the model as births
 Whichever approach is adopted, births are then implemented to the compartment nominated as the entry_compartment.
+
+## Stratification
+If a stratified model is required, this can be built through the class StratifiedModel, which provides additional
+methods for automatically stratifying the original model built using the parent (EpiModel) class's methods only
+(although the object should be created as an instance of StratifiedModel throughout to ensure all methods are available,
+of course). (Stratification could also be achieved manually by specifying compartments and flows through loops, etc. and
+using the EpiModel class only, but using this stratification approach is a major reason for the development of SUMMER).
+
+Model stratification is requested through the stratify method to StratifiedModel, which is the master method that calls
+all other processes that need to be applied to the base model structure.
+
+### Stratification naming
+The name of the stratification to be applied to the model is requested as the first argument to the stratify method.
+This should be provided as a string and have the features described above in "Compartment names and user-submitted
+strings". In addition, the string "age" has specific behaviour, as described below and so should not be used unless this
+behaviour is specifically desired.
+

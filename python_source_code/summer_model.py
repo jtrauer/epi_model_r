@@ -837,28 +837,62 @@ class EpiModel:
 
 
 class StratifiedModel(EpiModel):
+    """
+    stratified version of the epidemiological model, inherits from EpiModel which is a concrete class and can run models
+    independently (and could even include stratifications by using loops in a more traditional way to coding these
+    models)
+
+    :attribute strata:
+    :attribute removed_compartments
+    :attribute overwrite_parameters
+    :attribute compartment_types_to_stratify
+    :attribute heterogeneous_infectiousness
+    :attribute infectiousness_adjustments
+    :attribute parameter_components
+    """
+
+    """
+    most general methods
+    """
+
     def add_compartment(self, new_compartment_name, new_compartment_value):
         """
         add a compartment by specifying its name and value to take
+
+        :param new_compartment_name: str
+            name of the new compartment to be created
+        :param new_compartment_value: float
+            initial value to be assigned to the new compartment before integration
         """
         self.compartment_names.append(new_compartment_name)
         self.compartment_values.append(new_compartment_value)
         self.output_to_user("adding compartment: %s" % new_compartment_name)
 
-    def remove_compartment(self, compartment):
+    def remove_compartment(self, compartment_name):
         """
-        remove a compartment by taking the element out of the compartment values attribute
+        remove a compartment by taking the element out of the compartment_names and compartment_values attributes
+        store name of removed compartment in removed_compartments attribute
+
+        :param compartment_name: str
+            name of compartment to be removed
         """
-        self.removed_compartments.append(compartment)
-        del self.compartment_values[self.compartment_names.index(compartment)]
-        del self.compartment_names[self.compartment_names.index(compartment)]
-        self.output_to_user("removing compartment: %s" % compartment)
+        self.removed_compartments.append(compartment_name)
+        del self.compartment_values[self.compartment_names.index(compartment_name)]
+        del self.compartment_names[self.compartment_names.index(compartment_name)]
+        self.output_to_user("removing compartment: %s" % compartment_name)
 
     def __init__(self, times, compartment_types, initial_conditions, parameters, requested_flows,
                  initial_conditions_to_total=True, infectious_compartment="infectious", birth_approach="no_birth",
                  verbose=False, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1,
                  starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint",
                  output_connections={}):
+        """
+        constructor mostly inherits from parent class, with a few additional attributes that are required for the
+        stratified version
+
+        :params: all parameters coming in as arguments are those that are also attributes of the parent class
+        """
+
         EpiModel.__init__(self, times, compartment_types, initial_conditions, parameters, requested_flows,
                           initial_conditions_to_total=initial_conditions_to_total,
                           infectious_compartment=infectious_compartment, birth_approach=birth_approach,
@@ -874,14 +908,26 @@ class StratifiedModel(EpiModel):
         self.infectiousness_adjustments, self.parameter_components = [{} for _ in range(2)]
 
     """
-    pre-integration methods
+    main master method for model stratification
     """
 
     def stratify(self, stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests=(),
                  requested_proportions={}, infectiousness_adjustments=(), verbose=True):
         """
-        initial preparation and checks
+        calls to initial preparation, checks and methods that stratify the various aspects of the model
+
+        :param stratification_name:
+        :param strata_request:
+        :param compartment_types_to_stratify:
+        :param adjustment_requests:
+        :param requested_proportions:
+        :param infectiousness_adjustments:
+        :param verbose: bool
+            whether to report on progress, note that this can be changed at this stage from what was requested at
+            the original unstratified model construction
         """
+
+        # check inputs correctly specified
         strata_names, adjustment_requests = self.prepare_and_check_stratification(
             stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests, verbose)
 
@@ -903,10 +949,23 @@ class StratifiedModel(EpiModel):
         # heterogeneous infectiousness adjustments
         self.apply_heterogeneous_infectiousness(stratification_name, strata_request, infectiousness_adjustments)
 
+    """
+    other pre-integration methods
+    """
+
     def prepare_and_check_stratification(self, stratification_name, strata_request, compartment_types_to_stratify,
                                          adjustment_requests, verbose):
         """
         initial preparation and checks
+
+        :param stratification_name:
+        :param strata_request:
+        :param compartment_types_to_stratify:
+        :param adjustment_requests:
+        :param verbose:
+        :return:
+            strata_names:
+            adjustment_requests:
         """
         self.verbose = verbose
         if stratification_name == "age":
