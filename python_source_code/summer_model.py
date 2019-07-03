@@ -358,7 +358,7 @@ class EpiModel:
         # attributes with specific format that are independent of user inputs
         self.tracked_quantities, self.time_variants = ({} for _ in range(2))
         self.derived_outputs = {"times": []}
-        self.compartment_values, self.compartment_names = ([] for _ in range(2))
+        self.compartment_values, self.compartment_names, self.all_stratifications = ([] for _ in range(3))
 
         # ensure requests are fed in correctly
         self.check_and_report_attributes(
@@ -641,7 +641,7 @@ class EpiModel:
 
         :parameters and return: see previous method apply_all_flow_types_to_odes
         """
-        for n_flow in self.transition_flows[self.transition_flows.implement == len(self.strata)].index:
+        for n_flow in self.transition_flows[self.transition_flows.implement == len(self.all_stratifications)].index:
 
             # find adjusted parameter value
             adjusted_parameter = self.get_parameter_value(self.transition_flows.parameter[n_flow], _time)
@@ -699,7 +699,7 @@ class EpiModel:
         :parameters and return: see previous method apply_all_flow_types_to_odes
         """
 
-        for n_flow in self.death_flows[self.death_flows.implement == len(self.strata)].index:
+        for n_flow in self.death_flows[self.death_flows.implement == len(self.all_stratifications)].index:
             adjusted_parameter = self.get_parameter_value(self.death_flows.parameter[n_flow], _time)
             from_compartment = self.compartment_names.index(self.death_flows.origin[n_flow])
             net_flow = adjusted_parameter * _compartment_values[from_compartment]
@@ -902,7 +902,7 @@ class StratifiedModel(EpiModel):
                           equilibrium_stopping_tolerance=equilibrium_stopping_tolerance,
                           integration_type=integration_type, output_connections=output_connections)
 
-        self.strata, self.removed_compartments, self.overwrite_parameters, self.compartment_types_to_stratify = \
+        self.all_stratifications, self.removed_compartments, self.overwrite_parameters, self.compartment_types_to_stratify = \
             [[] for _ in range(4)]
         self.heterogeneous_infectiousness = False
         self.infectiousness_adjustments, self.parameter_components = [{} for _ in range(2)]
@@ -978,34 +978,41 @@ class StratifiedModel(EpiModel):
             stratification_name = str(stratification_name)
             self.output_to_user("converting stratification name %s to string" % stratification_name)
 
+        # ensure requested stratification hasn't previously been implemented
+        if stratification_name in self.all_stratifications:
+            raise ValueError("requested stratification has already been implemented, please choose a different name")
+
         # record stratification as model attribute, find the names to apply strata and check requests
-        self.strata.append(stratification_name)
+        self.all_stratifications.append(stratification_name)
         strata_names = self.find_strata_names_from_input(strata_request)
         adjustment_requests = self.alternative_adjustment_request(adjustment_requests)
         self.check_compartment_request(compartment_types_to_stratify)
         adjustment_requests = self.check_parameter_adjustment_requests(adjustment_requests, strata_names)
         return strata_names, adjustment_requests
 
-    def check_age_stratification(self, strata_request, compartment_types_to_stratify):
+    def check_age_stratification(self, _strata_request, _compartment_types_to_stratify):
         """
         check that request meets the requirements for stratification by age
+
+        :parameters: all parameters have come directly from the stratification (stratify) method unchanged and have been
+            renamed with a preceding _ character
+        :return: _strata_request: list
+            revised names of the strata tiers to be implemented
         """
         self.output_to_user("implementing age-specific stratification with specific behaviour")
-        if "age" in self.strata:
-            raise ValueError("requested age stratification, but has specific behaviour and can only be applied once")
-        elif len(compartment_types_to_stratify) > 0:
+        if len(_compartment_types_to_stratify) > 0:
             raise ValueError("requested age stratification, but compartment request should be passed as empty vector " +
                              "in order to apply to all compartments")
-        elif any([type(stratum) != int and type(stratum) != float for stratum in strata_request]):
+        elif any([type(stratum) != int and type(stratum) != float for stratum in _strata_request]):
             raise ValueError("inputs for age strata breakpoints are not numeric")
-        if 0 not in strata_request:
+        if 0 not in _strata_request:
             self.output_to_user("adding age stratum called '0' as not requested, to represent those aged less than %s"
-                                % min(strata_request))
-            strata_request.append(0)
-        if strata_request != sorted(strata_request):
-            strata_request = sorted(strata_request)
-            self.output_to_user("requested age strata not ordered, so have been sorted to: %s" % strata_request)
-        return strata_request
+                                % min(_strata_request))
+            _strata_request.append(0)
+        if _strata_request != sorted(_strata_request):
+            _strata_request = sorted(_strata_request)
+            self.output_to_user("requested age strata not ordered, so have been sorted to: %s" % _strata_request)
+        return _strata_request
 
     def find_strata_names_from_input(self, strata_request):
         """
@@ -1117,7 +1124,7 @@ class StratifiedModel(EpiModel):
         """
         stratify flows depending on whether inflow, outflow or both need replication
         """
-        for flow in self.transition_flows[self.transition_flows.implement == len(self.strata) - 1].index:
+        for flow in self.transition_flows[self.transition_flows.implement == len(self.all_stratifications) - 1].index:
             self.add_stratified_flows(
                 flow, stratification_name, strata_names,
                 find_stem(self.transition_flows.origin[flow]) in self.compartment_types_to_stratify,
@@ -1154,7 +1161,7 @@ class StratifiedModel(EpiModel):
         """
         add compartment-specific death flows to death data frame
         """
-        for flow in self.death_flows[self.death_flows.implement == len(self.strata) - 1].index:
+        for flow in self.death_flows[self.death_flows.implement == len(self.all_stratifications) - 1].index:
             for stratum in strata_names:
                 parameter_name = self.add_adjusted_parameter(
                     self.death_flows.parameter[flow], stratification_name, stratum, adjustment_requests)
@@ -1164,7 +1171,7 @@ class StratifiedModel(EpiModel):
                     {"type": self.death_flows.type[flow],
                      "parameter": parameter_name,
                      "origin": create_stratified_name(self.death_flows.origin[flow], stratification_name, stratum),
-                     "implement": len(self.strata)},
+                     "implement": len(self.all_stratifications)},
                     ignore_index=True)
 
     def stratify_universal_death_rate(self, stratification_name, strata_names, adjustment_requests):
@@ -1233,7 +1240,7 @@ class StratifiedModel(EpiModel):
                      "parameter": ageing_parameter_name,
                      "origin": create_stratified_name(compartment, "age", start_age),
                      "to": create_stratified_name(compartment, "age", end_age),
-                     "implement": len(self.strata)},
+                     "implement": len(self.all_stratifications)},
                     ignore_index=True)
 
     def add_stratified_flows(self, flow, stratification_name, strata_names, stratify_from, stratify_to,
@@ -1271,7 +1278,7 @@ class StratifiedModel(EpiModel):
                      "parameter": parameter_name,
                      "origin": from_compartment,
                      "to": to_compartment,
-                     "implement": len(self.strata)},
+                     "implement": len(self.all_stratifications)},
                     ignore_index=True)
 
         # if flow applies to a transition that isn't involved in the stratification, still increment for flow diagram
@@ -1311,11 +1318,11 @@ class StratifiedModel(EpiModel):
         # create list of all the parameters that we need to find the list of adjustments for
         parameters_to_adjust = []
         for f in range(self.transition_flows.shape[0]):
-            if self.transition_flows.implement[f] == len(self.strata) and \
+            if self.transition_flows.implement[f] == len(self.all_stratifications) and \
                     self.transition_flows.parameter[f] not in parameters_to_adjust:
                 parameters_to_adjust.append(self.transition_flows.parameter[f])
         for f in range(self.death_flows.shape[0]):
-            if self.death_flows.implement[f] == len(self.strata) and \
+            if self.death_flows.implement[f] == len(self.all_stratifications) and \
                     self.death_flows.parameter[f] not in parameters_to_adjust:
                 parameters_to_adjust.append(self.death_flows.parameter[f])
         parameters_to_adjust.append("universal_death_rate")
@@ -1425,7 +1432,7 @@ if __name__ == "__main__":
 
     sir_model.run_model()
 
-    create_flowchart(sir_model, strata=len(sir_model.strata))
+    create_flowchart(sir_model, strata=len(sir_model.all_stratifications))
 
     sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
 
