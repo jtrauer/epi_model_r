@@ -894,7 +894,7 @@ class StratifiedModel(EpiModel):
         constructor mostly inherits from parent class, with a few additional attributes that are required for the
         stratified version
 
-        :params: all parameters coming in as arguments are those that are also attributes of the parent class
+        :parameters: all parameters coming in as arguments are those that are also attributes of the parent class
         """
 
         EpiModel.__init__(self, times, compartment_types, initial_conditions, parameters, requested_flows,
@@ -1447,7 +1447,7 @@ class StratifiedModel(EpiModel):
         :param _stratify_to:
             see add_stratified_flows
         :param _n_flow: int
-            index of th flow being dealt with
+            index of the flow being dealt with
         :return: str
             parameter name for revised parameter than wasn't provided
         """
@@ -1465,59 +1465,73 @@ class StratifiedModel(EpiModel):
             self.output_to_user("\tretaining existing parameter value %s" % parameter_name)
         return parameter_name
 
-    """
-    methods to be called during the process of model running
-    """
-
     def prepare_stratified_parameter_calculations(self):
         """
         prior to integration commencing, work out what the components are of each parameter being implemented
         """
 
-        # create list of all the parameters that we need to find the list of adjustments for
+        # create list of all the parameters that we need to find the set of adjustments for
         parameters_to_adjust = []
-        for f in range(self.transition_flows.shape[0]):
-            if self.transition_flows.implement[f] == len(self.all_stratifications) and \
-                    self.transition_flows.parameter[f] not in parameters_to_adjust:
-                parameters_to_adjust.append(self.transition_flows.parameter[f])
-        for f in range(self.death_flows.shape[0]):
-            if self.death_flows.implement[f] == len(self.all_stratifications) and \
-                    self.death_flows.parameter[f] not in parameters_to_adjust:
-                parameters_to_adjust.append(self.death_flows.parameter[f])
+        for n_flow in range(self.transition_flows.shape[0]):
+            if self.transition_flows.implement[n_flow] == len(self.all_stratifications) and \
+                    self.transition_flows.parameter[n_flow] not in parameters_to_adjust:
+                parameters_to_adjust.append(self.transition_flows.parameter[n_flow])
+        for n_flow in range(self.death_flows.shape[0]):
+            if self.death_flows.implement[n_flow] == len(self.all_stratifications) and \
+                    self.death_flows.parameter[n_flow] not in parameters_to_adjust:
+                parameters_to_adjust.append(self.death_flows.parameter[n_flow])
         parameters_to_adjust.append("universal_death_rate")
+
+        # and adjust
         for parameter in parameters_to_adjust:
             self.find_parameter_components(parameter)
 
-    def find_parameter_components(self, parameter):
+    def find_parameter_components(self, _parameter):
         """
-        extract the components of the stratified parameter into a list structure
-        """
+        extract the components of the stratified parameter into a dictionary structure with values being a list of
+        time-variant parameters, a list of constant parameters and the product of all the constant values applied
 
-        # collate all the parameter components into time-variant or constant
-        self.parameter_components[parameter] = {"time_variants": [], "constants": [], "constant_value": 1}
-        for x_instance in extract_reversed_x_positions(parameter):
-            component = parameter[: x_instance]
+        :param _parameter: str
+            name of the parameter that we are tracking down the components of
+        """
+        self.parameter_components[_parameter] = {"time_variants": [], "constants": [], "constant_value": 1}
+
+        # work backwards through sub-strings of the parameter names from the full name to the name through to each X
+        for x_instance in extract_reversed_x_positions(_parameter):
+            component = _parameter[: x_instance]
             is_time_variant = component in self.time_variants
             if component in self.overwrite_parameters and is_time_variant:
-                self.parameter_components[parameter] = \
+                self.parameter_components[_parameter] = \
                     {"time_variants": [component], "constants": [], "constant_value": 1}
                 break
             elif component in self.overwrite_parameters and not is_time_variant:
-                self.parameter_components[parameter] = \
+                self.parameter_components[_parameter] = \
                     {"time_variants": [], "constants": [component], "constant_value": 1}
                 break
             elif is_time_variant:
-                self.parameter_components[parameter]["time_variants"].append(component)
+                self.parameter_components[_parameter]["time_variants"].append(component)
             elif component in self.parameters:
-                self.parameter_components[parameter]["constants"].append(component)
+                self.parameter_components[_parameter]["constants"].append(component)
+            else:
+                raise ValueError("unable to find parameter component %s of parameter %s" % (component, _parameter))
 
         # pre-calculate the constant component by multiplying through all the constant values
-        for constant_parameter in self.parameter_components[parameter]["constants"]:
-            self.parameter_components[parameter]["constant_value"] *= self.parameters[constant_parameter]
+        for constant_parameter in self.parameter_components[_parameter]["constants"]:
+            self.parameter_components[_parameter]["constant_value"] *= self.parameters[constant_parameter]
+
+    """
+    methods to be called during the process of model running
+    """
 
     def get_parameter_value(self, _parameter, _time):
         """
-        calculate adjusted parameter value from pre-calculated product of constant components and time variants
+        using the approach specified in find_parameter_components calculate adjusted parameter value from pre-calculated
+        product of constant components and time variants
+
+        :param _parameter: str
+            name of the parameter whose value is needed
+        :param _time: float
+            time in model integration
         """
         adjusted_parameter = self.parameter_components[_parameter]["constant_value"]
         for time_variant in self.parameter_components[_parameter]["time_variants"]:
@@ -1527,47 +1541,48 @@ class StratifiedModel(EpiModel):
     def find_infectious_population(self, _compartment_values):
         """
         calculations to find the effective infectious population
+
+        :param _compartment_values:
         """
 
         # loop through all compartments and find the ones representing active infectious disease
-        for compartment in self.compartment_names:
-            if find_stem(compartment) == self.infectious_compartment:
+        for compartment in [comp for comp in self.compartment_names if find_stem(comp) == self.infectious_compartment]:
 
-                # assume homogeneous infectiousness until requested otherwise
-                infectiousness_modifier = 1.0
+            # assume homogeneous infectiousness until/unless requested otherwise
+            infectiousness_modifier = 1.0
 
-                # haven't yet done heterogeneous infectiousness
-                if self.heterogeneous_infectiousness:
-                    for adjustment in [adj for adj in self.infectiousness_adjustments if adj in compartment]:
-                        infectiousness_modifier = self.infectiousness_adjustments[adjustment]
+            # haven't yet finished heterogeneous infectiousness - want to implement all forms of heterogeneous mixing
+            if self.heterogeneous_infectiousness:
+                for adjustment in [adj for adj in self.infectiousness_adjustments if adj in compartment]:
+                    infectiousness_modifier = self.infectiousness_adjustments[adjustment]
 
-                self.tracked_quantities["infectious_population"] += \
-                    _compartment_values[self.compartment_names.index(compartment)] * \
-                    infectiousness_modifier
+            # update total infectious population
+            self.tracked_quantities["infectious_population"] += \
+                _compartment_values[self.compartment_names.index(compartment)] * infectiousness_modifier
 
-    def apply_birth_rate(self, ode_equations, _compartment_values, _time):
+    def apply_birth_rate(self, _ode_equations, _compartment_values, _time):
         """
         apply a population-wide death rate to all compartments
+
+        :parameters: all parameters have come directly from the apply_all_flow_types_to_odes method unchanged
         """
         total_births = self.find_total_births(_compartment_values)
 
         # split the total births across entry compartments
-        for compartment in self.compartment_names:
-            if find_stem(compartment) == self.entry_compartment:
+        for compartment in [comp for comp in self.compartment_names if find_stem(comp) == self.entry_compartment]:
 
-                # calculate adjustment to original stem entry rate
-                entry_fraction = 1.0
-                x_positions = extract_x_positions(compartment)
-
-                if len(x_positions) > 1:
-                    for x_instance in range(len(x_positions) - 1):
-                        entry_fraction *= \
-                            self.parameters["entry_fractionX%s"
-                                            % compartment[x_positions[x_instance] + 1: x_positions[x_instance + 1]]]
-                compartment_births = entry_fraction * total_births
-                ode_equations = increment_compartment(
-                    ode_equations, self.compartment_names.index(compartment), compartment_births)
-        return ode_equations
+            # calculate adjustment to original stem entry rate
+            entry_fraction = 1.0
+            x_positions = extract_x_positions(compartment)
+            if len(x_positions) > 1:
+                for x_instance in range(len(x_positions) - 1):
+                    entry_fraction *= \
+                        self.parameters["entry_fractionX%s"
+                                        % compartment[x_positions[x_instance] + 1: x_positions[x_instance + 1]]]
+            compartment_births = entry_fraction * total_births
+            _ode_equations = increment_compartment(
+                _ode_equations, self.compartment_names.index(compartment), compartment_births)
+        return _ode_equations
 
 
 if __name__ == "__main__":
@@ -1586,7 +1601,7 @@ if __name__ == "__main__":
     sir_model.stratify("hiv", ["negative", "positive"], [],
                        {"recovery": {"negative": 0.7, "positive": 0.5},
                         "infect_death": {"negative": 0.5}},
-                       {"negative": 0.6}, verbose=True)
+                       {"negative": 0.6}, verbose=False)
     sir_model.stratify("age", [1, 10, 3], [], {}, verbose=False)
 
     sir_model.run_model()

@@ -193,10 +193,30 @@ instead overwrite the stratified parameter value for the stratum requested with 
 2. Provide an additional component in the request for the parameter which provides all the strata for which overwriting
 is desired. This should be named "overwrite"
 
+When stratified model parameters are implemented, implementation can be thought of conceptually as working through the
+smallest branches of the tree of stratificaion towards the trunk. At each branching point, the user may have specified
+an adjustment to the parameter at the level below (closer to the trunk) in the hierarchy. If this is the case, the lower
+parameter is multiplied by the value specified, if no value was specified, the parameter remains unadjusted and if an
+overwrite parameter was specified the process stops at that point in the branching process with the parameter value
+specified at that point of stratification.
+
 ### Heterogeneous infectiousness
 Heterogeneous infectiousness of specific compartments has been implemented, but this is currently under further
 development to incorporate full flexibility to mixing assumptions and will be documented once this is complete.  
 
+## Some key model attributes
+
+# Transition flows and death flows
+These are recorded in the transition_flows attribute of the main model object. This is a data frame (base R or pandas)
+with the following columns:
+* type: the type of flow being implemented, specifying the behaviour of the flow
+* parameter: the name of the parameter being used for the transition calculation
+* origin: the compartment that the flow comes from or depletes
+* to: the compartment that the flow goes to or increments - note that this applies to transition flows only and not to
+death flows
+* implement: an integer value specifying which stratification this applies to - note that only flows for which the value
+of this field is equal to the number of stratifications implemented are actually applied, the others are recorded for
+use in flow diagram plotting, etc.
 
 
 
