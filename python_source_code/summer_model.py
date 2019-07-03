@@ -841,10 +841,15 @@ class StratifiedModel(EpiModel):
     independently (and could even include stratifications by using loops in a more traditional way to coding these
     models)
 
-    :attribute strata:
-    :attribute removed_compartments
-    :attribute overwrite_parameters
+    :attribute all_stratifications: list
+        all the stratification names implemented so far
+    :attribute removed_compartments: list
+        all unstratified compartments that have been removed through the stratification process
+    :attribute overwrite_parameters: list
+        any parameters that are intended as absolute values to be applied to that stratum and not multipliers for the
+        unstratified parameter further up the tree
     :attribute compartment_types_to_stratify
+        see check_compartment_request
     :attribute heterogeneous_infectiousness
     :attribute infectiousness_adjustments
     :attribute parameter_components
@@ -916,11 +921,17 @@ class StratifiedModel(EpiModel):
         calls to initial preparation, checks and methods that stratify the various aspects of the model
 
         :param stratification_name:
+            see prepare_and_check_stratification
         :param strata_request:
+            see find_strata_names_from_input
         :param compartment_types_to_stratify:
+            see check_compartment_request
         :param adjustment_requests:
+            see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
         :param requested_proportions:
+            see prepare_starting_proportions
         :param infectiousness_adjustments:
+
         :param verbose: bool
             whether to report on progress, note that this can be changed at this stage from what was requested at
             the original unstratified model construction
@@ -935,7 +946,7 @@ class StratifiedModel(EpiModel):
             self.set_ageing_rates(strata_names)
 
         # stratify the compartments
-        requested_proportions = self.tidy_starting_proportions(strata_names, requested_proportions)
+        requested_proportions = self.prepare_starting_proportions(strata_names, requested_proportions)
         self.stratify_compartments(stratification_name, strata_names, requested_proportions)
 
         # stratify the flows
@@ -957,14 +968,21 @@ class StratifiedModel(EpiModel):
         """
         initial preparation and checks
 
-        :param _stratification_name:
+        :param _stratification_name: str
+            the name of the stratification - i.e. the reason for implementing this type of stratification
         :param _strata_request:
+            see find_strata_names_from_input
         :param _compartment_types_to_stratify:
+            see check_compartment_request
         :param _adjustment_requests:
+            see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
         :param _verbose:
+            see stratify
         :return:
-            _strata_names:
+            _strata_names: list
+                revised version of _strata_request after adaptation to class requirements
             adjustment_requests:
+                revised version of _adjustment_requests after adaptation to class requirements
         """
         self.verbose = _verbose
         self.output_to_user("\nimplementing stratification for: %s" % _stratification_name)
@@ -983,7 +1001,7 @@ class StratifiedModel(EpiModel):
         # record stratification as model attribute, find the names to apply strata and check requests
         self.all_stratifications.append(_stratification_name)
         _strata_names = self.find_strata_names_from_input(_strata_request)
-        _adjustment_requests = self.alternative_adjustment_request(_adjustment_requests)
+        _adjustment_requests = self.incorporate_alternative_overwrite_approach(_adjustment_requests)
         self.check_compartment_request(_compartment_types_to_stratify)
         _adjustment_requests = self.check_parameter_adjustment_requests(_adjustment_requests, _strata_names)
         return _strata_names, _adjustment_requests
@@ -1012,33 +1030,42 @@ class StratifiedModel(EpiModel):
             self.output_to_user("requested age strata not ordered, so have been sorted to: %s" % _strata_request)
         return _strata_request
 
-    def find_strata_names_from_input(self, strata_request):
+    def find_strata_names_from_input(self, _strata_request):
         """
         find the names of the strata to be implemented from a particular user request
+
+        :parameters: list or alternative format to be adapted
+            strata requested in the format provided by the user (except for age, which is dealth with in the preceding
+            method)
+        :return: strata_names: list
+            modified list of strata to be implemented in model
         """
-        if type(strata_request) == list and len(strata_request) == 0:
-            raise ValueError("requested to stratify, but no strata provided")
-        elif type(strata_request) == int:
-            strata_names = numpy.arange(1, strata_request + 1)
-            self.output_to_user("integer provided as strata labels for stratification, hence strata implemented " +
-                                "are integers from 1 to %s" % strata_request)
-        elif type(strata_request) == float:
-            raise ValueError("number passed as request for strata labels, but not an integer greater than one, " +
-                             "unclear what to do, stratification failed")
+        if type(_strata_request) == int:
+            strata_names = numpy.arange(1, _strata_request + 1)
+            self.output_to_user("single integer provided as strata labels for stratification, hence strata " +
+                                "implemented are integers from 1 to %s" % _strata_request)
+        elif type(_strata_request) == float:
+            raise ValueError("single number passed as request for strata labels, but not an integer greater than " +
+                             "one, so unclear what to do - therefore stratification failed")
+        elif type(_strata_request) == list and len(_strata_request) > 0:
+            strata_names = _strata_request
         else:
-            strata_names = strata_request
+            raise ValueError("requested to stratify, but strata level names not submitted in correct format")
         for name in range(len(strata_names)):
             strata_names[name] = str(strata_names[name])
             self.output_to_user("adding stratum: %s" % strata_names[name])
         return strata_names
 
-    def check_compartment_request(self, compartment_types_to_stratify):
+    def check_compartment_request(self, _compartment_types_to_stratify):
         """
         check the requested compartments to be stratified has been requested correctly
+
+        :param _compartment_types_to_stratify: list
+            the names of the compartment types that the requested stratification is intended to apply to
         """
 
-        # if vector of length zero passed, stratify all the compartment types in the model
-        if len(compartment_types_to_stratify) == 0:
+        # if list of length zero passed, stratify all the compartment types in the model
+        if len(_compartment_types_to_stratify) == 0:
             self.output_to_user("no compartment names specified for this stratification, " +
                                 "so stratification applied to all model compartments")
             self.compartment_types_to_stratify = self.compartment_types
@@ -1047,64 +1074,110 @@ class StratifiedModel(EpiModel):
         elif any([compartment not in self.compartment_types for compartment in self.compartment_types_to_stratify]):
             raise ValueError("requested compartment or compartments to be stratified are not available in this model")
         else:
-            self.compartment_types_to_stratify = compartment_types_to_stratify
+            self.compartment_types_to_stratify = _compartment_types_to_stratify
 
-    def alternative_adjustment_request(self, adjustment_requests):
+    def incorporate_alternative_overwrite_approach(self, _adjustment_requests):
         """
-        alternative approach to working out which parameters to overwrite - can put a capital W at the string's end
+        alternative approach to working out which parameters to overwrite
+        can now put a capital W at the string's end to indicate that it is an overwrite parameter, as an alternative to
+        submitting a separate dictionary key to represent the strata which need to be overwritten
+
+        :param _adjustment_requests: dict
+            user-submitted version of adjustment requests
+        :return: revised_adjustments: dict
+            modified version of _adjustment_requests after working out whether any parameters began with W
         """
+
+        # has to be constructed as a separate dictionary to avoid it changing size during iteration
         revised_adjustments = {}
-        for parameter in adjustment_requests:
+        for parameter in _adjustment_requests:
+
+            # accept the key representing the overwrite parameters
             revised_adjustments[parameter] = {}
             revised_adjustments[parameter]["overwrite"] = \
-                adjustment_requests[parameter]["overwrite"] if "overwrite" in adjustment_requests[parameter] else []
-            for stratum in adjustment_requests[parameter]:
+                _adjustment_requests[parameter]["overwrite"] if "overwrite" in _adjustment_requests[parameter] else []
+
+            # then loop through all the other keys of the user request
+            for stratum in _adjustment_requests[parameter]:
                 if stratum == "overwrite":
                     continue
+
+                # if the parameter ends in W, it is interpreted as an overwrite parameter and added to this key
                 elif stratum[-1] == "W":
-                    revised_adjustments[parameter][stratum[: -1]] = adjustment_requests[parameter][stratum]
+                    revised_adjustments[parameter][stratum[: -1]] = _adjustment_requests[parameter][stratum]
                     revised_adjustments[parameter]["overwrite"].append(stratum[: -1])
+
+                # otherwise just accept the parameter in its submitted form
                 else:
-                    revised_adjustments[parameter][stratum] = adjustment_requests[parameter][stratum]
-            adjustment_requests[parameter] = revised_adjustments[parameter]
+                    revised_adjustments[parameter][stratum] = _adjustment_requests[parameter][stratum]
+            _adjustment_requests[parameter] = revised_adjustments[parameter]
         return revised_adjustments
 
-    def check_parameter_adjustment_requests(self, adjustment_requests, strata_names):
+    def check_parameter_adjustment_requests(self, _adjustment_requests, _strata_names):
         """
-        check parameter adjustments have been requested appropriately
+        check parameter adjustments have been requested appropriately and add parameter for any strata not referred to
+
+        :param _adjustment_requests: dict
+            version of the submitted adjustment_requests modified by incorporate_alternative_overwrite_approach
+        :param _strata_names:
+            see find_strata_names_from_input
+        :return: _adjustment_requests
+            modified version of _adjustment_requests after checking
         """
-        for parameter in adjustment_requests:
+        for parameter in _adjustment_requests:
 
             # check all the requested strata for parameter adjustments were strata that were requested
-            if any([requested_stratum not in strata_names + ["overwrite"]
-                    for requested_stratum in adjustment_requests[parameter]]):
+            if any([requested_stratum not in _strata_names + ["overwrite"]
+                    for requested_stratum in _adjustment_requests[parameter]]):
                 raise ValueError("stratum requested in adjustments but unavailable")
 
             # if any strata were not requested, assume a value of one
-            for stratum in strata_names:
-                if stratum not in adjustment_requests[parameter]:
-                    adjustment_requests[parameter][stratum] = 1
+            for stratum in _strata_names:
+                if stratum not in _adjustment_requests[parameter]:
+                    _adjustment_requests[parameter][stratum] = 1
                     self.output_to_user("no request made for adjustment to %s within stratum " % parameter +
                                         "%s so accepting parent value by default" % stratum)
-        return adjustment_requests
+        return _adjustment_requests
 
-    def tidy_starting_proportions(self, strata_names, requested_proportions):
+    def prepare_starting_proportions(self, _strata_names, _requested_proportions):
         """
         prepare user inputs for starting proportions as needed
+        must be specified with names that are strata being implemented during this stratification process
+        note this applies to initial conditions and to entry flows
+
+        :param _strata_names:
+            see find_strata_names_from_input
+        :param _requested_proportions: dict
+            dictionary with keys for the stratum to assign starting population to and values the proportions to assign
+        :return: dict
+            revised dictionary of starting proportions after cleaning
         """
+        if not all(stratum in _strata_names for stratum in _requested_proportions):
+            raise ValueError("requested starting proportion for stratum that does not appear in requested strata")
+        if any(_requested_proportions[stratum] > 1.0 for stratum in _requested_proportions):
+            raise ValueError("requested a starting proportion value of greater than one")
 
         # assuming an equal proportion of the total for the compartment if not otherwise specified
-        for stratum in strata_names:
-            if stratum not in requested_proportions:
-                starting_proportion = 1.0 / len(strata_names)
-                requested_proportions[stratum] = starting_proportion
+        for stratum in _strata_names:
+            if stratum not in _requested_proportions:
+                starting_proportion = 1.0 / len(_strata_names)
+                _requested_proportions[stratum] = starting_proportion
                 self.output_to_user("no starting proportion requested for stratum %s" % stratum +
                                     " so allocated %s of total" % round(starting_proportion, self.reporting_sigfigs))
-        return normalise_dict(requested_proportions)
 
-    def stratify_compartments(self, stratification_name, strata_names, requested_proportions):
+        # normalise the dictionary before return, in case adding the missing groups as equal proportions exceeds one
+        return normalise_dict(_requested_proportions)
+
+    def stratify_compartments(self, _stratification_name, _strata_names, _requested_proportions):
         """
-        compartment stratification
+        stratify the model compartments, which affects the compartment_names and the compartment_values attributes
+
+        :param _stratification_name:
+            see prepare_and_check_stratification
+        :param _strata_names:
+            see find_strata_names_from_input
+        :param _requested_proportions:
+            see prepare_starting_proportions
         """
 
         # find the existing compartments that need stratification
@@ -1112,101 +1185,158 @@ class StratifiedModel(EpiModel):
                 [comp for comp in self.compartment_names if find_stem(comp) in self.compartment_types_to_stratify]:
 
             # add and remove compartments
-            for stratum in strata_names:
-                self.add_compartment(
-                    create_stratified_name(compartment, stratification_name, stratum),
-                    self.compartment_values[self.compartment_names.index(compartment)] * requested_proportions[stratum])
+            for stratum in _strata_names:
+                self.add_compartment(create_stratified_name(compartment, _stratification_name, stratum),
+                                     self.compartment_values[self.compartment_names.index(compartment)] *
+                                     _requested_proportions[stratum])
             self.remove_compartment(compartment)
 
-    def stratify_transition_flows(self, stratification_name, strata_names, adjustment_requests):
+    def stratify_transition_flows(self, _stratification_name, _strata_names, _adjustment_requests):
         """
-        stratify flows depending on whether inflow, outflow or both need replication
+        stratify flows depending on whether inflow, outflow or both need replication, using call to add_stratified_flows
+        method below
+
+        :param _stratification_name:
+            see prepare_and_check_stratification
+        :param _strata_names:
+            see find_strata_names_from_input
+        :param _adjustment_requests:
+            see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
         """
-        for flow in self.transition_flows[self.transition_flows.implement == len(self.all_stratifications) - 1].index:
+        for n_flow in self.transition_flows[self.transition_flows.implement == len(self.all_stratifications) - 1].index:
             self.add_stratified_flows(
-                flow, stratification_name, strata_names,
-                find_stem(self.transition_flows.origin[flow]) in self.compartment_types_to_stratify,
-                find_stem(self.transition_flows.to[flow]) in self.compartment_types_to_stratify,
-                adjustment_requests)
+                n_flow, _stratification_name, _strata_names,
+                find_stem(self.transition_flows.origin[n_flow]) in self.compartment_types_to_stratify,
+                find_stem(self.transition_flows.to[n_flow]) in self.compartment_types_to_stratify,
+                _adjustment_requests)
         self.output_to_user("stratified transition flows matrix:\n%s" % self.transition_flows)
 
-    def stratify_entry_flows(self, stratification_name, strata_names, requested_proportions):
+    def stratify_entry_flows(self, _stratification_name, _strata_names, _requested_proportions):
         """
-        stratify entry/recruitment/birth flows
+        stratify entry/recruitment/birth flows according to requested entry proportion adjustments
+        note this applies to initial conditions and to entry flows
+
+        :param _stratification_name:
+            see prepare_and_check_stratification
+        :param _strata_names:
+            see find_strata_names_from_input
+        :param _requested_proportions:
+            see prepare_starting_proportions
+        :return:
+            normalised dictionary of the compartments that the new entry flows should come in to
         """
         entry_fractions = {}
-
-        # work out parameter values for stratifying the entry proportion adjustments
         if self.entry_compartment in self.compartment_types_to_stratify:
-            for stratum in strata_names:
-                entry_fraction_name = create_stratified_name("entry_fraction", stratification_name, stratum)
-                if stratification_name == "age" and str(stratum) == "0":
+            for stratum in _strata_names:
+                entry_fraction_name = create_stratified_name("entry_fraction", _stratification_name, stratum)
+
+                # specific behaviour for age stratification
+                if _stratification_name == "age" and str(stratum) == "0":
                     entry_fractions[entry_fraction_name] = 1.0
                     continue
-                elif stratification_name == "age":
+                elif _stratification_name == "age":
                     entry_fractions[entry_fraction_name] = 0.0
                     continue
-                elif "adjustments" in requested_proportions and stratum in requested_proportions["adjustments"]:
-                    entry_fractions[entry_fraction_name] = requested_proportions["adjustments"][stratum]
+
+                # where a request has been submitted
+                elif "adjustments" in _requested_proportions and stratum in _requested_proportions["adjustments"]:
+                    entry_fractions[entry_fraction_name] = _requested_proportions["adjustments"][stratum]
                     self.output_to_user("assigning specified proportion of starting population to %s" % stratum)
+
+                # otherwise if no request made
                 else:
-                    entry_fractions[entry_fraction_name] = 1.0 / len(strata_names)
+                    entry_fractions[entry_fraction_name] = 1.0 / len(_strata_names)
                     self.output_to_user("assuming %s " % entry_fractions[entry_fraction_name] +
                                         "of starting population to be assigned to %s stratum by default" % stratum)
+
+        # normalise at the end before return
         self.parameters.update(normalise_dict(entry_fractions))
 
-    def stratify_death_flows(self, stratification_name, strata_names, adjustment_requests):
+    def stratify_death_flows(self, _stratification_name, _strata_names, _adjustment_requests):
         """
-        add compartment-specific death flows to death data frame
+        add compartment-specific death flows to death_flows data frame attribute
+
+        :param _stratification_name:
+            see prepare_and_check_stratification
+        :param _strata_names:
+             see find_strata_names_from_input
+        :param _adjustment_requests:
+            see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
         """
         for flow in self.death_flows[self.death_flows.implement == len(self.all_stratifications) - 1].index:
-            for stratum in strata_names:
+            for stratum in _strata_names:
+
+                # get stratified parameter name if requested to stratify, otherwise use the unstratified one
                 parameter_name = self.add_adjusted_parameter(
-                    self.death_flows.parameter[flow], stratification_name, stratum, adjustment_requests)
+                    self.death_flows.parameter[flow], _stratification_name, stratum, _adjustment_requests)
                 if not parameter_name:
                     parameter_name = self.death_flows.parameter[flow]
+
+                # add the stratified flow
                 self.death_flows = self.death_flows.append(
                     {"type": self.death_flows.type[flow],
                      "parameter": parameter_name,
-                     "origin": create_stratified_name(self.death_flows.origin[flow], stratification_name, stratum),
+                     "origin": create_stratified_name(self.death_flows.origin[flow], _stratification_name, stratum),
                      "implement": len(self.all_stratifications)},
                     ignore_index=True)
 
-    def stratify_universal_death_rate(self, stratification_name, strata_names, adjustment_requests):
+    def stratify_universal_death_rate(self, _stratification_name, _strata_names, _adjustment_requests):
         """
         stratify the approach to universal, population-wide deaths (which can be made to vary by stratum)
         adjust each parameter that refers to the universal death rate according to user request
-        """
-        for parameter in [param for param in self.parameters if find_stem(param) == "universal_death_rate"]:
-            for stratum in strata_names:
-                self.add_adjusted_parameter(parameter, stratification_name, stratum, adjustment_requests)
 
-    def add_adjusted_parameter(self, unadjusted_parameter, stratification_name, stratum, adjustment_requests):
+        :param _stratification_name:
+            see prepare_and_check_stratification
+        :param _strata_names:
+             see find_strata_names_from_input
+        :param _adjustment_requests:
+             see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
+       """
+        for parameter in [param for param in self.parameters if find_stem(param) == "universal_death_rate"]:
+            for stratum in _strata_names:
+                self.add_adjusted_parameter(parameter, _stratification_name, stratum, _adjustment_requests)
+
+    def add_adjusted_parameter(self, _unadjusted_parameter, _stratification_name, _stratum, _adjustment_requests):
         """
         find the adjustment request that is relevant to a particular unadjusted parameter and stratum
         otherwise allow return of None
+
+        :param _unadjusted_parameter:
+            name of the unadjusted parameter value
+        :param _stratification_name:
+            see prepare_and_check_stratification
+        :param _stratum:
+            stratum being considered by the method calling this method
+        :param _adjustment_requests:
+            see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
+        :return: parameter_adjustment_name: str or None
+            if returned as None, assumption will be that the original, unstratified parameter should be used
+            otherwise create a new parameter name and value and store away in the appropriate model structure
         """
         parameter_adjustment_name = None
 
-        # find the adjustment request that is an extension of the base parameter type being considered
-        for parameter_request in [req for req in adjustment_requests if unadjusted_parameter.startswith(req)]:
+        # find the adjustment requests that are extensions of the base parameter type being considered
+        for parameter_request in [req for req in _adjustment_requests if _unadjusted_parameter.startswith(req)]:
+            parameter_adjustment_name = create_stratified_name(_unadjusted_parameter, _stratification_name, _stratum)
             self.output_to_user(
-                "modifying %s for %s stratum of %s" % (unadjusted_parameter, stratum, stratification_name))
-            parameter_adjustment_name = create_stratified_name(unadjusted_parameter, stratification_name, stratum)
+                "modifying %s for %s stratum of %s with new parameter called %s"
+                % (_unadjusted_parameter, _stratum, _stratification_name, parameter_adjustment_name))
 
             # implement user request (otherwise parameter will be left out and assumed to be 1 during integration)
-            if stratum in adjustment_requests[parameter_request]:
-                self.parameters[parameter_adjustment_name] = adjustment_requests[parameter_request][stratum]
+            if _stratum in _adjustment_requests[parameter_request]:
+                self.parameters[parameter_adjustment_name] = _adjustment_requests[parameter_request][_stratum]
 
-            # overwrite parameters higher up the tree by listing which ones to be overwritten
-            if "overwrite" in adjustment_requests[parameter_request] and \
-                    stratum in adjustment_requests[parameter_request]["overwrite"]:
+            # overwrite parameters higher up the tree by tracking which ones are to be overwritten
+            if "overwrite" in _adjustment_requests[parameter_request] and \
+                    _stratum in _adjustment_requests[parameter_request]["overwrite"]:
                 self.overwrite_parameters.append(parameter_adjustment_name)
         return parameter_adjustment_name
 
     def apply_heterogeneous_infectiousness(self, stratification_name, strata_request, infectiousness_adjustments):
         """
         work out infectiousness adjustments and set as model attributes
+        this has not been fully documented, as we are intending to revise this to permit any approach to heterogeneous
+        infectiousness or mixing assumptions
         """
         if len(infectiousness_adjustments) == 0:
             self.output_to_user("heterogeneous infectiousness not requested for this stratification")
@@ -1220,13 +1350,17 @@ class StratifiedModel(EpiModel):
                 adjustment_name = create_stratified_name("", stratification_name, stratum)
                 self.infectiousness_adjustments[adjustment_name] = infectiousness_adjustments[stratum]
 
-    def set_ageing_rates(self, strata_names):
+    def set_ageing_rates(self, _strata_names):
         """
-        set intercompartmental flows for ageing from one stratum to the next
+        set intercompartmental flows for ageing from one stratum to the next as the reciprocal of the width of the age
+        bracket
+
+        :param _strata_names:
+            see find_strata_names_from_input
         """
-        for stratum_number in range(len(strata_names[: -1])):
-            start_age = int(strata_names[stratum_number])
-            end_age = int(strata_names[stratum_number + 1])
+        for stratum_number in range(len(_strata_names[: -1])):
+            start_age = int(_strata_names[stratum_number])
+            end_age = int(_strata_names[stratum_number + 1])
             ageing_parameter_name = "ageing%sto%s" % (start_age, end_age)
             ageing_rate = 1.0 / (end_age - start_age)
             self.output_to_user("ageing rate from age group %s to %s is %s"
@@ -1241,66 +1375,93 @@ class StratifiedModel(EpiModel):
                      "implement": len(self.all_stratifications)},
                     ignore_index=True)
 
-    def add_stratified_flows(self, flow, stratification_name, strata_names, stratify_from, stratify_to,
-                             adjustment_requests):
+    def add_stratified_flows(self, _n_flow, _stratification_name, _strata_names, stratify_from, stratify_to,
+                             _adjustment_requests):
         """
-        add additional stratified flow to flow data frame
+        add additional stratified flow to the transition flow data frame attribute of the class
+
+        :param _n_flow: int
+            location of the unstratified flow within the transition flow attribute
+        :param _stratification_name:
+            see prepare_and_check_stratification
+        :param _strata_names:
+            see find_strata_names_from_input
+        :param stratify_from: bool
+            whether to stratify the from/origin compartment
+        :param stratify_to:
+            whether to stratify the to/destination compartment
+        :param _adjustment_requests:
+            see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
         """
         if stratify_from or stratify_to:
             self.output_to_user(
                 "for flow from %s to %s in stratification %s"
-                % (self.transition_flows.origin[flow], self.transition_flows.to[flow], stratification_name))
+                % (self.transition_flows.origin[_n_flow], self.transition_flows.to[_n_flow], _stratification_name))
 
             # loop over each stratum in the requested stratification structure
-            for stratum in strata_names:
+            for stratum in _strata_names:
 
                 # find parameter name
                 parameter_name = self.add_adjusted_parameter(
-                    self.transition_flows.parameter[flow], stratification_name, stratum, adjustment_requests)
+                    self.transition_flows.parameter[_n_flow], _stratification_name, stratum, _adjustment_requests)
                 if not parameter_name:
                     parameter_name = self.sort_absent_parameter_request(
-                        stratification_name, strata_names, stratum, stratify_from, stratify_to, flow)
+                        _stratification_name, _strata_names, stratum, stratify_from, stratify_to, _n_flow)
                 self.output_to_user("\tadding parameter %s" % parameter_name)
 
                 # determine whether to and/or from compartments are stratified
                 from_compartment = \
-                    create_stratified_name(self.transition_flows.origin[flow], stratification_name, stratum) if \
-                        stratify_from else self.transition_flows.origin[flow]
+                    create_stratified_name(self.transition_flows.origin[_n_flow], _stratification_name, stratum) if \
+                    stratify_from else self.transition_flows.origin[_n_flow]
                 to_compartment = \
-                    create_stratified_name(self.transition_flows.to[flow], stratification_name, stratum) if \
-                        stratify_to else self.transition_flows.to[flow]
+                    create_stratified_name(self.transition_flows.to[_n_flow], _stratification_name, stratum) if \
+                    stratify_to else self.transition_flows.to[_n_flow]
 
                 # add the new flow
                 self.transition_flows = self.transition_flows.append(
-                    {"type": self.transition_flows.type[flow],
+                    {"type": self.transition_flows.type[_n_flow],
                      "parameter": parameter_name,
                      "origin": from_compartment,
                      "to": to_compartment,
                      "implement": len(self.all_stratifications)},
                     ignore_index=True)
 
-        # if flow applies to a transition that isn't involved in the stratification, still increment for flow diagram
+        # if flow applies to a transition not involved in the stratification, still increment to ensure implemented
         else:
-            new_flow = self.transition_flows.loc[flow, :].to_dict()
+            new_flow = self.transition_flows.loc[_n_flow, :].to_dict()
             new_flow["implement"] += 1
             self.transition_flows = self.transition_flows.append(new_flow, ignore_index=True)
 
-    def sort_absent_parameter_request(self, stratification_name, strata_names, stratum, stratify_from, stratify_to,
-                                      flow):
+    def sort_absent_parameter_request(self, _stratification_name, _strata_names, _stratum, _stratify_from, _stratify_to,
+                                      _n_flow):
         """
         work out what to do if a specific parameter adjustment has not been requested
+
+        :param _stratification_name:
+            see prepare_and_check_stratification
+        :param _strata_names:
+            see find_strata_names_from_input
+        :param _stratum:
+        :param _stratify_from:
+            see add_stratified_flows
+        :param _stratify_to:
+            see add_stratified_flows
+        :param _n_flow: int
+            index of th flow being dealt with
+        :return: str
+            parameter name for revised parameter than wasn't provided
         """
 
+        if not _stratify_from and _stratify_to:
         # default behaviour if not specified is to split the parameter into equal parts if to compartment is split
-        if not stratify_from and stratify_to:
             self.output_to_user("\tsplitting existing parameter value %s into %s equal parts"
-                                % (self.transition_flows.parameter[flow], len(strata_names)))
-            parameter_name = create_stratified_name(self.transition_flows.parameter[flow], stratification_name, stratum)
-            self.parameters[parameter_name] = 1.0 / len(strata_names)
+                                % (self.transition_flows.parameter[_n_flow], len(_strata_names)))
+            parameter_name = create_stratified_name(self.transition_flows.parameter[_n_flow], _stratification_name, _stratum)
+            self.parameters[parameter_name] = 1.0 / len(_strata_names)
 
         # otherwise if no request, retain the existing parameter
         else:
-            parameter_name = self.transition_flows.parameter[flow]
+            parameter_name = self.transition_flows.parameter[_n_flow]
             self.output_to_user("\tretaining existing parameter value %s" % parameter_name)
         return parameter_name
 
@@ -1425,7 +1586,7 @@ if __name__ == "__main__":
     sir_model.stratify("hiv", ["negative", "positive"], [],
                        {"recovery": {"negative": 0.7, "positive": 0.5},
                         "infect_death": {"negative": 0.5}},
-                       {"negative": 0.6}, verbose=False)
+                       {"negative": 0.6}, verbose=True)
     sir_model.stratify("age", [1, 10, 3], [], {}, verbose=False)
 
     sir_model.run_model()

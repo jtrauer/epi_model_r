@@ -132,6 +132,20 @@ This should be provided as a string and have the features described above in "Co
 strings". In addition, the string "age" has specific behaviour, as described below and so should not be used unless this
 behaviour is specifically desired.
 
+### Naming of strata
+The strata levels to be implemented are typically submitted as a list of string/character variables for the names of
+these levels as the second argument to the stratify method. Alternatively, if an integer value is submitted, the levels
+will be automatically considered to be all the integer values from one to this value (e.g. 1, 2, 3 if 3 is submitted).
+Otherwise, if an alternative single value (e.g float, boolean) is submitted, stratification will fail. 
+
+### Request for compartments to which stratification should apply
+The third argument to the stratify method is the last required argument and is a list of the base compartments to which
+the stratification should apply. For example, for features of the active infection state, only the name of this state
+would be applied. If an empty list/vector is supplied, the assumption is made that the stratification should apply to
+all compartments, which would be the typically assumption for conditions that affect or are features of the entire
+population (e.g. comorbidities, geographical regions, etc.). Accordingly, for the case of age, the compartments for
+stratification must be provided as an empty list or an error will occur.
+
 ### Age stratification
 As noted above, the stratification name should be "age" when this behaviour is required.
 
@@ -141,4 +155,48 @@ named by the lower limit of the age range. Therefore, if 0 is not included as an
 automatically added to represent those aged less than the lowest age breakpoint. Requests submitted un-ordered will be
 sorted for implmenetation. For example, if the user submits the values 15 and 5, the model will be automatically
 stratified into age ranges, 0 to 4, 5 to 14 and 15+, with these three strata named 0, 5 and 15 by the model code.
+
+Ageing flows are implemented automatically for every age stratum except for the oldest one. The rate of the flow is
+equal to the inverse of the width of the age range. For example, the rate of transition from the 0 to 4 bracket to the
+5 to 14 bracket in the example above would be 0.2.
+
+### Starting proportions
+The population assigned to each compartment under the user request for the initial conditions, as described above, must
+be split between the strata of the stratification being requested - if the stratificaion applies to that compartment.
+This can be set through the user request, using a dictionary/list with keys being the strata names and values being the
+proportion of the population to be assigned to each stratum. Each provided stratum must be one of the strata names and
+the value assigned must be <1. For any stratum not provided in this argument, an equal proportion of the starting
+population will be assigned to that stratum. Once this process has completed, the starting proportions will be
+normalised in order to total to 1. For example, if the strata are "positive" and "negative" and the user requests that
+0.6 be assigned to negative and no request is submitted for positive, positive will be assigned 0.5 and the total will
+then be normalised (in this exampled multiplied by 10/11).
+
+### Entry flows
+The proportion of new births/entries/recruitment into the model is determined by the same user request as submitted for
+the initial conditions, described in the previous section. However, this only applies if the entry compartment is
+stratified. Currently, only one user request applies to both entry flows and initial conditions stratification. This
+may be relaxed in future development.
+
+### Parameter stratification
+Adjustments to existing parameters can be applied through the process of stratification through the optional
+adjustment_requests argument to the stratify method.
+
+This approach can be applied to any existing parameter in the model, including those that have previously been
+stratified. (Request verbose at the previous level of stratification to see the names of the parameters after
+stratification has been applied.) Additionally, this can be applied to the universal_death_rate parameter, which is
+a specifically named parameter that depletes all model compartments.
+
+By default, any user request for a particular parameter and stratum is interpreted as a multiplier. There are two ways
+to avoid this behaviour and instead supply a new parameter that will ignore the value of the unstratified parameter and
+instead overwrite the stratified parameter value for the stratum requested with a new parameter value:
+1. Add the string "W" to the end of the stratum string (e.g. negativeW) within the parameter being requested
+2. Provide an additional component in the request for the parameter which provides all the strata for which overwriting
+is desired. This should be named "overwrite"
+
+### Heterogeneous infectiousness
+Heterogeneous infectiousness of specific compartments has been implemented, but this is currently under further
+development to incorporate full flexibility to mixing assumptions and will be documented once this is complete.  
+
+
+
 
