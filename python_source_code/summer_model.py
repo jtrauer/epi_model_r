@@ -1412,10 +1412,10 @@ class StratifiedModel(EpiModel):
                 # determine whether to and/or from compartments are stratified
                 from_compartment = \
                     create_stratified_name(self.transition_flows.origin[_n_flow], _stratification_name, stratum) if \
-                    stratify_from else self.transition_flows.origin[_n_flow]
+                        stratify_from else self.transition_flows.origin[_n_flow]
                 to_compartment = \
                     create_stratified_name(self.transition_flows.to[_n_flow], _stratification_name, stratum) if \
-                    stratify_to else self.transition_flows.to[_n_flow]
+                        stratify_to else self.transition_flows.to[_n_flow]
 
                 # add the new flow
                 self.transition_flows = self.transition_flows.append(
@@ -1452,8 +1452,8 @@ class StratifiedModel(EpiModel):
             parameter name for revised parameter than wasn't provided
         """
 
-        if not _stratify_from and _stratify_to:
         # default behaviour if not specified is to split the parameter into equal parts if to compartment is split
+        if not _stratify_from and _stratify_to:
             self.output_to_user("\tsplitting existing parameter value %s into %s equal parts"
                                 % (self.transition_flows.parameter[_n_flow], len(_strata_names)))
             parameter_name = create_stratified_name(self.transition_flows.parameter[_n_flow], _stratification_name, _stratum)
