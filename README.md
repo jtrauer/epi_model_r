@@ -132,3 +132,13 @@ This should be provided as a string and have the features described above in "Co
 strings". In addition, the string "age" has specific behaviour, as described below and so should not be used unless this
 behaviour is specifically desired.
 
+### Age stratification
+As noted above, the stratification name should be "age" when this behaviour is required.
+
+The names of the strata levels within this stratification must be submitted as numeric values (integer or float). These
+values represent "age breakpoints", such that the age classes are separated at each of these points. Each age stratum is
+named by the lower limit of the age range. Therefore, if 0 is not included as an age breakpoint, it will be
+automatically added to represent those aged less than the lowest age breakpoint. Requests submitted un-ordered will be
+sorted for implmenetation. For example, if the user submits the values 15 and 5, the model will be automatically
+stratified into age ranges, 0 to 4, 5 to 14 and 15+, with these three strata named 0, 5 and 15 by the model code.
+

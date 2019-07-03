@@ -698,7 +698,6 @@ class EpiModel:
 
         :parameters and return: see previous method apply_all_flow_types_to_odes
         """
-
         for n_flow in self.death_flows[self.death_flows.implement == len(self.all_stratifications)].index:
             adjusted_parameter = self.get_parameter_value(self.death_flows.parameter[n_flow], _time)
             from_compartment = self.compartment_names.index(self.death_flows.origin[n_flow])
@@ -953,42 +952,41 @@ class StratifiedModel(EpiModel):
     other pre-integration methods
     """
 
-    def prepare_and_check_stratification(self, stratification_name, strata_request, compartment_types_to_stratify,
-                                         adjustment_requests, verbose):
+    def prepare_and_check_stratification(self, _stratification_name, _strata_request, _compartment_types_to_stratify,
+                                         _adjustment_requests, _verbose):
         """
         initial preparation and checks
 
-        :param stratification_name:
-        :param strata_request:
-        :param compartment_types_to_stratify:
-        :param adjustment_requests:
-        :param verbose:
+        :param _stratification_name:
+        :param _strata_request:
+        :param _compartment_types_to_stratify:
+        :param _adjustment_requests:
+        :param _verbose:
         :return:
-            strata_names:
+            _strata_names:
             adjustment_requests:
         """
-        self.verbose = verbose
-        if stratification_name == "age":
-            strata_request = self.check_age_stratification(strata_request, compartment_types_to_stratify)
-        else:
-            self.output_to_user("\nimplementing stratification for: %s" % stratification_name)
+        self.verbose = _verbose
+        self.output_to_user("\nimplementing stratification for: %s" % _stratification_name)
+        if _stratification_name == "age":
+            _strata_request = self.check_age_stratification(_strata_request, _compartment_types_to_stratify)
 
-        # make sure all stratification names are characters
-        if type(stratification_name) != str:
-            stratification_name = str(stratification_name)
-            self.output_to_user("converting stratification name %s to string" % stratification_name)
+        # make sure the stratification name is a string
+        if type(_stratification_name) != str:
+            _stratification_name = str(_stratification_name)
+            self.output_to_user("converting stratification name %s to string" % _stratification_name)
 
         # ensure requested stratification hasn't previously been implemented
-        if stratification_name in self.all_stratifications:
+        if _stratification_name in self.all_stratifications:
             raise ValueError("requested stratification has already been implemented, please choose a different name")
 
         # record stratification as model attribute, find the names to apply strata and check requests
-        self.all_stratifications.append(stratification_name)
-        strata_names = self.find_strata_names_from_input(strata_request)
-        adjustment_requests = self.alternative_adjustment_request(adjustment_requests)
-        self.check_compartment_request(compartment_types_to_stratify)
-        adjustment_requests = self.check_parameter_adjustment_requests(adjustment_requests, strata_names)
-        return strata_names, adjustment_requests
+        self.all_stratifications.append(_stratification_name)
+        _strata_names = self.find_strata_names_from_input(_strata_request)
+        _adjustment_requests = self.alternative_adjustment_request(_adjustment_requests)
+        self.check_compartment_request(_compartment_types_to_stratify)
+        _adjustment_requests = self.check_parameter_adjustment_requests(_adjustment_requests, _strata_names)
+        return _strata_names, _adjustment_requests
 
     def check_age_stratification(self, _strata_request, _compartment_types_to_stratify):
         """
@@ -999,7 +997,7 @@ class StratifiedModel(EpiModel):
         :return: _strata_request: list
             revised names of the strata tiers to be implemented
         """
-        self.output_to_user("implementing age-specific stratification with specific behaviour")
+        self.output_to_user("implementing age stratification with specific behaviour")
         if len(_compartment_types_to_stratify) > 0:
             raise ValueError("requested age stratification, but compartment request should be passed as empty vector " +
                              "in order to apply to all compartments")
