@@ -272,6 +272,44 @@ def create_flowchart(model_object, strata=-1, stratify=True, name="flow_chart"):
 
 class EpiModel:
     """
+    general epidemiological model for constructing compartment-based models, typically of infectious disease
+    transmission. See README.md for full description of purpose and approach of this model.
+
+    :attribute times: list
+        time steps at which outputs are to be evaluated
+    :attribute compartment_types: list
+        strings representing the compartments of the model
+    :attribute initial_conditions: dict
+        keys are compartment types, values are starting population values for each compartment
+        note that not all compartment_types must be included as keys here
+    :attribute parameters: dict
+        constant parameter values
+    :attribute requested_flows: list of dicts in standard format
+        list with each element being a model flow, with fixed key names according to the type of flow implemented
+    :attribute initial_conditions_to_total: bool
+        whether to add the initial conditions up to a certain total if this value hasn't yet been reached through
+        the initial_conditions argument
+    :attribute infectious_compartment: str
+        name of the infectious compartment for calculation of intercompartmental infection flows
+    :attribute birth_approach: str
+        approach to allowing entry flows into the model, must be add_crude_birth_rate, replace_deaths or no_births
+    :attribute verbose: bool
+        whether to output progress in model construction as this process proceeds
+    :attribute reporting_sigfigs: int
+        number of significant figures to output to when reporting progress
+    :attribute entry_compartment: str
+        name of the compartment that births come in to
+    :attribute starting_population: numeric
+        value for the total starting population to be supplemented to if initial_conditions_to_total requested
+    :attribute starting_compartment: str
+        optional name of the compartment to add population recruitment to
+    :attribute equilibrium_stopping_tolerance: float
+        value at which relative changes in compartment size trigger stopping when equilibrium reached
+    :attribute integration_type: str
+        integration approach for numeric solution to odes, must be odeint or solveivp currently
+    """
+
+    """
     most general methods
     """
 
@@ -309,38 +347,8 @@ class EpiModel:
         construction method to create a basic (and at this stage unstratified) compartmental model, including checking
         that the arguments have been provided correctly (in a separate method called here)
 
-        :param times: list
-            time steps at which outputs are to be evaluated
-        :param compartment_types: list
-            strings representing the compartments of the model
-        :param initial_conditions: dict
-            keys are compartment types, values are starting population values for each compartment
-            note that not all compartment_types must be included as keys here
-        :param parameters: dict
-            constant parameter values
-        :param requested_flows: list of dicts in standard format
-            list with each element being a model flow, with fixed key names according to the type of flow implemented
-        :param initial_conditions_to_total: bool
-            whether to add the initial conditions up to a certain total if this value hasn't yet been reached through
-            the initial_conditions argument
-        :param infectious_compartment: str
-            name of the infectious compartment for calculation of intercompartmental infection flows
-        :param birth_approach: str
-            approach to allowing entry flows into the model, must be add_crude_birth_rate, replace_deaths or no_births
-        :param verbose: bool
-            whether to output progress in model construction as this process proceeds
-        :param reporting_sigfigs: int
-            number of significant figures to output to when reporting progress
-        :param entry_compartment: str
-            name of the compartment that births come in to
-        :param starting_population: numeric
-            value for the total starting population to be supplemented to if initial_conditions_to_total requested
-        :param starting_compartment: str
-            optional name of the compartment to add population recruitment to
-        :param equilibrium_stopping_tolerance: float
-            value at which relative changes in compartment size trigger stopping when equilibrium reached
-        :param integration_type: str
-            integration approach for numeric solution to odes, must be odeint or solveivp currently
+        :params: all arguments essentially become object attributes and are described in the first main docstring to
+            this object class
         """
 
         # set flow attributes as pandas dataframes with fixed column names
