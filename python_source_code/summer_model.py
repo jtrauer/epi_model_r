@@ -1239,8 +1239,8 @@ class StratifiedModel(EpiModel):
                     continue
 
                 # where a request has been submitted
-                elif "adjustments" in _requested_proportions and stratum in _requested_proportions["adjustments"]:
-                    entry_fractions[entry_fraction_name] = _requested_proportions["adjustments"][stratum]
+                elif stratum in _requested_proportions:
+                    entry_fractions[entry_fraction_name] = _requested_proportions[stratum]
                     self.output_to_user("assigning specified proportion of starting population to %s" % stratum)
 
                 # otherwise if no request made
@@ -1600,7 +1600,8 @@ if __name__ == "__main__":
         verbose=False, integration_type="solve_ivp")
     sir_model.stratify("hiv", ["negative", "positive"], [],
                        {"recovery": {"negative": 0.7, "positive": 0.5},
-                        "infect_death": {"negative": 0.5}},
+                        "infect_death": {"negative": 0.5},
+                        "entry_fraction": {"negative": 0.6, "positive": 0.4}},
                        {"negative": 0.6}, verbose=False)
     sir_model.stratify("age", [1, 10, 3], [], {}, verbose=False)
 
