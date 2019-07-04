@@ -1574,7 +1574,7 @@ class StratifiedModel(EpiModel):
             # calculate adjustment to original stem entry rate
             entry_fraction = 1.0
             x_positions = extract_x_positions(compartment)
-            if len(x_positions) > 1:
+            if len(x_positions):
                 for x_instance in range(len(x_positions) - 1):
                     entry_fraction *= \
                         self.parameters["entry_fractionX%s"
@@ -1603,7 +1603,7 @@ if __name__ == "__main__":
                         "infect_death": {"negative": 0.5},
                         "entry_fraction": {"negative": 0.6, "positive": 0.4}},
                        {"negative": 0.6}, verbose=False)
-    sir_model.stratify("age", [1, 10, 3], [], {}, verbose=False)
+    sir_model.stratify("age", [1, 10, 3], [], {"recovery": {"1": 0.5, "10": 0.8}}, verbose=False)
 
     sir_model.run_model()
 

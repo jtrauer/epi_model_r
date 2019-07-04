@@ -166,16 +166,16 @@ be split between the strata of the stratification being requested - if the strat
 This can be set through the user request, using a dictionary/list with keys being the strata names and values being the
 proportion of the population to be assigned to each stratum. Each provided stratum must be one of the strata names and
 the value assigned must be <1. For any stratum not provided in this argument, an equal proportion of the starting
-population will be assigned to that stratum. Once this process has completed, the starting proportions will be
-normalised in order to total to 1. For example, if the strata are "positive" and "negative" and the user requests that
-0.6 be assigned to negative and no request is submitted for positive, positive will be assigned 0.5 and the total will
-then be normalised (in this exampled multiplied by 10/11).
+population will be assigned to that stratum (i.e. the reciprocal of the number of strata). Once this process has
+completed, the starting proportions will be normalised in order to total to 1. For example, if the strata are "positive"
+and "negative" and the user requests that 0.6 be assigned to negative and no request is submitted for positive, positive
+will be assigned 0.5 and the total will then be normalised (in this exampled multiplied by 10/11).
 
 ### Entry flows
 The proportion of new births/entries/recruitment into the model is determined by the same user request as submitted for
 the initial conditions, described in the previous section. However, this only applies if the entry compartment is
-stratified. Currently, only one user request applies to both entry flows and initial conditions stratification. This
-may be relaxed in future development.
+stratified. Currently, only one user request applies to both entry flows and initial conditions stratification. (This
+may be relaxed in future development.)
 
 ### Parameter stratification
 Adjustments to existing parameters can be applied through the process of stratification through the optional
