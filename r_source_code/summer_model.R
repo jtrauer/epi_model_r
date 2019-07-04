@@ -85,15 +85,47 @@ extract_reversed_x_positions = function(input_string) {
   rev(c(x_positions, nchar(input_string) + 1))
 }
 
-# objects
 
-# main epidemiological model object
 EpiModel <- R6Class(
   "EpiModel",
   
+  #   general epidemiological model for constructing compartment-based models, typically of infectious disease
+  #   transmission. See README.md for full description of purpose and approach of this model.
+  # 
+  #   :attribute times: list
+  #       time steps at which outputs are to be evaluated
+  #   :attribute compartment_types: list
+  #       strings representing the compartments of the model
+  #   :attribute initial_conditions: dict
+  #       keys are compartment types, values are starting population values for each compartment
+  #       note that not all compartment_types must be included as keys here
+  #   :attribute parameters: dict
+  #       constant parameter values
+  #   :attribute requested_flows: list of dicts in standard format
+  #       list with each element being a model flow, with fixed key names according to the type of flow implemented
+  #   :attribute initial_conditions_to_total: bool
+  #       whether to add the initial conditions up to a certain total if this value hasn't yet been reached through
+  #       the initial_conditions argument
+  #   :attribute infectious_compartment: str
+  #       name of the infectious compartment for calculation of intercompartmental infection flows
+  #   :attribute birth_approach: str
+  #       approach to allowing entry flows into the model, must be add_crude_birth_rate, replace_deaths or no_births
+  #   :attribute verbose: bool
+  #       whether to output progress in model construction as this process proceeds
+  #   :attribute reporting_sigfigs: int
+  #       number of significant figures to output to when reporting progress
+  #   :attribute entry_compartment: str
+  #       name of the compartment that births come in to
+  #   :attribute starting_population: numeric
+  #       value for the total starting population to be supplemented to if initial_conditions_to_total requested
+  #   :attribute starting_compartment: str
+  #       optional name of the compartment to add population recruitment to
+  #   :attribute equilibrium_stopping_tolerance: float
+  #       value at which relative changes in compartment size trigger stopping when equilibrium reached
+  #   :attribute integration_type: str
+  #       integration approach for numeric solution to odes, must be odeint or solveivp currently
+  
   # attributes that shouldn't be changed by the user
-  private = list(
-    available_birth_approaches = c("add_crude_birth_rate", "replace_deaths", "no_births")),
   public = list(
     
     # attributes that are fed in as inputs (so defaults can be set as arguments to the initialisation method)
@@ -104,11 +136,11 @@ EpiModel <- R6Class(
     initial_conditions_to_total = NULL,
     infectious_compartment = NULL,
     birth_approach = NULL,
-    report_progress = NULL,
+    verbose = NULL,
     reporting_sigfigs = NULL,
     entry_compartment = NULL,
     starting_population = NULL,
-    default_starting_compartment = NULL,
+    starting_compartment = NULL,
     equilibrium_stopping_tolerance = NULL,
     output_connections = NULL,
     tracked_quantities = NULL,
@@ -125,10 +157,14 @@ EpiModel <- R6Class(
     flows_to_track = c(),
     
     # __________
-    # general methods that can be required at various stages
+    # most general methods
     
-    # find the value of a parameter with time-variant values trumping constant ones
     find_parameter_value = function(parameter_name, time) {
+      #   find the value of a parameter with time-variant values trumping constant ones
+      # 
+      #   :param parameter_name: string for the name of the parameter of interest
+      #   :param time: model integration time (if needed)
+      #   :return: parameter value, whether constant or time variant
       if (parameter_name %in% names(self$time_variants)) {
         self$time_variants[[parameter_name]](time)
       }
@@ -137,12 +173,15 @@ EpiModel <- R6Class(
       }
     },
 
-    # short function to save the if statement in every call to output some information
     output_to_user = function(comment) {
-      if (self$report_progress & is.character(comment)) {
+      #   short function to save the if statement in every call to output some information, may be adapted later and was
+      #   more important to the R version of the repository
+      # 
+      #   :param: comment: string for the comment to be displayed to the user
+      if (self$verbose & is.character(comment)) {
         writeLines(comment)
       }
-      else if (self$report_progress) {
+      else if (self$verbose) {
         print(comment)
       }
     },
@@ -152,23 +191,26 @@ EpiModel <- R6Class(
     
     # initialise basic model characteristics from inputs and check appropriately requested
     initialize = function(times, compartment_types, initial_conditions, parameters, requested_flows,
-                          initial_conditions_to_total=TRUE, infectious_compartment="infectious", 
-                          birth_approach="no_births", report_progress=TRUE, reporting_sigfigs=4,
-                          entry_compartment="susceptible", starting_population=1, default_starting_compartment="",
-                          equilibrium_stopping_tolerance=NULL, output_connections=list(), tracked_quantities=list()) {
+                          initial_conditions_to_total=TRUE, infectious_compartment="infectious", birth_approach="no_births", 
+                          verbose=FALSE, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1, 
+                          starting_compartment="", equilibrium_stopping_tolerance=1e6, output_connections=list(), tracked_quantities=list()) {
+      #   construction method to create a basic (and at this stage unstratified) compartmental model, including checking
+      #   that the arguments have been provided correctly (in a separate method called here)
+      # 
+      #   :params: all arguments essentially become object attributes and are described in the first main docstring to
+      #       this object class
       
       # ensure requests are fed in correctly
       self$check_and_report_attributes(
         times, compartment_types, initial_conditions, parameters, requested_flows, initial_conditions_to_total,
-        infectious_compartment, birth_approach, report_progress, reporting_sigfigs, entry_compartment, starting_population,
-        default_starting_compartment, equilibrium_stopping_tolerance, output_connections, tracked_quantities)
-
+        infectious_compartment, birth_approach, verbose, reporting_sigfigs, entry_compartment, starting_population,
+        starting_compartment, equilibrium_stopping_tolerance, output_connections, tracked_quantities)
       
       # convert input arguments to model attributes
       for (attribute_to_assign in c(
         "times", "compartment_types", "initial_conditions", "parameters", "infectious_compartment", 
-        "birth_approach", "report_progress", "reporting_sigfigs", "entry_compartment", "starting_population",
-        "default_starting_compartment", "infectious_compartment", "equilibrium_stopping_tolerance", "output_connections", 
+        "birth_approach", "verbose", "reporting_sigfigs", "entry_compartment", "starting_population",
+        "starting_compartment", "infectious_compartment", "equilibrium_stopping_tolerance", "output_connections", 
         "tracked_quantities")) {
         self[[attribute_to_assign]] <- get(attribute_to_assign)
       }
@@ -183,71 +225,65 @@ EpiModel <- R6Class(
       self$add_default_quantities()
     },
     
-    # check all input data are in the correct form
     check_and_report_attributes = function(
-      times, compartment_types, initial_conditions, parameters, requested_flows, initial_conditions_to_total,
-      infectious_compartment, birth_approach, report_progress, reporting_sigfigs, entry_compartment, starting_population,
-      default_starting_compartment, equilibrium_stopping_tolerance, output_connections, tracked_quantities) {
+      .times, .compartment_types, .initial_conditions, .parameters, .requested_flows, .initial_conditions_to_total,
+      .infectious_compartment, .birth_approach, .verbose, .reporting_sigfigs, .entry_compartment, .starting_population,
+      .starting_compartment, .equilibrium_stopping_tolerance, .output_connections, .tracked_quantities) {
+      #   check all input data have been requested correctly
+      # 
+      #   :parameters: all parameters have come directly from the construction (__init__) method unchanged and have been
+      #       renamed with a preceding _ character
       
-      # check that variables expected to be numeric are numeric
-      for (expected_numeric_variable in c("times", "reporting_sigfigs", "starting_population")) {
+      # check that variables are of the expected type
+      for (expected_numeric_variable in c(".times", ".reporting_sigfigs", ".starting_population", ".equilibrium_stopping_tolerance")) {
         if (!is.numeric(get(expected_numeric_variable))) {
-          stop(c(expected_numeric_variable, " is not numeric"))
+          stop(c("expected numeric input for ", expected_numeric_variable))
         }
       }
-      
-      # check that variables expected to be string are character
-      for (expected_string_variable in c("compartment_types", "infectious_compartment", "birth_approach", "entry_compartment",
-                                         "default_starting_compartment")) {
+      for (expected_string_variable in c(".compartment_types", ".infectious_compartment", ".birth_approach", ".entry_compartment",
+                                         ".starting_compartment")) {
         if (!is.character(get(expected_string_variable))) {
-          stop(c(expected_string_variable, " is not character"))
+          stop(c("expected character input for ", expected_string_variable))
         }
       }
-      
-      # check that variables expected to be boolean are logical
-      for (expected_boolean_variable in c("initial_conditions_to_total", "report_progress")) {
+      for (expected_boolean_variable in c(".initial_conditions_to_total", ".verbose")) {
         if (!is.logical(get(expected_boolean_variable))) {
-          stop(c(expected_boolean_variable, " is not boolean"))
+          stop(c("expected boolean for ", expected_boolean_variable))
         }
       }
-      
-      for (expected_list_variable in c("requested_flows", "output_connections", "tracked_quantities")) {
+      for (expected_list_variable in c(".requested_flows", ".output_connections", ".tracked_quantities")) {
         if (!is.list(get(expected_list_variable))) {
-          stop(c(expected_list_variable, " is not list"))
+          stop(c("expected list for ", expected_list_variable))
         }
       }
       
-      # infectious compartment
-      if (!infectious_compartment %in% compartment_types) {
+      # check some specific requirements
+      if (!.infectious_compartment %in% .compartment_types) {
         stop("infectious compartment name is not one of the listed compartment types")
       }
-      
-      # hard coded available birth approaches
-      if (!birth_approach %in% private$available_birth_approaches) {
+      if (!.birth_approach %in% c("add_crude_birth_rate", "replace_deaths", "no_births")) {
         stop("requested birth approach unavailable")
       }
-      
-      # order times if needed
       if (is.unsorted(self$times)) {
         self$output_to_user("requested integration times are not sorted, now sorting")
         self$times <- sort(self$times)
       }
       
       # report on characteristics of inputs
-      if (report_progress) {
-        writeLines(paste("\nintegrating from time ", round(times[1], reporting_sigfigs), 
-                         " to ", round(tail(times, 1), reporting_sigfigs), sep=""))
+      if (.verbose) {
+        writeLines(paste("\nintegrating times are from ", round(.times[1], .reporting_sigfigs), 
+                         " to ", round(tail(.times, 1), .reporting_sigfigs), " time units are always arbitrary", sep=""))
         writeLines("\nunstratified requested initial conditions are:")
-        for (compartment in names(initial_conditions)) {
+        for (compartment in names(.initial_conditions)) {
           writeLines(paste(compartment, ": ", 
-                           as.character(round(as.numeric(initial_conditions[compartment]), reporting_sigfigs)), sep=""))
+                           as.character(round(as.numeric(.initial_conditions[compartment]), .reporting_sigfigs)), sep=""))
         }
         writeLines("\nunstratified parameter values are:")
-        for (parameter in names(parameters)) {
-          writeLines(paste(parameter, ": ", as.character(round(as.numeric(parameters[parameter]), reporting_sigfigs)), sep=""))
+        for (parameter in names(.parameters)) {
+          writeLines(paste(parameter, ": ", as.character(round(as.numeric(.parameters[parameter]), .reporting_sigfigs)), sep=""))
         }
-        writeLines(paste("\ninfectious compartment is called:", infectious_compartment))
-        writeLines(paste("\nbirth approach is:", birth_approach))
+        writeLines(paste("\ninfectious compartment is called:", .infectious_compartment))
+        writeLines(paste("\nbirth approach is:", .birth_approach))
       }
     },
     
@@ -290,13 +326,13 @@ EpiModel <- R6Class(
     find_remainder_compartment = function() {
       
       # error if requested starting compartment not available
-      if (nchar(self$default_starting_compartment) > 0 & !self$default_starting_compartment %in% names(self$compartment_values)) {
+      if (nchar(self$starting_compartment) > 0 & !self$starting_compartment %in% names(self$compartment_values)) {
         stop("starting compartment to populate with initial values not found in available compartments")
       }
       
       # use request if requested starting compartemnt is available
-      else if (nchar(self$default_starting_compartment) > 0) {
-        return(self$default_starting_compartment)
+      else if (nchar(self$starting_compartment) > 0) {
+        return(self$starting_compartment)
       }
       
       # otherwise use the entry compartment and report
@@ -656,7 +692,7 @@ StratifiedModel <- R6Class(
     
     # initial preparation and checks
     prepare_and_check_stratification = function(stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests, report) {
-      self$report_progress <- report
+      self$verbose <- report
       
       # checks and reporting for age stratification and general starting message otherwise
       if (stratification_name == "age") {

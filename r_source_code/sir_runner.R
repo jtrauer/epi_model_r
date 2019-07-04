@@ -17,7 +17,7 @@ sir_model <- StratifiedModel$new(seq(from=0, to=60/365, by=1/365),
                           list(c("standard_flows", "recovery", "infectious", "recovered"),
                                c("infection_density", "beta", "susceptible", "infectious"),
                                c("compartment_death", "infect_death", "infectious")),
-                          report_progress=FALSE)
+                          verbose=FALSE)
 sir_model$stratify("hiv", c("negative", "positive"), c(),
                     list(recovery=list("negative"=0.7, "positive"=0.5),
                          infect_death=list("negative"=0.5)),

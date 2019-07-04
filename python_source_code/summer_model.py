@@ -395,7 +395,7 @@ class EpiModel:
     def check_and_report_attributes(
             self, _times, _compartment_types, _initial_conditions, _parameters, _requested_flows,
             _initial_conditions_to_total, _infectious_compartment, _birth_approach, _verbose, _reporting_sigfigs,
-            _entry_compartment, _starting_population, _default_starting_compartment, _equilibrium_stopping_tolerance,
+            _entry_compartment, _starting_population, _starting_compartment, _equilibrium_stopping_tolerance,
             _integration_type, _output_connections):
         """
         check all input data have been requested correctly
@@ -408,11 +408,14 @@ class EpiModel:
         for expected_numeric_variable in ["_reporting_sigfigs", "_starting_population"]:
             if not isinstance(eval(expected_numeric_variable), int):
                 raise TypeError("expected integer for %s" % expected_numeric_variable)
+        for expected_float_variable in ["_equilibrium_stopping_tolerance"]:
+            if not isinstance(eval(expected_float_variable), float):
+                raise TypeError("expected float for %s" % expected_float_variable)
         for expected_list in ["_times", "_compartment_types", "_requested_flows"]:
             if not isinstance(eval(expected_list), list):
                 raise TypeError("expected list for %s" % expected_list)
         for expected_string in \
-                ["_infectious_compartment", "_birth_approach", "_entry_compartment", "_default_starting_compartment",
+                ["_infectious_compartment", "_birth_approach", "_entry_compartment", "_starting_compartment",
                  "_integration_type"]:
             if not isinstance(eval(expected_string), str):
                 raise TypeError("expected string for %s" % expected_string)
