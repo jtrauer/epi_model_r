@@ -1574,7 +1574,7 @@ class StratifiedModel(EpiModel):
             # calculate adjustment to original stem entry rate
             entry_fraction = 1.0
             x_positions = extract_x_positions(compartment)
-            if len(x_positions):
+            if len(x_positions) > 1:
                 for x_instance in range(len(x_positions) - 1):
                     entry_fraction *= \
                         self.parameters["entry_fractionX%s"
