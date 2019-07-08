@@ -18,18 +18,20 @@ def unc_run(beta):
 if __name__ == "__main__":
 
     # calculate prior
-    beta = Uniform("beta", lower=2.0, upper=100.0)
-    mu = pm.Deterministic(eval=unc_run, name="mu", doc="output", verbose=0, parents={"beta": beta})
+    beta = Uniform("beta", lower=2.0, upper=100.0, verbose=1)
+    prev = pm.Deterministic(eval=unc_run, name="mu", doc="output", verbose=1, parents={"beta": beta})
 
     # likelihood
-    Y_obs = pm.normal_like(x=0.006, mu=mu, tau=0.0005)
-    M = MCMC(set([beta, mu, Y_obs]))
-    M.use_step_method(pymc.AdaptiveMetropolis, beta, verbose=4)
+    y = pm.Normal('y', mu=prev, value=0.006, tau=100, observed=True)
+    M = MCMC(set([beta, prev, y]), verbose=5)
+    M.use_step_method(pymc.Metropolis, beta, proposal_sd=1., proposal_distribution='normal', verbose=5)
 
     # sampling
-    M.sample(iter=100, burn=50, thin=10)
+    M.sample(iter=200)
 
     # trace
     print(numpy.mean(M.trace("beta")[-50:]))
+    print(beta.stats())
+    print(prev.stats())
     pymc.Matplot.plot(M)
     plt.show()
