@@ -19,19 +19,20 @@ if __name__ == "__main__":
 
     # calculate prior
     beta = Uniform("beta", lower=2.0, upper=100.0, verbose=1)
-    prev = pm.Deterministic(eval=unc_run, name="mu", doc="output", verbose=1, parents={"beta": beta})
+    prev = pm.Deterministic(eval=unc_run, name="prev", doc="output", verbose=1, parents={"beta": beta})
 
     # likelihood
-    y = pm.Normal('y', mu=prev, value=0.006, tau=100, observed=True)
+    y = pm.Normal('y', mu=prev, value=0.006, tau=1000000, observed=True)
     M = MCMC(set([beta, prev, y]), verbose=5)
-    M.use_step_method(pymc.Metropolis, beta, proposal_sd=1., proposal_distribution='normal', verbose=5)
+    M.use_step_method(pymc.Metropolis, beta, verbose=5)
 
     # sampling
-    M.sample(iter=200)
+    M.sample(iter=1000)
 
     # trace
     print(numpy.mean(M.trace("beta")[-50:]))
     print(beta.stats())
     print(prev.stats())
+    print(pymc.raftery_lewis(M, q=0.025, r=0.01))
     pymc.Matplot.plot(M)
     plt.show()
