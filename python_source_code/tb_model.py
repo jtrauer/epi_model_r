@@ -86,7 +86,7 @@ def unpivot_outputs(model_object):
     return output_dataframe.drop(columns="variable")
 
 
-def build_working_tb_model(beta):
+def build_working_tb_model(beta, cdr_adjustment):
     """
     current working tb model with some characteristics of mongolia applied at present
     """
