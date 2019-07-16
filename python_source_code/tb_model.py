@@ -121,7 +121,7 @@ def build_working_tb_model(beta, cdr_adjustment):
     res = input_database.db_query("gtb_2015", column="c_cdr", is_filter="country", value="Mongolia")
 
     # add scaling case detection rate
-    cdr_adjustment_factor = 0.6
+    cdr_adjustment_factor = cdr_adjustment
     cdr_mongolia = res["c_cdr"].values / 1e2 * cdr_adjustment_factor
     cdr_mongolia = numpy.concatenate(([0.0], cdr_mongolia))
     res = input_database.db_query("gtb_2015", column="year", is_filter="country", value="Mongolia")
@@ -154,7 +154,7 @@ def build_working_tb_model(beta, cdr_adjustment):
 
 if __name__ == "__main__":
 
-    tb_model = build_working_tb_model(40.0)
+    tb_model = build_working_tb_model(40.0, 0.6)
 
     # create_flowchart(tb_model, name="mongolia_flowchart")
     # tb_model.transition_flows.to_csv("transitions.csv")
