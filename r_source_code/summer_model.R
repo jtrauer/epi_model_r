@@ -352,39 +352,41 @@ EpiModel <- R6Class(
     },
     
     # add all flows to create data frames from input lists
-    implement_flows = function(requested_flows) {
-      for (flow in seq(length(requested_flows))) {
+    implement_flows = function(.requested_flows) {
+      #   add all flows to create data frames from input lists
+      # 
+      #   :param _requested_flows: dict
+      #     unchanged from argument to __init__
+      
+      for (flow in .requested_flows) {
         
-        # check flows have been correctly specified
-        working_flow <- requested_flows[flow][[1]]
-        if(!working_flow[2] %in% names(self$parameters)) {
+        # check flow requested correctly
+        if(!flow[2] %in% names(self$parameters)) {
           stop("flow parameter not found in parameter list")
         }
-        if(!working_flow[3] %in% self$compartment_types) {
+        if(!flow[3] %in% self$compartment_types) {
           stop("from compartment name not found in compartment types")
         }
-        if(!working_flow[4] %in% self$compartment_types & working_flow[1] != "compartment_death") {
+        if(length(flow) > 3 & !flow[4] %in% self$compartment_types) {
           stop("to compartment name not found in compartment types")
         }
         
-        if (working_flow[1] == "compartment_death") {
-          self$add_death_flow(working_flow)
+        # add flow to appropriate dataframe
+        if (flow[1] == "compartment_death") {
+          self$add_death_flow(flow)
         }
         else {
-          self$add_transition_flow(working_flow)
+          self$add_transition_flow(flow)
         }
         
-        # add quantities that will need to be tracked to the tracked quantities attribute
-        if (grepl("infection", working_flow[1])) {
+        # add any tracked quantities that will be needed for calculating flow rates during integration
+        if (grepl("infection", flow[1])) {
           self$tracked_quantities$infectious_population <- 0
         }
-        if (working_flow[1] == "infection_frequency") {
+        if (flow[1] == "infection_frequency") {
           self$tracked_quantities$total_population <- 0
         }
       }
-      
-      # retain a copy of the original flows for the purposes of graphing, etc.
-      self$unstratified_flows <- self$transition_flows
     },
     
     # add parameters and tracked quantities that weren't requested but will be needed

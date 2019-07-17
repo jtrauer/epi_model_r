@@ -507,11 +507,11 @@ class EpiModel:
 
         :param _requested_flows: dict
             unchanged from argument to __init__
-        :return:
         """
 
-        # check flow requested correctly
         for flow in _requested_flows:
+
+            # check flow requested correctly
             if flow["parameter"] not in self.parameters:
                 raise ValueError("flow parameter not found in parameter list")
             if flow["origin"] not in self.compartment_types:
