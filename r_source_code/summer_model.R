@@ -331,22 +331,22 @@ EpiModel <- R6Class(
       self$compartment_values[compartment] <- remaining_population
     },
     
-    # find the compartment to put the remaining population that hasn't been assigned yet when summing to total
     find_remainder_compartment = function() {
+      #   find the compartment to put the remaining population that hasn't been assigned yet when summing to total
+      # 
+      #   :return: str
+      #       name of the compartment to assign the remaining population size to
       
-      # error if requested starting compartment not available
-      if (nchar(self$starting_compartment) > 0 & !self$starting_compartment %in% names(self$compartment_values)) {
+      if (nchar(self$starting_compartment) > 0 & !self$starting_compartment %in% self$compartment_types) {
         stop("starting compartment to populate with initial values not found in available compartments")
       }
-      
-      # use request if requested starting compartemnt is available
       else if (nchar(self$starting_compartment) > 0) {
         return(self$starting_compartment)
       }
-      
-      # otherwise use the entry compartment and report
       else {
-        self$output_to_user(paste("\nNo default starting compartment requested for unallocated population, so will be allocated to entry compartment,", self$entry_compartment))
+        self$output_to_user(paste(
+          "no default starting compartment requested for unallocated population,",
+            "so will be allocated to entry compartment", self$entry_compartment))
         return(self$entry_compartment)
       }
     },
