@@ -494,40 +494,48 @@ EpiModel <- R6Class(
       list(.ode_equations)
     },
     
-    # add fixed or infection-related flow to odes
-    apply_transition_flows = function(ode_equations, compartment_values, time) {
+    apply_transition_flows = function(.ode_equations, .compartment_values, .time) {
+      #   apply fixed or infection-related intercompartmental transition flows to odes
+      # 
+      #   :parameters and return: see previous method apply_all_flow_types_to_odes
       for (f in which(self$transition_flows$implement == length(self$strata))) {
         flow <- self$transition_flows[f,]
         
         # find adjusted parameter value
-        adjusted_parameter <- self$get_parameter_value(flow$parameter, time)
+        adjusted_parameter <- self$get_parameter_value(flow$parameter, .time)
         
-        # find from compartment and "infectious population", which is 1 for standard flows
+        # find from compartment and "infectious population" (which is 1 for standard flows)
         infectious_population <- self$find_infectious_multiplier(flow$type)
         
         # calculate the flow and apply to the odes
         from_compartment <- match(flow$from, names(self$compartment_values))
-        net_flow <- adjusted_parameter * compartment_values[from_compartment] * infectious_population
-        ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
-        ode_equations <- self$increment_compartment(ode_equations, match(flow$to, names(self$compartment_values)), net_flow)
+        net_flow <- adjusted_parameter * .compartment_values[from_compartment] * infectious_population
+        .ode_equations <- self$increment_compartment(.ode_equations, from_compartment, -net_flow)
+        .ode_equations <- self$increment_compartment(.ode_equations, match(flow$to, names(self$compartment_values)), net_flow)
         
         # track any quantities dependent on flow rates
         self$track_derived_outputs(flow, net_flow)
       }
       
       # add another element to the derived outputs vector
-      self$extend_derived_outputs(time)
+      self$extend_derived_outputs(.time)
       
       # return flow rates
-      ode_equations
+      .ode_equations
     },
     
-    # calculate derived quantities to be tracked
-    track_derived_outputs = function(flow, net_flow) {
+    track_derived_outputs = function(.flow, .net_flow) {
+      #   calculate derived quantities to be tracked, which are stored as the self.derived_outputs dictionary for the
+      #   current working time step
+      # 
+      #   :param .flow: row of dataframe
+      #       row of the dataframe representing the flow being considered in the preceding method
+      #   :param .net_flow: float
+      #       previously calculated magnitude of the transition flow
       for (output_type in names(self$output_connections)) {
-        if (grepl(self$output_connections[[output_type]]["from"], flow$from) &
-            grepl(self$output_connections[[output_type]]["to"], flow$to)){
-          self$tracked_quantities[[output_type]] <- self$tracked_quantities[[output_type]] + as.numeric(net_flow)
+        if (grepl(self$output_connections[[output_type]]["from"], .flow$from) &
+            grepl(self$output_connections[[output_type]]["to"], .flow$to)){
+          self$tracked_quantities[[output_type]] <- self$tracked_quantities[[output_type]] + as.numeric(.net_flow)
         }
       }
     },

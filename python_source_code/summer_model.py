@@ -649,7 +649,7 @@ class EpiModel:
             # find adjusted parameter value
             adjusted_parameter = self.get_parameter_value(self.transition_flows.parameter[n_flow], _time)
 
-            # find from compartment and "infectious population", which is 1 for standard flows
+            # find from compartment and "infectious population" (which is 1 for standard flows)
             infectious_population = self.find_infectious_multiplier(self.transition_flows.type[n_flow])
 
             # calculate the n_flow and apply to the odes
