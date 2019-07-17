@@ -556,7 +556,7 @@ class EpiModel:
 
     def add_transition_flow(self, _flow):
         """
-        add a flow (row) to the pandas dataframe storing the flows
+        add a flow (row) to the dataframe storing the flows
         """
 
         # implement value starts at zero for unstratified and is then progressively incremented

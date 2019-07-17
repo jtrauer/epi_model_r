@@ -351,7 +351,6 @@ EpiModel <- R6Class(
       }
     },
     
-    # add all flows to create data frames from input lists
     implement_flows = function(.requested_flows) {
       #   add all flows to create data frames from input lists
       # 
@@ -389,8 +388,8 @@ EpiModel <- R6Class(
       }
     },
     
-    # add parameters and tracked quantities that weren't requested but will be needed
     add_default_quantities = function() {
+      #   add parameters and tracked quantities that weren't requested but will be needed
       
       # universal death rate
       if (!"universal_death_rate" %in% names(self$parameters)) {
@@ -414,20 +413,21 @@ EpiModel <- R6Class(
       self$parameters$entry_fractions <- 1
     },
     
-    # simply add a flow to the data frame storing the flows
-    add_transition_flow = function(flow) {
-      self$transition_flows <- rbind(self$transition_flows, data.frame(type=flow[1], parameter=as.character(flow[2]), from=flow[3], to=flow[4], 
-                                                                       implement=length(self$stratifications), stringsAsFactors=FALSE))
+    add_transition_flow = function(.flow) {
+      #   add a flow (row) to the dataframe storing the flows
+      self$transition_flows <- 
+        rbind(self$transition_flows, data.frame(type=.flow[1], parameter=as.character(.flow[2]), from=.flow[3], to=.flow[4], 
+                                                implement=length(self$stratifications), stringsAsFactors=FALSE))
     },
     
-    # similarly for compartment-specific death flows    
-    add_death_flow = function(flow) {
-      self$death_flows <- rbind(self$death_flows, data.frame(type=flow[1], parameter=as.character(flow[2]), from=flow[3],
+    add_death_flow = function(.flow) {
+      #   similarly for compartment-specific death flows
+      self$death_flows <- rbind(self$death_flows, data.frame(type=.flow[1], parameter=as.character(.flow[2]), from=.flow[3],
                                                              implement=0, stringsAsFactors=FALSE))
     },
     
     # __________
-    # methods for running the model
+    # methods for model running
     
     # integrate model odes  
     run_model = function () {
