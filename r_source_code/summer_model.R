@@ -317,17 +317,16 @@ EpiModel <- R6Class(
       }
     },
     
-    # make initial conditions sum to a certain value    
     sum_initial_compartments_to_total = function() {
+      # make initial conditions sum to a certain value    
       
       compartment <- self$find_remainder_compartment()
-      
-      if (Reduce("+", self$compartment_values) > self$starting_population) {
+      remaining_population <- self$starting_population - Reduce("+", self$compartment_values)
+      if (remaining_population < 0) {
         stop("total of requested compartment values is greater than the requested starting population")
       }
-      remaining_population <- self$starting_population - Reduce("+", self$compartment_values)
-      self$output_to_user(paste("\nRequested that total population sum to", self$starting_population))
-      self$output_to_user(paste("Remaining population of ", as.character(round(remaining_population, self$reporting_sigfigs)), 
+      self$output_to_user(paste("requested that total population sum to", self$starting_population))
+      self$output_to_user(paste("remaining population of ", as.character(round(remaining_population, self$reporting_sigfigs)), 
                                 " allocated to ", compartment, " compartment", sep=""))
       self$compartment_values[compartment] <- remaining_population
     },
