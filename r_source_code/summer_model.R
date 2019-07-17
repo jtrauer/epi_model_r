@@ -429,20 +429,23 @@ EpiModel <- R6Class(
     # __________
     # methods for model running
     
-    # integrate model odes  
     run_model = function () {
-      self$output_to_user("\nnow integrating")
+      #   main function to integrate model odes, called externally in the master running script
+      self$output_to_user("now integrating")
       self$prepare_stratified_parameter_calculations()
+      
+      #   unlike python version, only one integration solver included so far
       self$outputs <- as.data.frame(lsodar(self$compartment_values, self$times, self$make_model_function(),
                                            rootfunc = self$set_stopping_conditions()))
-      self$output_to_user("\nintegration complete")
-    },   
+      self$output_to_user("integration complete")
+    },
     
-    # for use in the stratified version
-    prepare_stratified_parameter_calculations = function() {},
+    prepare_stratified_parameter_calculations = function() {
+      #   for use in the stratified version only
+    },
     
-    # create derivative function
     make_model_function = function() {
+      #   create derivative function, different approach to python because only one solver implemented here
       epi_model_function <- function(time, compartment_values, parameters) {
         
         # update all the emergent model quantities needed for integration
@@ -453,8 +456,8 @@ EpiModel <- R6Class(
       }
     },
     
-    # if requested to stop when equilibrium is reached
     set_stopping_conditions = function() {
+      #   if requested to stop when equilibrium is reached
       
       # never stop because impossible to find root
       if (is.null(self$equilibrium_stopping_tolerance)) {
@@ -471,15 +474,24 @@ EpiModel <- R6Class(
       }
     },
     
-    # apply all flow types to a vector of zeros (deaths must come before births in case births replace deaths)
-    apply_all_flow_types_to_odes = function(ode_equations, compartment_values, time) {
-      ode_equations <- self$apply_transition_flows(ode_equations, compartment_values, time)
+    apply_all_flow_types_to_odes = function(.ode_equations, .compartment_values, .time) {
+      #   apply all flow types to a vector of zeros (note deaths must come before births in case births replace deaths)
+      # 
+      #   :param .ode_equations: list
+      #       comes in as a list of zeros with length equal to that of the compartments
+      #   :param .compartment_values: numpy.ndarray
+      #       working values of the compartment sizes
+      #   :param .time:
+      #       current integration time
+      #   :return: ode equations as list
+      #       updated ode equations in same format but with all flows implemented
+      .ode_equations <- self$apply_transition_flows(.ode_equations, .compartment_values, .time)
       if (nrow(self$death_flows) > 0) {
-        ode_equations <- self$apply_compartment_death_flows(ode_equations, compartment_values, time)
+        .ode_equations <- self$apply_compartment_death_flows(.ode_equations, .compartment_values, .time)
       }
-      ode_equations <- self$apply_universal_death_flow(ode_equations, compartment_values, time)
-      ode_equations <- self$apply_birth_rate(ode_equations, compartment_values, time)
-      list(ode_equations)
+      .ode_equations <- self$apply_universal_death_flow(.ode_equations, .compartment_values, .time)
+      .ode_equations <- self$apply_birth_rate(.ode_equations, .compartment_values, .time)
+      list(.ode_equations)
     },
     
     # add fixed or infection-related flow to odes

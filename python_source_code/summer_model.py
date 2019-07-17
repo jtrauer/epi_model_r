@@ -622,7 +622,7 @@ class EpiModel:
 
     def apply_all_flow_types_to_odes(self, _ode_equations, _compartment_values, _time):
         """
-        apply all flow types to a vector of zeros (deaths must come before births in case births replace deaths)
+        apply all flow types to a vector of zeros (note deaths must come before births in case births replace deaths)
 
         :param _ode_equations: list
             comes in as a list of zeros with length equal to that of the compartments
