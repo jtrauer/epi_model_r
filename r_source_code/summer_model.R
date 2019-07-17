@@ -131,6 +131,7 @@ EpiModel <- R6Class(
     # attributes that are fed in as inputs (so defaults can be set as arguments to the initialisation method)
     times = NULL,
     compartment_types = NULL,
+    compartment_names = NULL,
     initial_conditions = NULL,
     parameters = NULL,
     initial_conditions_to_total = NULL,
@@ -287,22 +288,31 @@ EpiModel <- R6Class(
       }
     },
     
-    # set starting compartment values
-    set_initial_conditions = function(initial_conditions_to_total) {
+    set_initial_conditions = function(.initial_conditions_to_total) {
+      #   set starting compartment values
+      # 
+      #   :param .initial_conditions_to_total: bool
+      #   unchanged from argument to __init__
       
-      # set starting values of unstratified compartments to requested value, or zero if no value requested
-      for (compartment in self$compartment_types) {
-        if (compartment %in% names(self$initial_conditions)) {
+      # keep copy of the compartment types for when the compartment names are stratified later
+      self$compartment_names <- self$compartment_types
+      
+      # start from making sure all compartments are set to zero values
+      self$compartment_values <- rep(0, length(self$compartment_names))
+      names(self$compartment_values) <- self$compartment_names
+
+      # set starting values of unstratified compartments to requested value
+      for (compartment in names(self$initial_conditions)) {
+        if (compartment %in% self$compartment_types) {
           self$compartment_values[compartment] <- self$initial_conditions[compartment]
         }
         else {
-          self$compartment_values[compartment] <- 0
-          self$output_to_user(paste("\nNo starting value requested for", compartment, "compartment, so set to zero"))
+          stop(paste("compartment", compartment, "requested in initial conditions not found in model compartment types"))
         }
       }
       
       # sum to a total value if requested
-      if (initial_conditions_to_total) {
+      if (.initial_conditions_to_total) {
         self$sum_initial_compartments_to_total()
       }
     },
