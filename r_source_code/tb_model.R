@@ -63,7 +63,7 @@ tb_model <- StratifiedModel$new(
   parameters, flows, birth_approach="replace_deaths")
 
 
-tb_model$stratify("age", c(5, 15), c(), get_age_specific_latency_parameters(), report=FALSE)
+tb_model$stratify("age", c(5, 15), c(), get_age_specific_latency_parameters(), verbose=FALSE)
 
 tb_model$run_model()
 

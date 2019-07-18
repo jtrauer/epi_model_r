@@ -689,6 +689,23 @@ EpiModel <- R6Class(
 
 
 StratifiedModel <- R6Class(
+  #   stratified version of the epidemiological model, inherits from EpiModel which is a concrete class and can run models
+  #   independently (and could even include stratifications by using loops in a more traditional way to coding these
+  #   models)
+  # 
+  #   :attribute all_stratifications: list
+  #       all the stratification names implemented so far
+  #   :attribute removed_compartments: list
+  #       all unstratified compartments that have been removed through the stratification process
+  #   :attribute overwrite_parameters: list
+  #       any parameters that are intended as absolute values to be applied to that stratum and not multipliers for the
+  #       unstratified parameter further up the tree
+  #   :attribute compartment_types_to_stratify
+  #       see check_compartment_request
+  #   :attribute heterogeneous_infectiousness
+  #   :attribute infectiousness_adjustments
+  #   :attribute parameter_components
+  
   inherit = EpiModel,
   public = list(
     strata = c(),
@@ -701,24 +718,56 @@ StratifiedModel <- R6Class(
     # __________
     # general methods
     
-    # add a compartment by specifying its name and value to take 
     add_compartment = function(new_compartment_name, new_compartment_value) {
+      #   add a compartment by specifying its name and value to take
+      # 
+      #   :param new_compartment_name: str
+      #       name of the new compartment to be created
+      #   :param new_compartment_value: float
+      #       initial value to be assigned to the new compartment before integration
+      self$compartment_names <- c(self$compartment_names, new_compartment_name)
       self$compartment_values[new_compartment_name] <- new_compartment_value
       self$output_to_user(paste("adding compartment:", new_compartment_name))
     },
     
-    # remove a compartment by taking the element out of the compartment values attribute
     remove_compartment = function(compartment) {
+      #   remove a compartment by taking the element out of the compartment_names and compartment_values attributes
+      #   store name of removed compartment in removed_compartments attribute
+      # 
+      #   :param compartment_name: str
+      #       name of compartment to be removed
       self$removed_compartments <- c(self$removed_compartments, compartment)
       self$compartment_values <- self$compartment_values[names(self$compartment_values) != compartment]
+      self$compartment_names <- self$compartment_names[self$compartment_names != compartment]
       self$output_to_user(paste("removing compartment:", compartment))
     },
     
-    # master stratification method
+    # __________
+    # main master method for model stratification
+    
     stratify = function(stratification_name, strata_request, compartment_types_to_stratify,
-                        adjustment_requests=list(), requested_proportions=list(), infectiousness_adjustments=c(), report=TRUE) {
+                        adjustment_requests=list(), requested_proportions=list(), infectiousness_adjustments=c(), verbose=TRUE) {
+      #   calls to initial preparation, checks and methods that stratify the various aspects of the model
+      # 
+      #   :param stratification_name:
+      #       see prepare_and_check_stratification
+      #   :param strata_request:
+      #       see find_strata_names_from_input
+      #   :param compartment_types_to_stratify:
+      #       see check_compartment_request
+      #   :param adjustment_requests:
+      #       see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
+      #   :param requested_proportions:
+      #       see prepare_starting_proportions
+      #   :param infectiousness_adjustments:
+      # 
+      #   :param verbose: bool
+      #       whether to report on progress, note that this can be changed at this stage from what was requested at
+      #       the original unstratified model construction
+      
+      # check inputs correctly specified
       strata_names <- self$prepare_and_check_stratification(
-        stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests, report)
+        stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests, verbose)
       
       # work out ageing flows (comes first so that the compartment names are still in the unstratified form)
       if (stratification_name == "age") {
@@ -726,7 +775,7 @@ StratifiedModel <- R6Class(
       }
       
       # stratify the compartments
-      requested_proportions <- self$tidy_starting_proportions(strata_names, requested_proportions)
+      requested_proportions <- self$prepare_starting_proportions(strata_names, requested_proportions)
       self$stratify_compartments(stratification_name, strata_names, requested_proportions)
 
       # stratify the flows
@@ -745,8 +794,8 @@ StratifiedModel <- R6Class(
     # pre-integration methods
     
     # initial preparation and checks
-    prepare_and_check_stratification = function(stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests, report) {
-      self$verbose <- report
+    prepare_and_check_stratification = function(stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests, verbose) {
+      self$verbose <- verbose
       
       # checks and reporting for age stratification and general starting message otherwise
       if (stratification_name == "age") {
@@ -882,7 +931,7 @@ StratifiedModel <- R6Class(
     },
     
     # prepare user inputs for starting proportions as needed
-    tidy_starting_proportions = function(strata_names, requested_proportions) {
+    prepare_starting_proportions = function(strata_names, requested_proportions) {
       
       # assume an equal proportion of the total for the compartment if not otherwise specified
       for (stratum in strata_names) {
