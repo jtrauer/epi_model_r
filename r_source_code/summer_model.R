@@ -85,6 +85,12 @@ extract_reversed_x_positions = function(input_string) {
   rev(c(x_positions, nchar(input_string) + 1))
 }
 
+# general method to increment the odes by a value specified as an argument
+increment_compartment = function(ode_equations, compartment_number, increment) {
+  ode_equations[compartment_number] <- ode_equations[compartment_number] + increment
+  ode_equations
+}
+
 
 EpiModel <- R6Class(
   "EpiModel",
@@ -510,8 +516,8 @@ EpiModel <- R6Class(
         # calculate the flow and apply to the odes
         from_compartment <- match(flow$from, names(self$compartment_values))
         net_flow <- adjusted_parameter * .compartment_values[from_compartment] * infectious_population
-        .ode_equations <- self$increment_compartment(.ode_equations, from_compartment, -net_flow)
-        .ode_equations <- self$increment_compartment(.ode_equations, match(flow$to, names(self$compartment_values)), net_flow)
+        .ode_equations <- increment_compartment(.ode_equations, from_compartment, -net_flow)
+        .ode_equations <- increment_compartment(.ode_equations, match(flow$to, names(self$compartment_values)), net_flow)
         
         # track any quantities dependent on flow rates
         self$track_derived_outputs(flow, net_flow)
@@ -561,7 +567,7 @@ EpiModel <- R6Class(
         adjusted_parameter <- self$get_parameter_value(flow$parameter, .time)
         from_compartment <- match(flow$from, names(self$compartment_values))
         net_flow <- adjusted_parameter * .compartment_values[from_compartment]
-        .ode_equations <- self$increment_compartment(.ode_equations, from_compartment, -net_flow)
+        .ode_equations <- increment_compartment(.ode_equations, from_compartment, -net_flow)
         if ("total_deaths" %in% names(self$tracked_quantities)) {
           self$tracked_quantities$total_deaths <- self$tracked_quantities$total_deaths + net_flow
         }
@@ -577,7 +583,7 @@ EpiModel <- R6Class(
         adjusted_parameter <- self$get_parameter_value("universal_death_rate", .time)
         from_compartment <- match(compartment, names(self$compartment_values))
         net_flow <- adjusted_parameter * .compartment_values[from_compartment]
-        .ode_equations <- self$increment_compartment(.ode_equations, from_compartment, -net_flow)
+        .ode_equations <- increment_compartment(.ode_equations, from_compartment, -net_flow)
         
         # track deaths in case births are meant to replace deaths
         if ("total_deaths" %in% names(self$tracked_quantities)) {
@@ -591,14 +597,19 @@ EpiModel <- R6Class(
       #   apply a birth rate to the entry compartments
       # 
       #   :parameters and return: see previous method apply_all_flow_types_to_odes
-      .ode_equations <- self$increment_compartment(.ode_equations, match(self$entry_compartment, names(self$compartment_values)), 
+      .ode_equations <- increment_compartment(.ode_equations, match(self$entry_compartment, names(self$compartment_values)), 
                                                    self$find_total_births(.compartment_values))
     },
     
-    # work out the total births to apply dependent on the approach requested
-    find_total_births = function (compartment_values) {
+    find_total_births = function (.compartment_values) {
+      #   work out the total births to apply dependent on the approach requested
+      # 
+      #   :param _compartment_values:
+      #       as for preceding methods
+      #   :return: float
+      #       total rate of births to be implemented in the model
       if (self$birth_approach == "add_crude_birth_rate") {
-        return(self$parameters$crude_birth_rate * sum(compartment_values))
+        return(self$parameters$crude_birth_rate * sum(.compartment_values))
       }
       else if (self$birth_approach == "replace_deaths") {
         return(self$tracked_quantities$total_deaths)
@@ -608,8 +619,14 @@ EpiModel <- R6Class(
       }
     },
     
-    # find the multiplier to account for the infectious population in dynamic flows
     find_infectious_multiplier = function(flow_type) {
+      #   find the multiplier to account for the infectious population in dynamic flows
+      # 
+      #   :param flow_type: str
+      #       type of flow, as per the standard naming approach to flow types for the dataframes flow attribute
+      #   :return:
+      #       the total infectious quantity, whether that be the number or proportion of infectious persons
+      #       needs to return as one for flows that are not transmission dynamic infectiousness flows
       if (flow_type == "infection_density") {
         infectious_population <- self$tracked_quantities$infectious_population
       }
@@ -621,50 +638,48 @@ EpiModel <- R6Class(
       }
     },
     
-    # update quantities that emerge during model running (not pre-defined functions of time)
-    update_tracked_quantities = function(compartment_values) {
-      
-      # for each listed quantity in the quantities requested for tracking,
-      # except population deaths, which are updated as they are calculated
+    update_tracked_quantities = function(.compartment_values) {
+      #   update quantities that emerge during model running (not pre-defined functions of time)
+      # 
+      #   :param _compartment_values:
+      #       as for preceding methods
       for (quantity in names(self$tracked_quantities)) {
-        
         self$tracked_quantities[[quantity]] <- 0
         if (quantity == "infectious_population") {
-          self$find_infectious_population(compartment_values)
+          self$find_infectious_population(.compartment_values)
         }
         else if (quantity == "total_population") {
-          self$tracked_quantities$total_population <- sum(compartment_values)
+          self$tracked_quantities$total_population <- sum(.compartment_values)
         }
       }
     },
     
-    # calculations to find the effective infectious population
     find_infectious_population = function(compartment_values) {
-      
-      # loop through all compartments and find the ones representing active infectious disease
+      #   calculations to find the effective infectious population
+      # 
+      #   :param _compartment_values:
+      #       as for preceding methods
       for (compartment in names(self$compartment_values)) {
         if (find_stem(compartment) == self$infectious_compartment) {
-          
-          # increment infectious population
-          self$tracked_quantities$infectious_population <-
-            self$tracked_quantities$infectious_population +
+          self$tracked_quantities$infectious_population <- self$tracked_quantities$infectious_population + 
             compartment_values[match(compartment, names(self$compartment_values))]
         }
       }      
     },
     
-    # general method to increment the odes by a value specified as an argument
-    increment_compartment = function(ode_equations, compartment_number, increment) {
-      ode_equations[compartment_number] <- ode_equations[compartment_number] + increment
-      ode_equations
+    get_parameter_value = function(.parameter, .time) {
+      #   very simple, essentially place-holding, but need to split this out as a function in order to
+      #   stratification later
+      # 
+      #   :param .parameter: str
+      #       parameter name
+      #   :param .time: float
+      #       current integration time
+      #   :return: float
+      #       parameter value
+      self$find_parameter_value(.parameter, .time)
     },
     
-    # need to split this out as a function in order to allow stratification later
-    get_parameter_value = function(parameter, time) {
-      self$find_parameter_value(parameter, time)
-    },
-    
-    #method to store output in SqliteDB
     storeDB = function(){
       connection <- dbConnect(SQLite(), "outputs.db")
       dbWriteTable(connection, 'outputs', sir_model$outputs, overwrite=TRUE)
@@ -1204,7 +1219,7 @@ StratifiedModel <- R6Class(
             }
           }
           compartment_births <- entry_fraction * total_births
-          ode_equations <- self$increment_compartment(ode_equations, match(compartment, names(self$compartment_values)), compartment_births)
+          ode_equations <- increment_compartment(ode_equations, match(compartment, names(self$compartment_values)), compartment_births)
         }
       }
       ode_equations
