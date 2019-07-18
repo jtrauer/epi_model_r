@@ -827,7 +827,7 @@ StratifiedModel <- R6Class(
       # record stratification as attribute to model, find the names to apply strata and check compartment and parameter requests
       self$strata <- c(self$strata, .stratification_name)
       .strata_names <- self$find_strata_names_from_input(.strata_request)
-      .adjustment_requests <- self$alternative_adjustment_request(.adjustment_requests)
+      .adjustment_requests <- self$incorporate_alternative_overwrite_approach(.adjustment_requests)
       self$check_compartment_request(.compartment_types_to_stratify)
       .adjustment_requests <- self$check_parameter_adjustment_requests(.adjustment_requests, .strata_names)
       list(.strata_names, .adjustment_requests)
@@ -870,10 +870,7 @@ StratifiedModel <- R6Class(
       #       method)
       #   :return: strata_names: list
       #       modified list of strata to be implemented in model
-      if (length(.strata_request) == 0) {
-        stop("requested to stratify, but no strata provided")
-      }
-      else if (length(.strata_request) == 1 & is.numeric(.strata_request)) {
+      if (length(.strata_request) == 1 & is.numeric(.strata_request)) {
         if (.strata_request %% 1 == 0 & .strata_request > 1) {
           strata_names <- seq(.strata_request)
           self$output_to_user(paste("integer provided strata labels for stratification, hence strata implemented are integers from 1 to", .strata_request))
@@ -882,8 +879,11 @@ StratifiedModel <- R6Class(
           stop("number passed as request for strata labels, but not an integer greater than one, unclear what to do, stratification failed")
         }
       }
-      else {
+      else if (length(.strata_request) > 0) {
         strata_names <- .strata_request
+      }
+      else {
+        stop("requested to stratify, but no strata provided")
       }
       for (name in strata_names) {
         self$output_to_user(paste("adding stratum:", name))
@@ -891,84 +891,124 @@ StratifiedModel <- R6Class(
       strata_names
     },
     
-    # check the requested compartments to be stratified has been requested correctly
-    check_compartment_request = function(compartment_types_to_stratify) {
+    check_compartment_request = function(.compartment_types_to_stratify) {
+      #   check the requested compartments to be stratified has been requested correctly
+      # 
+      #   :param .compartment_types_to_stratify: list
+      #       the names of the compartment types that the requested stratification is intended to apply to
       
       # if vector of length zero passed, stratify all the compartment types in the model
-      if (length(compartment_types_to_stratify) == 0) {
+      if (length(.compartment_types_to_stratify) == 0) {
         self$output_to_user("no compartment names specified for this stratification, so stratification applied to all model compartments")
         self$compartment_types_to_stratify <- self$compartment_types
       }
       
       # otherwise check all the requested compartments are available and implement the user request
-      else if (length(setdiff(compartment_types_to_stratify, self$compartment_types)) != 0) {
+      else if (length(setdiff(.compartment_types_to_stratify, self$compartment_types)) != 0) {
         stop("requested compartment or compartments to be stratified are not available in this model")
       }
       else {
-        self$compartment_types_to_stratify <- compartment_types_to_stratify
+        self$compartment_types_to_stratify <- .compartment_types_to_stratify
       }
     },
 
-    # alternative approach to working out which parameters to overwrite - can put a capital W at the string's end
-    alternative_adjustment_request = function(adjustment_requests) {
+    incorporate_alternative_overwrite_approach = function(.adjustment_requests) {
+      #   alternative approach to working out which parameters to overwrite
+      #   can now put a capital W at the string's end to indicate that it is an overwrite parameter, as an alternative to
+      #   submitting a separate dictionary key to represent the strata which need to be overwritten
+      # 
+      #   :param .adjustment_requests: dict
+      #       user-submitted version of adjustment requests
+      #   :return: revised_adjustments: dict
+      #       modified version of _adjustment_requests after working out whether any parameters began with W
+      
       revised_adjustments <- list()
-      for (parameter in names(adjustment_requests)) {
+      for (parameter in names(.adjustment_requests)) {
+        
+        # accept the key representing the overwrite parameters
         revised_adjustments[[parameter]] <- list()
-        if ("overwrite" %in% adjustment_requests[[parameter]]) {
-          revised_adjustments[[parameter]]$overwrite <- adjustment_requests[[parameter]]$overwrite
+        if ("overwrite" %in% .adjustment_requests[[parameter]]) {
+          revised_adjustments[[parameter]]$overwrite <- .adjustment_requests[[parameter]]$overwrite
         }
         else {
           revised_adjustments[[parameter]]$overwrite <- c()
         }
-        for (stratum in names(adjustment_requests[[parameter]])) {
+        
+        # then loop through all the other keys of the user request
+        for (stratum in names(.adjustment_requests[[parameter]])) {
           if (stratum == "overwrite") {
             next
           }
+
+          # if the parameter ends in W, it is interpreted as an overwrite parameter and added to this key
           else if (substr(stratum, nchar(stratum), nchar(stratum)) == "W") {
-            revised_adjustments[[parameter]][substr(stratum, 1, nchar(stratum) - 1)] <- adjustment_requests[[parameter]][[stratum]]
+            revised_adjustments[[parameter]][substr(stratum, 1, nchar(stratum) - 1)] <- .adjustment_requests[[parameter]][[stratum]]
             revised_adjustments[[parameter]]$overwrite <- c(revised_adjustments[[parameter]]$overwrite, substr(stratum, 1, nchar(stratum) - 1))
           }
+          
+          # otherwise just accept the parameter in its submitted form
           else {
-            revised_adjustments[[parameter]][[stratum]] <- adjustment_requests[[parameter]][[stratum]]
+            revised_adjustments[[parameter]][[stratum]] <- .adjustment_requests[[parameter]][[stratum]]
           }
         }
-        adjustment_requests[[parameter]] <- revised_adjustments[[parameter]]
+        .adjustment_requests[[parameter]] <- revised_adjustments[[parameter]]
       }
       revised_adjustments
     },
     
-    # check parameter adjustments have been requested appropriately
-    check_parameter_adjustment_requests = function(adjustment_requests, strata_names) {
-      for (parameter in names(adjustment_requests)) {
-        for (requested_stratum in names(adjustment_requests[[parameter]])) {
+    check_parameter_adjustment_requests = function(.adjustment_requests, strata_names) {
+      #   check parameter adjustments have been requested appropriately and add parameter for any strata not referred to
+      # 
+      #   :param _adjustment_requests: dict
+      #       version of the submitted adjustment_requests modified by incorporate_alternative_overwrite_approach
+      #   :param _strata_names:
+      #       see find_strata_names_from_input
+      #   :return: _adjustment_requests
+      #       modified version of _adjustment_requests after checking
+      for (parameter in names(.adjustment_requests)) {
+        
+        # check all the requested strata for parameter adjustments were strata that were requested
+        for (requested_stratum in names(.adjustment_requests[[parameter]])) {
           if (!requested_stratum %in% as.character(strata_names) & requested_stratum != "overwrite") {
             stop(paste("stratum", requested_stratum, "requested in adjustments but unavailable"))
           }
         }
+        
+        # if any strata were not requested, assume a value of one
         for (stratum in as.character(strata_names)) {
-          if (!stratum %in% names(adjustment_requests[[parameter]])) {
-            adjustment_requests[[parameter]][[stratum]] <- 1
+          if (!stratum %in% names(.adjustment_requests[[parameter]])) {
+            .adjustment_requests[[parameter]][[stratum]] <- 1
             self$output_to_user(paste("no request made for adjustment to", parameter, "within stratum", stratum, "so using parent value by default"))
           }
         }
       }
+      .adjustment_requests
     },
     
-    # prepare user inputs for starting proportions as needed
-    prepare_starting_proportions = function(strata_names, requested_proportions) {
+    prepare_starting_proportions = function(.strata_names, .requested_proportions) {
+      #   prepare user inputs for starting proportions as needed
+      #   must be specified with names that are strata being implemented during this stratification process
+      #   note this applies to initial conditions and to entry flows
+      # 
+      #   :param .strata_names:
+      #       see find_strata_names_from_input
+      #   :param .requested_proportions: dict
+      #       dictionary with keys for the stratum to assign starting population to and values the proportions to assign
+      #   :return: dict
+      #       revised dictionary of starting proportions after cleaning
       
       # assume an equal proportion of the total for the compartment if not otherwise specified
-      for (stratum in strata_names) {
-        if (!stratum %in% names(requested_proportions)) {
-          starting_proportion <- 1 / length(strata_names)
-          requested_proportions[as.character(stratum)] <- starting_proportion
+      for (stratum in .strata_names) {
+        if (!stratum %in% names(.requested_proportions)) {
+          starting_proportion <- 1 / length(.strata_names)
+          .requested_proportions[as.character(stratum)] <- starting_proportion
           self$output_to_user(paste("no starting proportion requested for stratum", stratum,
                                     "so allocated", round(starting_proportion, self$reporting_sigfigs), "of total"))
         }
       }
       
-      # normalise if totals not equal to one
-      normalise_list(requested_proportions)
+      # normalise the dictionary before return, in case adding the missing groups as equal proportions exceeds one
+      normalise_list(.requested_proportions)
     },
     
     # compartment stratification
