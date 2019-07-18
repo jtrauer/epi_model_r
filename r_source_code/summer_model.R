@@ -540,29 +540,33 @@ EpiModel <- R6Class(
       }
     },
     
-    # add the derived quantities being tracked to the end of the tracking vector
-    extend_derived_outputs = function(time) {
-      self$derived_outputs$times <- c(self$derived_outputs$times, time)
+    extend_derived_outputs = function(.time) {
+      #   add the derived quantities being tracked to the end of the tracking vector, taking the self.derived_outputs
+      #   dictionary for a single time point and updating the derived outputs dictionary of lists for all time points
+      # 
+      #   :param .time: float
+      #       current time in integration process
+      self$derived_outputs$times <- c(self$derived_outputs$times, .time)
       for (output_type in names(self$output_connections)) {
         self$derived_outputs[[output_type]] <- c(self$derived_outputs[[output_type]], self$tracked_quantities[[output_type]])
       }
     },
     
-    # equivalent method to for transition flows above, but for deaths
-    apply_compartment_death_flows = function(ode_equations, compartment_values, time) {
-      for (f in seq(nrow(self$death_flows))) {
+    apply_compartment_death_flows = function(.ode_equations, .compartment_values, .time) {
+      #   equivalent method to for transition flows above, but for deaths
+      # 
+      #   :parameters and return: see previous method apply_all_flow_types_to_odes
+      for (f in which(self$death_flows$implement == length(self$strata))) {
         flow <- self$death_flows[f,]
-        if (flow$implement == length(self$strata)) {
-          adjusted_parameter <- self$get_parameter_value(flow$parameter, time)
-          from_compartment <- match(flow$from, names(self$compartment_values))
-          net_flow <- adjusted_parameter * compartment_values[from_compartment]
-          ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
-          if ("total_deaths" %in% names(self$tracked_quantities)) {
-            self$tracked_quantities$total_deaths <- self$tracked_quantities$total_deaths + net_flow
-          }
+        adjusted_parameter <- self$get_parameter_value(flow$parameter, .time)
+        from_compartment <- match(flow$from, names(self$compartment_values))
+        net_flow <- adjusted_parameter * .compartment_values[from_compartment]
+        .ode_equations <- self$increment_compartment(.ode_equations, from_compartment, -net_flow)
+        if ("total_deaths" %in% names(self$tracked_quantities)) {
+          self$tracked_quantities$total_deaths <- self$tracked_quantities$total_deaths + net_flow
         }
       }
-      ode_equations
+      .ode_equations
     },
     
     # apply the population-wide death rate to all compartments
