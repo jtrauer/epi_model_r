@@ -490,7 +490,7 @@ EpiModel <- R6Class(
         .ode_equations <- self$apply_compartment_death_flows(.ode_equations, .compartment_values, .time)
       }
       .ode_equations <- self$apply_universal_death_flow(.ode_equations, .compartment_values, .time)
-      .ode_equations <- self$apply_birth_rate(.ode_equations, .compartment_values, .time)
+      .ode_equations <- self$apply_birth_rate(.ode_equations, .compartment_values)
       list(.ode_equations)
     },
     
@@ -569,26 +569,30 @@ EpiModel <- R6Class(
       .ode_equations
     },
     
-    # apply the population-wide death rate to all compartments
-    apply_universal_death_flow = function(ode_equations, compartment_values, time) {
+    apply_universal_death_flow = function(.ode_equations, .compartment_values, .time) {
+      #   apply the population-wide death rate to all compartments
+      # 
+      #   :parameters and return: see previous method apply_all_flow_types_to_odes
       for (compartment in names(self$compartment_values)) {
-        adjusted_parameter <- self$get_parameter_value("universal_death_rate", time)
+        adjusted_parameter <- self$get_parameter_value("universal_death_rate", .time)
         from_compartment <- match(compartment, names(self$compartment_values))
-        net_flow <- adjusted_parameter * compartment_values[from_compartment]
-        ode_equations <- self$increment_compartment(ode_equations, from_compartment, -net_flow)
+        net_flow <- adjusted_parameter * .compartment_values[from_compartment]
+        .ode_equations <- self$increment_compartment(.ode_equations, from_compartment, -net_flow)
         
         # track deaths in case births are meant to replace deaths
         if ("total_deaths" %in% names(self$tracked_quantities)) {
           self$tracked_quantities$total_deaths <- self$tracked_quantities$total_deaths + net_flow
         }
       }
-      ode_equations
+      .ode_equations
     },
     
-    # apply a population-wide death rate to all compartments
-    apply_birth_rate = function(ode_equations, compartment_values, time) {
-      ode_equations <- self$increment_compartment(ode_equations, match(self$entry_compartment, names(self$compartment_values)), 
-                                                  self$find_total_births(compartment_values))
+    apply_birth_rate = function(.ode_equations, .compartment_values) {
+      #   apply a birth rate to the entry compartments
+      # 
+      #   :parameters and return: see previous method apply_all_flow_types_to_odes
+      .ode_equations <- self$increment_compartment(.ode_equations, match(self$entry_compartment, names(self$compartment_values)), 
+                                                   self$find_total_births(.compartment_values))
     },
     
     # work out the total births to apply dependent on the approach requested
@@ -1183,7 +1187,7 @@ StratifiedModel <- R6Class(
     },
     
     # apply a population-wide death rate to all compartments
-    apply_birth_rate = function(ode_equations, compartment_values, time) {
+    apply_birth_rate = function(ode_equations, compartment_values) {
       total_births = self$find_total_births(compartment_values)
       
       # split the total births across entry compartments

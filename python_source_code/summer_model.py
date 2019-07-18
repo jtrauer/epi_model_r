@@ -636,7 +636,7 @@ class EpiModel:
         _ode_equations = self.apply_transition_flows(_ode_equations, _compartment_values, _time)
         _ode_equations = self.apply_compartment_death_flows(_ode_equations, _compartment_values, _time)
         _ode_equations = self.apply_universal_death_flow(_ode_equations, _compartment_values, _time)
-        return self.apply_birth_rate(_ode_equations, _compartment_values, _time)
+        return self.apply_birth_rate(_ode_equations, _compartment_values)
 
     def apply_transition_flows(self, _ode_equations, _compartment_values, _time):
         """
@@ -727,7 +727,7 @@ class EpiModel:
                 self.tracked_quantities["total_deaths"] += net_flow
         return _ode_equations
 
-    def apply_birth_rate(self, _ode_equations, _compartment_values, _time):
+    def apply_birth_rate(self, _ode_equations, _compartment_values):
         """
         apply a birth rate to the entry compartments
 
@@ -1563,7 +1563,7 @@ class StratifiedModel(EpiModel):
             self.tracked_quantities["infectious_population"] += \
                 _compartment_values[self.compartment_names.index(compartment)] * infectiousness_modifier
 
-    def apply_birth_rate(self, _ode_equations, _compartment_values, _time):
+    def apply_birth_rate(self, _ode_equations, _compartment_values):
         """
         apply a population-wide death rate to all compartments
 
