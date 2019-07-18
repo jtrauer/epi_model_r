@@ -14,7 +14,7 @@ library(R6)
 # library(DiagrammeRsvg)
 library(rsvg)
 library(stringr)
-library(RSQLite)
+#library(RSQLite)
 # this file contains the main model builder function, that is intended to be agnostic
 # to the type and complexity of model that the user wants to build
 # all instructions for what the characteristics of the model are are separated out to a file that calls/sources this one
@@ -678,12 +678,9 @@ EpiModel <- R6Class(
       #   :return: float
       #       parameter value
       self$find_parameter_value(.parameter, .time)
-    },
-    
-    storeDB = function(){
-      connection <- dbConnect(SQLite(), "outputs.db")
-      dbWriteTable(connection, 'outputs', sir_model$outputs, overwrite=TRUE)
     }
+    
+    
   )
 )
 
