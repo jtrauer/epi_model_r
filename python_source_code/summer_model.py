@@ -909,8 +909,9 @@ class StratifiedModel(EpiModel):
                           equilibrium_stopping_tolerance=equilibrium_stopping_tolerance,
                           integration_type=integration_type, output_connections=output_connections)
 
-        self.all_stratifications, self.removed_compartments, self.overwrite_parameters, self.compartment_types_to_stratify = \
-            [[] for _ in range(4)]
+        self.all_stratifications, self.removed_compartments, self.overwrite_parameters, \
+        self.compartment_types_to_stratify, self.strata = \
+            [[] for _ in range(5)]
         self.heterogeneous_infectiousness = False
         self.infectiousness_adjustments, self.parameter_components = [{} for _ in range(2)]
 
@@ -1024,13 +1025,16 @@ class StratifiedModel(EpiModel):
                              "in order to apply to all compartments")
         elif any([type(stratum) != int and type(stratum) != float for stratum in _strata_request]):
             raise ValueError("inputs for age strata breakpoints are not numeric")
+        elif "age" in self.strata:
+            raise ValueError(
+                "requested stratification by age, but this has specific behaviour and can only be applied once")
+        if _strata_request != sorted(_strata_request):
+            _strata_request = sorted(_strata_request)
+            self.output_to_user("requested age strata not ordered, so have been sorted to: %s" % _strata_request)
         if 0 not in _strata_request:
             self.output_to_user("adding age stratum called '0' as not requested, to represent those aged less than %s"
                                 % min(_strata_request))
             _strata_request.append(0)
-        if _strata_request != sorted(_strata_request):
-            _strata_request = sorted(_strata_request)
-            self.output_to_user("requested age strata not ordered, so have been sorted to: %s" % _strata_request)
         return _strata_request
 
     def find_strata_names_from_input(self, _strata_request):

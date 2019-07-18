@@ -679,8 +679,6 @@ EpiModel <- R6Class(
       #       parameter value
       self$find_parameter_value(.parameter, .time)
     }
-    
-    
   )
 )
 
@@ -763,9 +761,11 @@ StratifiedModel <- R6Class(
       #       the original unstratified model construction
       
       # check inputs correctly specified
-      strata_names <- self$prepare_and_check_stratification(
+      check_results <- self$prepare_and_check_stratification(
         stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests, verbose)
-      
+      strata_names <- check_results[[1]]
+      adjustment_requests <- check_results[[2]]
+        
       # work out ageing flows (comes first so that the compartment names are still in the unstratified form)
       if (stratification_name == "age") {
         self$set_ageing_rates(strata_names)
@@ -790,73 +790,100 @@ StratifiedModel <- R6Class(
     # __________
     # pre-integration methods
     
-    # initial preparation and checks
-    prepare_and_check_stratification = function(stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests, verbose) {
-      self$verbose <- verbose
+    prepare_and_check_stratification = function(.stratification_name, .strata_request, .compartment_types_to_stratify, .adjustment_requests, .verbose) {
+      #   initial preparation and checks
+      # 
+      #   :param .stratification_name: str
+      #       the name of the stratification - i.e. the reason for implementing this type of stratification
+      #   :param .strata_request:
+      #       see find_strata_names_from_input
+      #   :param .compartment_types_to_stratify:
+      #       see check_compartment_request
+      #   :param .adjustment_requests:
+      #       see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
+      #   :param .verbose:
+      #       see stratify
+      #   :return:
+      #       .strata_names: list
+      #           revised version of _strata_request after adaptation to class requirements
+      #       .adjustment_requests:
+      #           revised version of _adjustment_requests after adaptation to class requirements
+      self$verbose <- .verbose
       
       # checks and reporting for age stratification and general starting message otherwise
-      if (stratification_name == "age") {
-        strata_request <- self$check_age_stratification(strata_request, compartment_types_to_stratify)
+      if (.stratification_name == "age") {
+        .strata_request <- self$check_age_stratification(.strata_request, .compartment_types_to_stratify)
       }
       else {
-        self$output_to_user(paste("\nimplementing stratification for:", stratification_name))
+        self$output_to_user(paste("\nimplementing stratification for:", .stratification_name))
       }
       
       # make sure all stratification names are characters
-      if (!is.character(stratification_name)) {
-        stratification_name <- as.character(stratification_name)
-        self$output_to_user(paste("converting stratification name", stratification_name, "to character"))
+      if (!is.character(.stratification_name)) {
+        .stratification_name <- as.character(.stratification_name)
+        self$output_to_user(paste("converting stratification name", .stratification_name, "to character"))
       }
       
       # record stratification as attribute to model, find the names to apply strata and check compartment and parameter requests
-      self$strata <- c(self$strata, stratification_name)
-      strata_names <- self$find_strata_names_from_input(strata_request)
-      adjustment_requests <- self$alternative_adjustment_request(adjustment_requests)
-      self$check_compartment_request(compartment_types_to_stratify)
-      adjustment_requests <- self$check_parameter_adjustment_requests(adjustment_requests, strata_names)
-      strata_names
+      self$strata <- c(self$strata, .stratification_name)
+      .strata_names <- self$find_strata_names_from_input(.strata_request)
+      .adjustment_requests <- self$alternative_adjustment_request(.adjustment_requests)
+      self$check_compartment_request(.compartment_types_to_stratify)
+      .adjustment_requests <- self$check_parameter_adjustment_requests(.adjustment_requests, .strata_names)
+      list(.strata_names, .adjustment_requests)
     },
     
-    # check that request meets the requirements for stratification by age
-    check_age_stratification = function(strata_request, compartment_types_to_stratify) {
-      self$output_to_user(paste("\nimplementing age-specific stratification with specific behaviour"))
-      if ("age" %in% self$strata) {
-        stop("requested stratification by age, but this has specific behaviour and can only be applied once")
-      }
-      else if (length(compartment_types_to_stratify) > 0) {
+    check_age_stratification = function(.strata_request, .compartment_types_to_stratify) {
+      #   check that request meets the requirements for stratification by age
+      # 
+      #   :parameters: all parameters have come directly from the stratification (stratify) method unchanged and have been
+      #       renamed with a preceding _ character
+      #   :return: _strata_request: list
+      #       revised names of the strata tiers to be implemented
+      self$output_to_user(paste("implementing age-specific stratification with specific behaviour"))
+      if (length(.compartment_types_to_stratify) > 0) {
         stop("requested age stratification, but compartment request should be passed as empty vector in order to apply to all compartments")
       }
-      else if (!is.numeric(strata_request)) {
+      else if (!is.numeric(.strata_request)) {
         stop("inputs for age strata breakpoints are not numeric")
       }
-      if (is.unsorted(strata_request)) {
-        strata_request <- sort(strata_request)
+      else if ("age" %in% self$strata) {
+        stop("requested stratification by age, but this has specific behaviour and can only be applied once")
+      }
+      if (is.unsorted(.strata_request)) {
+        .strata_request <- sort(.strata_request)
         self$output_to_user(paste("requested strata for age stratification not ordered, so have been sorted to:", 
-                                  paste(rep(", ", length(strata_request)), strata_request, collapse=""), sep=""))
+                                  paste(rep(", ", length(.strata_request)), .strata_request, collapse=""), sep=""))
       }
-      if (!0 %in% strata_request) {
-        self$output_to_user(paste("adding age stratum called '0' as not requested, to represent those aged less than", strata_request[1]))
-        strata_request <- c(0, strata_request)
+      if (!0 %in% .strata_request) {
+        self$output_to_user(paste("adding age stratum called '0' as not requested, to represent those aged less than", .strata_request[1]))
+        .strata_request <- c(0, .strata_request)
       }
-      strata_request
+      .strata_request
     },
         
-    # find the names of the stratifications from a particular user request
-    find_strata_names_from_input = function(strata_request) {
-      if (length(strata_request) == 0) {
+    find_strata_names_from_input = function(.strata_request) {
+      #   find the names of the strata to be implemented from a particular user request
+      # 
+      #   :parameters: list or alternative format to be adapted
+      #       strata requested in the format provided by the user (except for age, which is dealth with in the preceding
+      #       method)
+      #   :return: strata_names: list
+      #       modified list of strata to be implemented in model
+      if (length(.strata_request) == 0) {
         stop("requested to stratify, but no strata provided")
       }
-      else if (length(strata_request) == 1 & is.numeric(strata_request)) {
-        if (strata_request %% 1 == 0 & strata_request > 1) {
-          strata_names <- seq(strata_request)
-          self$output_to_user(paste("integer provided strata labels for stratification, hence strata implemented are integers from 1 to", strata_request))
+      else if (length(.strata_request) == 1 & is.numeric(.strata_request)) {
+        if (.strata_request %% 1 == 0 & .strata_request > 1) {
+          strata_names <- seq(.strata_request)
+          self$output_to_user(paste("integer provided strata labels for stratification, hence strata implemented are integers from 1 to", .strata_request))
         }
         else {
           stop("number passed as request for strata labels, but not an integer greater than one, unclear what to do, stratification failed")
         }
       }
       else {
-        strata_names <- strata_request
+        strata_names <- .strata_request
       }
       for (name in strata_names) {
         self$output_to_user(paste("adding stratum:", name))
