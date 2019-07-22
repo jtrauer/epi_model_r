@@ -86,17 +86,17 @@ def unpivot_outputs(model_object):
     return output_dataframe.drop(columns="variable")
 
 
-def build_working_tb_model(beta, cdr_adjustment):
+def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
     """
     current working tb model with some characteristics of mongolia applied at present
     """
-    times_ = numpy.linspace(1800., 2020.0, 201).tolist()
+    times_ = numpy.linspace(start_time, 2020.0, 201).tolist()
 
     # set basic parameters, flows and times, except for latency flows and parameters, then functionally add latency
     case_fatality_rate = 0.4
     untreated_disease_duration = 3.0
     parameters = \
-        {"beta": beta,
+        {"beta": tb_n_contact,
          "recovery": case_fatality_rate / untreated_disease_duration,
          "infect_death": (1.0 - case_fatality_rate) / untreated_disease_duration,
          "universal_death_rate": 1.0 / 50.0,
@@ -138,7 +138,7 @@ def build_working_tb_model(beta, cdr_adjustment):
     # store_database(function_dataframe, table_name="functions")
 
     # add age stratification
-    age_breakpoints = [0, 5, 15]
+    age_breakpoints = [0, 6, 13, 15]
     age_infectiousness = get_parameter_dict_from_function(logistic_scaling_function(15.0), age_breakpoints)
     tb_model_.stratify("age", age_breakpoints, [],
                        adjustment_requests=get_adapted_age_parameters(age_breakpoints),
@@ -154,7 +154,7 @@ def build_working_tb_model(beta, cdr_adjustment):
 
 if __name__ == "__main__":
 
-    tb_model = build_working_tb_model(40.0, 0.6)
+    tb_model = build_working_tb_model(40.0)
 
     # create_flowchart(tb_model, name="mongolia_flowchart")
     # tb_model.transition_flows.to_csv("transitions.csv")
