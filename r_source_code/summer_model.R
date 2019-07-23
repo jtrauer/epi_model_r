@@ -659,12 +659,10 @@ EpiModel <- R6Class(
       # 
       #   :param _compartment_values:
       #       as for preceding methods
-      for (compartment in names(self$compartment_values)) {
-        if (find_stem(compartment) == self$infectious_compartment) {
-          self$tracked_quantities$infectious_population <- self$tracked_quantities$infectious_population + 
-            compartment_values[match(compartment, names(self$compartment_values))]
-        }
-      }      
+      for (compartment in which(names(self$compartment_values) == self$infectious_compartment)) {
+        self$tracked_quantities$infectious_population <- 
+          self$tracked_quantities$infectious_population + compartment_values[compartment]
+      }
     },
     
     get_parameter_value = function(.parameter, .time) {
