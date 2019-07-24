@@ -1298,7 +1298,7 @@ class StratifiedModel(EpiModel):
              see find_strata_names_from_input
         :param _adjustment_requests:
              see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
-       """
+        """
         for parameter in [param for param in self.parameters if find_stem(param) == "universal_death_rate"]:
             for stratum in _strata_names:
                 self.add_adjusted_parameter(parameter, _stratification_name, stratum, _adjustment_requests)
@@ -1354,8 +1354,8 @@ class StratifiedModel(EpiModel):
             for stratum in infectiousness_adjustments:
                 if stratum not in strata_request:
                     raise ValueError("stratum to have infectiousness modified not found within requested strata")
-                adjustment_name = create_stratified_name("", stratification_name, stratum)
-                self.infectiousness_adjustments[adjustment_name] = infectiousness_adjustments[stratum]
+                self.infectiousness_adjustments[create_stratified_name("", stratification_name, stratum)] = \
+                    infectiousness_adjustments[stratum]
 
     def set_ageing_rates(self, _strata_names):
         """
@@ -1398,7 +1398,7 @@ class StratifiedModel(EpiModel):
         :param stratify_to:
             whether to stratify the to/destination compartment
         :param _adjustment_requests:
-            see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
+            see incorporate _alternative_overwrite_approach and check_parameter_adjustment_requests
         """
         if stratify_from or stratify_to:
             self.output_to_user(
@@ -1463,7 +1463,8 @@ class StratifiedModel(EpiModel):
         if not _stratify_from and _stratify_to:
             self.output_to_user("\tsplitting existing parameter value %s into %s equal parts"
                                 % (self.transition_flows.parameter[_n_flow], len(_strata_names)))
-            parameter_name = create_stratified_name(self.transition_flows.parameter[_n_flow], _stratification_name, _stratum)
+            parameter_name = \
+                create_stratified_name(self.transition_flows.parameter[_n_flow], _stratification_name, _stratum)
             self.parameters[parameter_name] = 1.0 / len(_strata_names)
 
         # otherwise if no request, retain the existing parameter

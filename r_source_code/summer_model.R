@@ -1126,36 +1126,56 @@ StratifiedModel <- R6Class(
       }
     },    
     
-    # stratify the approach to universal, population-wide deaths (which can be made to vary by stratum)
-    stratify_universal_death_rate = function(stratification_name, strata_names, adjustment_requests) {
-      
-      # take each parameter that refers to the universal death rate and adjust it for each stratum according to user request
+    stratify_universal_death_rate = function(.stratification_name, .strata_names, .adjustment_requests) {
+      #   stratify the approach to universal, population-wide deaths (which can be made to vary by stratum)
+      #   adjust each parameter that refers to the universal death rate according to user request
+      # 
+      #   :param .stratification_name:
+      #       see prepare_and_check_stratification
+      #   :param .strata_names:
+      #       see find_strata_names_from_input
+      #   :param .adjustment_requests:
+      #       see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
       for (parameter in names(self$parameters)) {
         if (find_stem(parameter) == "universal_death_rate") {
-          for (stratum in strata_names) {
-            self$add_adjusted_parameter(parameter, stratification_name, stratum, adjustment_requests)
+          for (stratum in .strata_names) {
+            self$add_adjusted_parameter(parameter, .stratification_name, stratum, .adjustment_requests)
           }
         }
       }
     },
     
-    # find the adjustment request that is relevant to a particular unadjusted parameter and stratum, otherwise allow return of null
-    add_adjusted_parameter = function(unadjusted_parameter, stratification_name, stratum, adjustment_requests) {
-      self$output_to_user(paste("\tmodifying", unadjusted_parameter, "for", stratum, "stratum of", stratification_name))
+    add_adjusted_parameter = function(.unadjusted_parameter, .stratification_name, .stratum, .adjustment_requests) {
+      #   find the adjustment request that is relevant to a particular unadjusted parameter and stratum
+      #   otherwise allow return of None
+      # 
+      #   :param .unadjusted_parameter:
+      #       name of the unadjusted parameter value
+      #   :param .stratification_name:
+      #       see prepare_and_check_stratification
+      #   :param .stratum:
+      #       stratum being considered by the method calling this method
+      #   :param .adjustment_requests:
+      #       see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
+      #   :return: parameter_adjustment_name: str or None
+      #       if returned as None, assumption will be that the original, unstratified parameter should be used
+      #       otherwise create a new parameter name and value and store away in the appropriate model structure
+      self$output_to_user(paste("\tmodifying", .unadjusted_parameter, "for", .stratum, "stratum of", .stratification_name))
       
-      # find the adjustment request that is an extension of the base parameter type being considered
-      for (parameter_request in names(adjustment_requests)) {
-        if (startsWith(unadjusted_parameter, parameter_request)) {
-          self$output_to_user(paste("modifying", unadjusted_parameter, "for", stratum, "of", stratification_name))
-          parameter_adjustment_name <- create_stratified_name(unadjusted_parameter, stratification_name, stratum)
+      # find the adjustment requests that are extensions of the base parameter type being considered
+      for (parameter_request in names(.adjustment_requests)) {
+        if (startsWith(.unadjusted_parameter, parameter_request)) {
+          parameter_adjustment_name <- create_stratified_name(.unadjusted_parameter, .stratification_name, .stratum)
+          self$output_to_user(paste("modifying", .unadjusted_parameter, "for", .stratum, "of", .stratification_name,
+                                    "with new parameter called", parameter_adjustment_name))
           
           # implement user request if requested (note that otherwise parameter will now be left out and assumed to be 1 during integration)
-          if (stratum %in% names(adjustment_requests[[parameter_request]])) {
-            self$parameters[parameter_adjustment_name] <- adjustment_requests[[parameter_request]][[as.character(stratum)]]
+          if (.stratum %in% names(.adjustment_requests[[parameter_request]])) {
+            self$parameters[parameter_adjustment_name] <- .adjustment_requests[[parameter_request]][[as.character(.stratum)]]
           }
           
           # overwrite parameters higher up the tree by listing which ones to be overwritten
-          if (stratum %in% adjustment_requests[[parameter_request]]) {
+          if (.stratum %in% .adjustment_requests[[parameter_request]]) {
             self$overwrite_parameters <- c(self$overwrite_parameters, parameter_adjustment_name)
           }
           return(parameter_adjustment_name)
@@ -1163,8 +1183,10 @@ StratifiedModel <- R6Class(
       }
     },
     
-    # work out infectiousness adjustments and set as model attributes
     apply_heterogeneous_infectiousness = function(stratification_name, strata_request, infectiousness_adjustments) {
+      #   work out infectiousness adjustments and set as model attributes
+      #   this has not been fully documented, as we are intending to revise this to permit any approach to heterogeneous
+      #   infectiousness or mixing assumptions
       if (length(infectiousness_adjustments) == 0) {
         self$output_to_user("heterogeneous infectiousness not requested for this stratification")
       }
@@ -1177,17 +1199,21 @@ StratifiedModel <- R6Class(
           if (!stratum %in% strata_request) {
             stop("stratum to have infectiousness modified not found within requested strata")
           }
-          adjustment_name <- create_stratified_name("", stratification_name, stratum)
-          self$infectiousness_adjustments[[adjustment_name]] <- infectiousness_adjustments[[stratum]]
+          self$infectiousness_adjustments[[create_stratified_name("", stratification_name, stratum)]] <- 
+            infectiousness_adjustments[[stratum]]
         }
       }
     },
     
-    # set intercompartmental flows for ageing from one stratum to the next
-    set_ageing_rates = function(strata_names) {
-      for (stratum_number in seq(length(strata_names) - 1)) {
-        start_age <- strata_names[stratum_number]
-        end_age <- strata_names[stratum_number + 1]
+    set_ageing_rates = function(.strata_names) {
+      #   set intercompartmental flows for ageing from one stratum to the next as the reciprocal of the width of the age
+      #   bracket
+      # 
+      #   :param _strata_names:
+      #       see find_strata_names_from_input
+      for (stratum_number in seq(length(.strata_names) - 1)) {
+        start_age <- .strata_names[stratum_number]
+        end_age <- .strata_names[stratum_number + 1]
         ageing_parameter_name <- paste("ageing", as.character(start_age), "to", as.character(end_age), sep="")
         ageing_rate <- 1 / (end_age - start_age)
         self$output_to_user(paste("ageing rate from age group", start_age, "to", end_age, "is", round(ageing_rate, self$reporting_sigfigs)))
@@ -1203,74 +1229,98 @@ StratifiedModel <- R6Class(
       }
     },
 
-    # add additional stratified flow to flow data frame
-    add_stratified_flows = function(flow, stratification_name, strata_names, stratify_from, stratify_to, adjustment_requests) {
+    add_stratified_flows = function(.n_flow, stratification_name, strata_names, stratify_from, stratify_to, adjustment_requests) {
+      #   add additional stratified flow to the transition flow data frame attribute of the class
+      # 
+      #   :param _n_flow: int
+      #       location of the unstratified flow within the transition flow attribute
+      #   :param _stratification_name:
+      #       see prepare_and_check_stratification
+      #   :param _strata_names:
+      #       see find_strata_names_from_input
+      #   :param stratify_from: bool
+      #       whether to stratify the from/origin compartment
+      #   :param stratify_to:
+      #       whether to stratify the to/destination compartment
+      #   :param _adjustment_requests:
+      #       see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
       parameter_name <- NULL
       if (stratify_from | stratify_to) {
-        self$output_to_user(paste("for flow from", self$transition_flows$from[flow], "to", self$transition_flows$to[flow], "in stratification", stratification_name))
+        self$output_to_user(paste("for flow from", self$transition_flows$from[.n_flow], "to", self$transition_flows$to[.n_flow], "in stratification", stratification_name))
         
         # loop over each stratum in the requested stratification structure
         for (stratum in strata_names) {
           
           # find parameter name
           parameter_name <- self$add_adjusted_parameter(
-            self$transition_flows$parameter[flow], stratification_name, stratum, adjustment_requests)
+            self$transition_flows$parameter[.n_flow], stratification_name, stratum, adjustment_requests)
           if (is.null(parameter_name)) {
-            parameter_name <- self$sort_absent_parameter_request(stratification_name, strata_names, stratum, stratify_from, stratify_to, flow)
+            parameter_name <- self$sort_absent_parameter_request(stratification_name, strata_names, stratum, stratify_from, stratify_to, .n_flow)
           }
                       
           # determine whether to and/or from compartments are stratified
           if (stratify_from) {
-            from_compartment <- create_stratified_name(self$transition_flows$from[flow], stratification_name, stratum)
+            from_compartment <- create_stratified_name(self$transition_flows$from[.n_flow], stratification_name, stratum)
           }
           else {
-            from_compartment <- self$transition_flows$from[flow]
+            from_compartment <- self$transition_flows$from[.n_flow]
           }
           if (stratify_to) {
-            to_compartment <- create_stratified_name(self$transition_flows$to[flow], stratification_name, stratum)
+            to_compartment <- create_stratified_name(self$transition_flows$to[.n_flow], stratification_name, stratum)
           }
           else {
-            to_compartment <- self$transition_flows$to[flow]
+            to_compartment <- self$transition_flows$to[.n_flow]
           }
           
           # add the new flow
           self$transition_flows <- rbind(self$transition_flows,data.frame(
-            parameter=parameter_name, from=from_compartment, to=to_compartment, implement=length(self$strata), type=self$transition_flows$type[flow]))
+            parameter=parameter_name, from=from_compartment, to=to_compartment, implement=length(self$strata), type=self$transition_flows$type[.n_flow]))
         }
         
         # remove old flow
-        self$transition_flows$implement[flow] <- length(self$strata) - 1
+        self$transition_flows$implement[.n_flow] <- length(self$strata) - 1
       }
       else {
-        retained_flow <- self$transition_flows[flow,]
+        retained_flow <- self$transition_flows[.n_flow,]
         retained_flow$implement <- retained_flow$implement + 1
         self$transition_flows <- rbind(self$transition_flows, retained_flow, stringsAsFactors=FALSE)
       }
     },
     
-    # work out what to do if a specific parameter adjustment has not been requested
-    sort_absent_parameter_request = function (stratification_name, strata_names, stratum, stratify_from, stratify_to, flow) {
+    sort_absent_parameter_request = function (.stratification_name, .strata_names, .stratum, .stratify_from, .stratify_to, .n_flow) {
+      #   work out what to do if a specific parameter adjustment has not been requested
+      # 
+      #   :param _stratification_name:
+      #       see prepare_and_check_stratification
+      #   :param _strata_names:
+      #       see find_strata_names_from_input
+      #   :param _stratum:
+      #   :param _stratify_from:
+      #       see add_stratified_flows
+      #   :param _stratify_to:
+      #       see add_stratified_flows
+      #   :param _n_flow: int
+      #       index of the flow being dealt with
+      #   :return: str
+      #       parameter name for revised parameter than wasn't provided
       
       # default behaviour for parameters not requested is to split the parameter into equal parts from compartment not split but to compartment is
-      if (!stratify_from & stratify_to) {
-        self$output_to_user(paste("\tsplitting existing parameter value", self$transition_flows$parameter[flow], "into", length(strata_names), "equal parts"))
-        parameter_name <- create_stratified_name(self$transition_flows$parameter[flow], stratification_name, stratum)
-        self$parameters[parameter_name] <- 1 / length(strata_names)
+      if (!.stratify_from & .stratify_to) {
+        self$output_to_user(paste("\tsplitting existing parameter value", self$transition_flows$parameter[.n_flow], "into", length(.strata_names), "equal parts"))
+        parameter_name <- create_stratified_name(self$transition_flows$parameter[.n_flow], .stratification_name, .stratum)
+        self$parameters[parameter_name] <- 1 / length(.strata_names)
       }
       
       # otherwise if no request, retain the existing parameter
       else {
-        parameter_name <- self$transition_flows$parameter[flow]
+        parameter_name <- self$transition_flows$parameter[.n_flow]
         self$output_to_user(paste("\tretaining existing parameter value", parameter_name))
       }
       parameter_name
     },
-
-    # __________
-    # methods to be called during the process of model running
     
-    # prior to integration commencing, work out what the components are of each parameter being implemented
     prepare_stratified_parameter_calculations = function() {
+      #   prior to integration commencing, work out what the components are of each parameter being implemented
       
       # create list of all the parameters that we need to find the list of adjustments for
       parameters_to_adjust <- c(self$transition_flows$parameter[which(self$transition_flows$implement == length(self$strata))],
@@ -1281,48 +1331,64 @@ StratifiedModel <- R6Class(
       }
     },
     
-    # extract the components of the stratified parameter into a list structure
-    find_parameter_components = function(parameter) {
+    find_parameter_components = function(.parameter) {
+      #   extract the components of the stratified parameter into a dictionary structure with values being a list of
+      #   time-variant parameters, a list of constant parameters and the product of all the constant values applied
+      # 
+      #   :param _parameter: str
+      #       name of the parameter that we are tracking down the components of
       
-      # collate all the parameter components into time-variant or constant
-      self$parameter_components[[parameter]] <- list(time_variants = c(), constants = c(), constant_value = 1)
-      for (x_instance in extract_reversed_x_positions(parameter)) {
-        component <- substr(parameter, 1, x_instance - 1)
+      # work backwards through sub-strings of the parameter names from the full name to the name through to each X
+      self$parameter_components[[.parameter]] <- list(time_variants = c(), constants = c(), constant_value = 1)
+      for (x_instance in extract_reversed_x_positions(.parameter)) {
+        component <- substr(.parameter, 1, x_instance - 1)
         is_time_variant <- component %in% self$time_variants
         if (component %in% self$overwrite_parameters & is_time_variant) {
-          self$parameter_components[[parameter]] <- list(time_variants = c(component), constants = c(), constant_value = 1)
+          self$parameter_components[[.parameter]] <- list(time_variants = c(component), constants = c(), constant_value = 1)
           break
         }
         else if (component %in% self$overwrite_parameters & !is_time_variant) {
-          self$parameter_components[[parameter]] <- list(time_variants = c(), constants = c(component), constant_value = 1)
+          self$parameter_components[[.parameter]] <- list(time_variants = c(), constants = c(component), constant_value = 1)
           break
         }
         else if (is_time_variant) {
-          self$parameter_components[[parameter]]$time_variants <- c(self$parameter_components[[parameter]]$time_variants, component)
+          self$parameter_components[[.parameter]]$time_variants <- c(self$parameter_components[[.parameter]]$time_variants, component)
         }
         else if (component %in% names(self$parameters)) {
-          self$parameter_components[[parameter]]$constants <- c(component, self$parameter_components[[parameter]]$constants)
+          self$parameter_components[[.parameter]]$constants <- c(component, self$parameter_components[[.parameter]]$constants)
         }
       }
       
       # pre-calculate the constant component by multiplying through all the constant values
-      for (constant_parameter in self$parameter_components[[parameter]]$constants) {
-        self$parameter_components[[parameter]]$constant_value <- 
-          self$parameter_components[[parameter]]$constant_value * self$parameters[[constant_parameter]]
+      for (constant_parameter in self$parameter_components[[.parameter]]$constants) {
+        self$parameter_components[[.parameter]]$constant_value <- 
+          self$parameter_components[[.parameter]]$constant_value * self$parameters[[constant_parameter]]
       }
     },
 
-    # calculate adjusted parameter value from pre-calculated product of constant components and individual time variants    
-    get_parameter_value = function(parameter, time) {
-      adjusted_parameter <- self$parameter_components[[parameter]]$constant_value
-      for (time_variant in self$parameter_components[[parameter]]$time_variants) {
-        adjusted_parameter <- adjusted_parameter * self$time_variants[[time_variant]](time)
+    # __________
+    # methods to be called during the process of model running
+
+    get_parameter_value = function(.parameter, .time) {
+      #   using the approach specified in find_parameter_components calculate adjusted parameter value from pre-calculated
+      #   product of constant components and time variants
+      # 
+      #   :param _parameter: str
+      #       name of the parameter whose value is needed
+      #   :param _time: float
+      #       time in model integration
+      adjusted_parameter <- self$parameter_components[[.parameter]]$constant_value
+      for (time_variant in self$parameter_components[[.parameter]]$time_variants) {
+        adjusted_parameter <- adjusted_parameter * self$time_variants[[time_variant]](.time)
       }
       adjusted_parameter
     },
     
-    # calculations to find the effective infectious population
-    find_infectious_population = function(compartment_values) {
+    find_infectious_population = function(.compartment_values) {
+      #   calculations to find the effective infectious population
+      # 
+      #   :param _compartment_values:
+      #       as for preceding methods
       
       # loop through all compartments and find the ones representing active infectious disease
       for (compartment in names(self$compartment_values)) {
@@ -1331,12 +1397,9 @@ StratifiedModel <- R6Class(
           # assume homogeneous infectiousness until requested otherwise
           infectiousness_modifier <- 1
           
-          # heterogeneous infectiousness adjustment
+          # haven't yet finished heterogeneous infectiousness - want to implement all forms of heterogeneous mixing
           if (self$heterogeneous_infectiousness) {
             for (adjustment in names(self$infectiousness_adjustments)) {
-              print(compartment)
-              print(adjustment)
-              
               if (grepl(adjustment, compartment)) {
                 infectiousness_modifier <- self$infectiousness_adjustments[[adjustment]]
               }
@@ -1345,17 +1408,19 @@ StratifiedModel <- R6Class(
           
           # increment infectious population
           self$tracked_quantities$infectious_population <-
-            self$tracked_quantities$infectious_population + compartment_values[match(compartment, names(self$compartment_values))] * infectiousness_modifier
+            self$tracked_quantities$infectious_population + .compartment_values[match(compartment, names(self$compartment_values))] * infectiousness_modifier
         }
       }
     },
     
-    # apply a population-wide death rate to all compartments
-    apply_birth_rate = function(ode_equations, compartment_values) {
-      total_births = self$find_total_births(compartment_values)
+    apply_birth_rate = function(.ode_equations, .compartment_values) {
+      #   apply a population-wide death rate to all compartments
+      # 
+      #   :parameters: all parameters have come directly from the apply_all_flow_types_to_odes method unchanged
+      total_births = self$find_total_births(.compartment_values)
       
       # split the total births across entry compartments
-      for (compartment in names(compartment_values)) {
+      for (compartment in names(.compartment_values)) {
         if (find_stem(compartment) == self$entry_compartment) {
           
           # calculate adjustment to original stem entry rate
@@ -1363,15 +1428,16 @@ StratifiedModel <- R6Class(
           x_positions <- extract_x_positions(compartment)
           if (!x_positions[1] == -1) {
             for (x_instance in seq(length(x_positions) - 1)) {
-              adjustment <- paste("entry_fractionX", substr(compartment, x_positions[x_instance] + 1, x_positions[x_instance + 1] - 1), sep="")
-              entry_fraction <- entry_fraction * self$parameters[[adjustment]]
+              entry_fraction <- entry_fraction * 
+                self$parameters[[paste("entry_fractionX", 
+                                       substr(compartment, x_positions[x_instance] + 1, x_positions[x_instance + 1] - 1), sep="")]]
             }
           }
           compartment_births <- entry_fraction * total_births
-          ode_equations <- increment_compartment(ode_equations, match(compartment, names(self$compartment_values)), compartment_births)
+          .ode_equations <- increment_compartment(.ode_equations, match(compartment, names(self$compartment_values)), compartment_births)
         }
       }
-      ode_equations
+      .ode_equations
     }
   )
 )
