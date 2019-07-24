@@ -1270,20 +1270,20 @@ class StratifiedModel(EpiModel):
         :param _adjustment_requests:
             see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
         """
-        for flow in self.death_flows[self.death_flows.implement == len(self.all_stratifications) - 1].index:
+        for n_flow in self.death_flows[self.death_flows.implement == len(self.all_stratifications) - 1].index:
             for stratum in _strata_names:
 
                 # get stratified parameter name if requested to stratify, otherwise use the unstratified one
                 parameter_name = self.add_adjusted_parameter(
-                    self.death_flows.parameter[flow], _stratification_name, stratum, _adjustment_requests)
+                    self.death_flows.parameter[n_flow], _stratification_name, stratum, _adjustment_requests)
                 if not parameter_name:
-                    parameter_name = self.death_flows.parameter[flow]
+                    parameter_name = self.death_flows.parameter[n_flow]
 
                 # add the stratified flow
                 self.death_flows = self.death_flows.append(
-                    {"type": self.death_flows.type[flow],
+                    {"type": self.death_flows.type[n_flow],
                      "parameter": parameter_name,
-                     "origin": create_stratified_name(self.death_flows.origin[flow], _stratification_name, stratum),
+                     "origin": create_stratified_name(self.death_flows.origin[n_flow], _stratification_name, stratum),
                      "implement": len(self.all_stratifications)},
                     ignore_index=True)
 

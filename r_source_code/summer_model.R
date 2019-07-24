@@ -1009,58 +1009,86 @@ StratifiedModel <- R6Class(
       normalise_list(.requested_proportions)
     },
     
-    # compartment stratification
-    stratify_compartments = function(stratification_name, strata_names, requested_proportions) {
+    stratify_compartments = function(.stratification_name, .strata_names, .requested_proportions) {
+      #   stratify the model compartments, which affects the compartment_names and the compartment_values attributes
+      # 
+      #   :param .stratification_name:
+      #       see prepare_and_check_stratification
+      #   :param .strata_names:
+      #       see find_strata_names_from_input
+      #   :param .requested_proportions:
+      #       see prepare_starting_proportions
       
       # find the existing compartments that need stratification
       for (compartment in names(self$compartment_values)) {
         if (find_stem(compartment) %in% self$compartment_types_to_stratify) {
           
           # add and remove compartments
-          for (stratum in strata_names) {
-            self$add_compartment(create_stratified_name(compartment, stratification_name, stratum),
-                                 self$compartment_values[[compartment]] * as.numeric(requested_proportions[as.character(stratum)]))
+          for (stratum in .strata_names) {
+            self$add_compartment(create_stratified_name(compartment, .stratification_name, stratum),
+                                 self$compartment_values[[compartment]] * as.numeric(.requested_proportions[as.character(stratum)]))
           }
           self$remove_compartment(compartment)
         }
       }
     },
     
-    # stratify flows depending on whether inflow, outflow or both need replication
-    stratify_transition_flows = function(stratification_name, strata_names, adjustment_requests) {
-      for (flow in which((self$transition_flows$implement == length(self$strata)-1))) {
-        self$add_stratified_flows(flow, stratification_name, strata_names, 
-                                  find_stem(self$transition_flows$from[flow]) %in% self$compartment_types_to_stratify,
-                                  find_stem(self$transition_flows$to[flow]) %in% self$compartment_types_to_stratify,
-                                  adjustment_requests)
+    stratify_transition_flows = function(.stratification_name, .strata_names, .adjustment_requests) {
+      #   stratify flows depending on whether inflow, outflow or both need replication, using call to add_stratified_flows
+      #   method below
+      # 
+      #   :param .stratification_name:
+      #       see prepare_and_check_stratification
+      #   :param .strata_names:
+      #       see find_strata_names_from_input
+      #   :param .adjustment_requests:
+      #       see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
+      for (n_flow in which((self$transition_flows$implement == length(self$strata) - 1))) {
+        self$add_stratified_flows(n_flow, .stratification_name, .strata_names, 
+                                  find_stem(self$transition_flows$from[n_flow]) %in% self$compartment_types_to_stratify,
+                                  find_stem(self$transition_flows$to[n_flow]) %in% self$compartment_types_to_stratify,
+                                  .adjustment_requests)
       }
       self$output_to_user("stratified transition flows matrix:")
-      #write.csv(self$transition_flows, file = 'transitions.csv')
-      #self$output_to_user(self$transition_flows)
+      self$output_to_user(self$transition_flows)
     },
     
-    # stratify entry/recruitment/birth flows
-    stratify_entry_flows = function(stratification_name, strata_names, requested_proportions) {
+    stratify_entry_flows = function(.stratification_name, .strata_names, .requested_proportions) {
+      #   stratify entry/recruitment/birth flows according to requested entry proportion adjustments
+      #   note this applies to initial conditions and to entry flows
+      # 
+      #   :param .stratification_name:
+      #       see prepare_and_check_stratification
+      #   :param .strata_names:
+      #       see find_strata_names_from_input
+      #   :param .requested_proportions:
+      #       see prepare_starting_proportions
+      #   :return:
+      #       normalised dictionary of the compartments that the new entry flows should come in to
       entry_fractions <- list()
-      
-      # work out parameter values for stratifying the entry proportion adjustments
       if (self$entry_compartment %in% self$compartment_types_to_stratify) {
-        for (stratum in strata_names) {
-          entry_fraction_name <- create_stratified_name("entry_fraction", stratification_name, stratum)
-          if (stratification_name == "age" & as.character(stratum) == "0") {
+        for (stratum in .strata_names) {
+          entry_fraction_name <- create_stratified_name("entry_fraction", .stratification_name, stratum)
+          
+          # specific behaviour for age stratification
+          if (.stratification_name == "age" & as.character(stratum) == "0") {
             entry_fractions[entry_fraction_name] <- 1
             next
           }
-          else if (stratification_name == "age") {
+          else if (.stratification_name == "age") {
             entry_fractions[entry_fraction_name] <- 0
             next
           }
-          else if (stratum %in% names(requested_proportions)) {
-            entry_fractions[entry_fraction_name] <- requested_proportions[[stratum]]
+          
+          # where a request has been submitted
+          else if (stratum %in% names(.requested_proportions)) {
+            entry_fractions[entry_fraction_name] <- .requested_proportions[[stratum]]
             self$output_to_user(paste("assigning specified proportion of starting population to", stratum))
           }
+          
+          # otherwise if no request made
           else {
-            entry_fractions[entry_fraction_name] <- 1 / length(strata_names)
+            entry_fractions[entry_fraction_name] <- 1 / length(.strata_names)
             self$output_to_user(paste("assuming", as.character(entry_fractions[entry_fraction_name]), "of starting population to be assigned to", stratum, "stratum by default"))
           }
         }
@@ -1068,21 +1096,31 @@ StratifiedModel <- R6Class(
       }
     },  
     
-    # add compartment-specific death flows to death data frame
-    stratify_death_flows = function(stratification_name, strata_names, adjustment_requests) {
-      for (flow in which(self$death_flows$implement == length(self$strata) -1)) {
-        if (find_stem(self$death_flows$from[flow]) %in% self$compartment_types_to_stratify) {
-          for (stratum in strata_names) {
-            parameter_name <- self$add_adjusted_parameter(self$death_flows$parameter[flow], stratification_name, stratum, adjustment_requests)
+    stratify_death_flows = function(.stratification_name, .strata_names, .adjustment_requests) {
+      #   add compartment-specific death flows to death_flows data frame attribute
+      # 
+      #   :param .stratification_name:
+      #       see prepare_and_check_stratification
+      #   :param .strata_names:
+      #        see find_strata_names_from_input
+      #   :param .adjustment_requests:
+      #       see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
+      for (n_flow in which(self$death_flows$implement == length(self$strata) - 1)) {
+        if (find_stem(self$death_flows$from[n_flow]) %in% self$compartment_types_to_stratify) {
+          for (stratum in .strata_names) {
+
+            # get stratified parameter name if requested to stratify, otherwise use the unstratified one
+            parameter_name <- self$add_adjusted_parameter(self$death_flows$parameter[n_flow], .stratification_name, stratum, .adjustment_requests)
             if (is.null(parameter_name)) {
-              parameter_name <- self$death_flows$parameter[flow]
+              parameter_name <- self$death_flows$parameter[n_flow]
             }
+            
+            # add the stratified flow
             self$death_flows <- rbind(self$death_flows, 
-                                      data.frame(type=self$death_flows$type[flow], 
+                                      data.frame(type=self$death_flows$type[n_flow], 
                                                  parameter=parameter_name, 
-                                                 from=create_stratified_name(self$death_flows$from[flow], stratification_name, stratum), 
+                                                 from=create_stratified_name(self$death_flows$from[n_flow], .stratification_name, stratum), 
                                                  implement=length(self$strata), stringsAsFactors=FALSE))
-            self$death_flows$implement[flow] <- length(self$strata) - 1
           }
         }
       }
