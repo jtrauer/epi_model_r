@@ -3,5 +3,4 @@
 * think about whether find_parameter_components could cope with functions rather than just multipliers, overwrites or
 constants
 * heterogeneous mixing
-* look at Sachin's suggestions for improving indexing of dataframes
 * look at whether R version is converting strata requests to character/string at the same point
