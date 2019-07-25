@@ -22,11 +22,11 @@ sir_model$stratify("hiv", c("negative", "positive"), c(),
                     list(recovery=list("negative"=0.7, "positive"=0.5),
                          infect_death=list("negative"=0.5)),
                   list("negative"=0.6, "positive"=0.4), verbose = FALSE)
-
+# 
 # sir_model$stratify("age", c(3, 2, 1), c(),
-#                     list(recovery=list(adjustments=list("2"=1, "3"=2)), 
-#                          recoveryXhiv_positive=list(adjustments=list("1"=2, "2"=365/13*.5, "3"=1), overwrite=c("2")),
-#                          universal_death_rate=list(adjustments=list("1"=1, "2"=2, "3"=3))), verbose=TRUE)
+#                     list(recovery=list("2"=1, "3"=2),
+#                          recoveryXhiv_positive=list("1"=2, "2"=365/13*.5, "3"=1, overwrite=c("2")),
+#                          universal_death_rate=list("1"=1, "2"=2, "3"=3)), verbose=TRUE)
 
 # sir_model$stratify("age", c(3, 2, 1), c(), verbose = TRUE)
 # sir_model$add_time_variant("recovery", create_arbitrary_time_variant_function)
