@@ -788,7 +788,8 @@ StratifiedModel <- R6Class(
     # __________
     # pre-integration methods
     
-    prepare_and_check_stratification = function(.stratification_name, .strata_request, .compartment_types_to_stratify, .adjustment_requests, .verbose) {
+    prepare_and_check_stratification = function(.stratification_name, .strata_request, .compartment_types_to_stratify,
+                                                .adjustment_requests, .verbose) {
       #   initial preparation and checks
       # 
       #   :param .stratification_name: char
@@ -886,7 +887,7 @@ StratifiedModel <- R6Class(
       for (name in strata_names) {
         self$output_to_user(paste("adding stratum:", name))
       }
-      strata_names
+      as.character(strata_names)
     },
     
     check_compartment_request = function(.compartment_types_to_stratify) {
@@ -1212,8 +1213,8 @@ StratifiedModel <- R6Class(
       #   :param .strata_names:
       #       see find_strata_names_from_input
       for (stratum_number in seq(length(.strata_names) - 1)) {
-        start_age <- .strata_names[stratum_number]
-        end_age <- .strata_names[stratum_number + 1]
+        start_age <- as.numeric(.strata_names[stratum_number])
+        end_age <- as.numeric(.strata_names[stratum_number + 1])
         ageing_parameter_name <- paste("ageing", as.character(start_age), "to", as.character(end_age), sep="")
         ageing_rate <- 1 / (end_age - start_age)
         self$output_to_user(paste("ageing rate from age group", start_age, "to", end_age, "is", round(ageing_rate, self$reporting_sigfigs)))
