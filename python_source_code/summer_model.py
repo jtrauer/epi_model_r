@@ -924,7 +924,7 @@ class StratifiedModel(EpiModel):
         self.compartment_types_to_stratify, self.strata = \
             [[] for _ in range(5)]
         self.heterogeneous_infectiousness = False
-        self.infectiousness_adjustments, self.parameter_components = [{} for _ in range(2)]
+        self.infectiousness_adjustments, self.parameter_components, self.parameter_functions = [{} for _ in range(3)]
 
     """
     main master method for model stratification
@@ -1502,8 +1502,6 @@ class StratifiedModel(EpiModel):
         parameters_to_adjust.append("universal_death_rate")
 
         # and adjust
-        self.ordered_parameter_adjustments = {}
-        self.parameter_functions = {}
         for parameter in parameters_to_adjust:
             self.find_parameter_components(parameter)
             self.find_parameter_components_shadow(parameter)
@@ -1542,67 +1540,26 @@ class StratifiedModel(EpiModel):
             self.parameter_components[_parameter]["constant_value"] *= self.parameters[constant_parameter]
 
     def find_parameter_components_shadow(self, _parameter):
-        self.ordered_parameter_adjustments[_parameter] = []
-        for n_x_instance, x_instance in enumerate(extract_x_positions(_parameter)):
+
+        # start from base value as function
+        def return_starting_parameter_value():
+            return self.parameters[find_stem(_parameter)]
+        self.parameter_functions[_parameter] = return_starting_parameter_value
+
+        # cycle through remaining components and extend function recursively
+        for x_instance in extract_x_positions(_parameter)[1:]:
             component = _parameter[: x_instance]
-            self.ordered_parameter_adjustments[_parameter].append(component)
-            if n_x_instance == 0:
-                # print(component)
-                # print(self.parameters[component])
-                def return_starting_parameter_value():
-                    return self.parameters[component]
-                # print(return_starting_parameter_value())
-                self.parameter_functions[_parameter] = return_starting_parameter_value
-            else:
-                self.parameter_functions[_parameter] = create_function_of_function(
-                    create_multiplicative_function(self.parameters[component]), self.parameter_functions[_parameter])
+            self.parameter_functions[_parameter] = create_function_of_function(
+                create_multiplicative_function(self.parameters[component]), self.parameter_functions[_parameter])
             if component in self.overwrite_parameters:
                 break
-        print(self.ordered_parameter_adjustments[_parameter])
 
     """
     methods to be called during the process of model running
     """
 
     def get_parameter_value(self, _parameter, _time):
-
-        print("______")
-        print(_parameter)
-        self.get_parameter_value_1(_parameter, _time)
-        adjusted_parameter = self.get_parameter_value_2(_parameter, _time)
-        return adjusted_parameter
-
-    def get_parameter_value_1(self, _parameter, _time):
-        """
-        using the approach specified in find_parameter_components calculate adjusted parameter value from pre-calculated
-        product of constant components and time variants
-
-        :param _parameter: str
-            name of the parameter whose value is needed
-        :param _time: float
-            time in model integration
-        """
-        adjusted_parameter = self.parameter_components[_parameter]["constant_value"]
-        for time_variant in self.parameter_components[_parameter]["time_variants"]:
-            adjusted_parameter *= self.time_variants[time_variant](_time)
-        # print(adjusted_parameter)
-        # return adjusted_parameter
-
-    def get_parameter_value_2(self, _parameter, _time):
-        adjusted_parameter = self.parameters[self.ordered_parameter_adjustments[_parameter][0]]
-        for component in self.ordered_parameter_adjustments[_parameter][1:]:
-            adjusted_parameter *= self.parameters[component]
-        # print(adjusted_parameter)
-        # # return adjusted_parameter
-        #
-        # if callable(self.parameter_functions[_parameter]):
-        #     adjusted_parameter = self.parameter_functions[_parameter]()
-        # else:
-        #     adjusted_parameter = self.parameter_functions[_parameter]
-        #
-        # print(adjusted_parameter)
-
-        return adjusted_parameter
+        return self.parameter_functions[_parameter]()
 
     def find_infectious_population(self, _compartment_values):
         """
