@@ -270,15 +270,48 @@ def create_flowchart(model_object, strata=-1, stratify=True, name="flow_chart"):
 
 
 def create_multiplicative_function(multiplier):
+    """
+    return the multiplication by a fixed value as a function itself
+
+    :param multiplier: float
+        value that the returned function multiplies by
+    :return: function
+        function that can multiply by the multiplier parameter when called
+    """
     def multiplicative_function(value):
-        return value * multiplier
+        return multiplier * value
     return multiplicative_function
 
 
 def create_function_of_function(outer_function, inner_function):
-    def function_to_return():
-        return outer_function(inner_function())
+    """
+    function that can itself return a function that sequentially apply two functions
+
+    :param outer_function: function
+        last function to be called
+    :param inner_function: function
+        first function to be called
+    :return: function
+        composite function that applies the inner and then the outer function, allowing the time parameter to be passed
+            through if necessary
+    """
+    def function_to_return(time):
+        return outer_function(inner_function(time))
     return function_to_return
+
+
+def create_increment_function(increment):
+    """
+    return the addition of a fixed value as a function itself
+
+    :param increment: float
+        value that the returned function increments by
+    :return: function
+        function that can increment by the value parameter when called
+    """
+    def increment_function(value):
+        return value + increment
+    return increment_function
 
 
 class EpiModel:
@@ -924,7 +957,8 @@ class StratifiedModel(EpiModel):
         self.compartment_types_to_stratify, self.strata = \
             [[] for _ in range(5)]
         self.heterogeneous_infectiousness = False
-        self.infectiousness_adjustments, self.parameter_components, self.parameter_functions = [{} for _ in range(3)]
+        self.infectiousness_adjustments, self.parameter_components, self.parameter_functions, \
+            self.adaptation_functions, self.mapped_adaptation_functions = [{} for _ in range(5)]
 
     """
     main master method for model stratification
@@ -1018,7 +1052,7 @@ class StratifiedModel(EpiModel):
         _strata_names = self.find_strata_names_from_input(_strata_request)
         _adjustment_requests = self.incorporate_alternative_overwrite_approach(_adjustment_requests)
         self.check_compartment_request(_compartment_types_to_stratify)
-        _adjustment_requests = self.check_parameter_adjustment_requests(_adjustment_requests, _strata_names)
+        self.check_parameter_adjustment_requests(_adjustment_requests, _strata_names)
         return _strata_names, _adjustment_requests
 
     def check_age_stratification(self, _strata_request, _compartment_types_to_stratify):
@@ -1139,23 +1173,11 @@ class StratifiedModel(EpiModel):
             version of the submitted adjustment_requests modified by incorporate_alternative_overwrite_approach
         :param _strata_names:
             see find_strata_names_from_input
-        :return: _adjustment_requests
-            modified version of _adjustment_requests after checking
         """
         for parameter in _adjustment_requests:
-
-            # check all the requested strata for parameter adjustments were strata that were requested
             if any([requested_stratum not in _strata_names + ["overwrite"]
                     for requested_stratum in _adjustment_requests[parameter]]):
                 raise ValueError("stratum requested in adjustments but unavailable")
-
-            # if any strata were not requested, assume a value of one
-            for stratum in _strata_names:
-                if stratum not in _adjustment_requests[parameter]:
-                    _adjustment_requests[parameter][stratum] = 1
-                    self.output_to_user("no request made for adjustment to %s within stratum " % parameter +
-                                        "%s so accepting parent value by default" % stratum)
-        return _adjustment_requests
 
     def prepare_starting_proportions(self, _strata_names, _requested_proportions):
         """
@@ -1340,8 +1362,12 @@ class StratifiedModel(EpiModel):
                 "modifying %s for %s stratum of %s with new parameter called %s"
                 % (_unadjusted_parameter, _stratum, _stratification_name, parameter_adjustment_name))
 
-            # implement user request (otherwise parameter will be left out and assumed to be 1 during integration)
-            if _stratum in _adjustment_requests[parameter_request]:
+            # implement request, otherwise parameter will be left out, essentially assumed to be one when integrating
+            if _stratum in _adjustment_requests[parameter_request] and \
+                    type(_adjustment_requests[parameter_request][_stratum]) == str:
+                self.mapped_adaptation_functions[parameter_adjustment_name] = \
+                    self.adaptation_functions[_adjustment_requests[parameter_request][_stratum]]
+            elif _stratum in _adjustment_requests[parameter_request]:
                 self.parameters[parameter_adjustment_name] = _adjustment_requests[parameter_request][_stratum]
 
             # overwrite parameters higher up the tree by tracking which ones are to be overwritten
@@ -1504,62 +1530,37 @@ class StratifiedModel(EpiModel):
         # and adjust
         for parameter in parameters_to_adjust:
             self.find_parameter_components(parameter)
-            self.find_parameter_components_shadow(parameter)
 
     def find_parameter_components(self, _parameter):
-        """
-        extract the components of the stratified parameter into a dictionary structure with values being a list of
-        time-variant parameters, a list of constant parameters and the product of all the constant values applied
 
-        :param _parameter: str
-            name of the parameter that we are tracking down the components of
-        """
-        self.parameter_components[_parameter] = {"time_variants": [], "constants": [], "constant_value": 1}
-
-        # work backwards through sub-strings of the parameter names from the full name to the name through to each X
-        for x_instance in extract_reversed_x_positions(_parameter):
-            component = _parameter[: x_instance]
-            is_time_variant = component in self.time_variants
-            if component in self.overwrite_parameters and is_time_variant:
-                self.parameter_components[_parameter] = \
-                    {"time_variants": [component], "constants": [], "constant_value": 1}
-                break
-            elif component in self.overwrite_parameters and not is_time_variant:
-                self.parameter_components[_parameter] = \
-                    {"time_variants": [], "constants": [component], "constant_value": 1}
-                break
-            elif is_time_variant:
-                self.parameter_components[_parameter]["time_variants"].append(component)
-            elif component in self.parameters:
-                self.parameter_components[_parameter]["constants"].append(component)
-            else:
-                raise ValueError("unable to find parameter component %s of parameter %s" % (component, _parameter))
-
-        # pre-calculate the constant component by multiplying through all the constant values
-        for constant_parameter in self.parameter_components[_parameter]["constants"]:
-            self.parameter_components[_parameter]["constant_value"] *= self.parameters[constant_parameter]
-
-    def find_parameter_components_shadow(self, _parameter):
-
-        # start from base value as function
-        def return_starting_parameter_value():
+        # start from base value as a function
+        def return_starting_parameter_value(time):
             return self.parameters[find_stem(_parameter)]
         self.parameter_functions[_parameter] = return_starting_parameter_value
 
-        # cycle through remaining components and extend function recursively
+        # cycle through remaining components and extend function recursively until an overwrite parameter is met
         for x_instance in extract_x_positions(_parameter)[1:]:
             component = _parameter[: x_instance]
-            self.parameter_functions[_parameter] = create_function_of_function(
-                create_multiplicative_function(self.parameters[component]), self.parameter_functions[_parameter])
+            if component in self.parameters:
+                outer_function = self.find_parameter_adaptation(component)
+                self.parameter_functions[_parameter] = \
+                    create_function_of_function(outer_function, self.parameter_functions[_parameter])
             if component in self.overwrite_parameters:
                 break
+
+    def find_parameter_adaptation(self, _component):
+        parameter_value = self.parameters[_component]
+        if type(parameter_value) == str:
+            return self.mapped_adaptation_functions[_component]
+        elif type(parameter_value) == int or type(parameter_value) == float:
+            return create_multiplicative_function(parameter_value)
 
     """
     methods to be called during the process of model running
     """
 
     def get_parameter_value(self, _parameter, _time):
-        return self.parameter_functions[_parameter]()
+        return self.parameter_functions[_parameter](_time)
 
     def find_infectious_population(self, _compartment_values):
         """
@@ -1621,13 +1622,15 @@ if __name__ == "__main__":
          {"type": "compartment_death", "parameter": "infect_death", "origin": "infectious"}],
         output_connections={"incidence": {"origin": "susceptible", "to": "infectious"}},
         verbose=False, integration_type="solve_ivp")
+    sir_model.adaptation_functions["increment_by_one"] = create_increment_function(1.)
+
     sir_model.stratify("hiv", ["negative", "positive"], [],
-                       {"recovery": {"negative": 0.7, "positive": 0.5},
+                       {"recovery": {"negative": "increment_by_one", "positive": 0.5},
                         "infect_death": {"negative": 0.5},
                         "entry_fraction": {"negative": 0.6, "positive": 0.4}},
                        {"negative": 0.6}, verbose=False)
-    sir_model.stratify("age", [1, 10, 3], [], {"recovery": {"1": 0.5, "10": 0.8}}, verbose=False)
 
+    sir_model.stratify("age", [1, 10, 3], [], {"recovery": {"1": 0.5, "10": 0.8}}, verbose=False)
     sir_model.run_model()
 
     # create_flowchart(sir_model, strata=len(sir_model.all_stratifications))
