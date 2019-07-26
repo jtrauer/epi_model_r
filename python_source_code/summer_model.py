@@ -1491,8 +1491,10 @@ class StratifiedModel(EpiModel):
         parameters_to_adjust.append("universal_death_rate")
 
         # and adjust
+        self.ordered_parameter_adjustments = {}
         for parameter in parameters_to_adjust:
             self.find_parameter_components(parameter)
+            self.find_parameter_components_shadow(parameter)
 
     def find_parameter_components(self, _parameter):
         """
@@ -1526,6 +1528,14 @@ class StratifiedModel(EpiModel):
         # pre-calculate the constant component by multiplying through all the constant values
         for constant_parameter in self.parameter_components[_parameter]["constants"]:
             self.parameter_components[_parameter]["constant_value"] *= self.parameters[constant_parameter]
+
+    def find_parameter_components_shadow(self, _parameter):
+        self.ordered_parameter_adjustments[_parameter] = []
+        for x_instance in extract_reversed_x_positions(_parameter):
+            component = _parameter[: x_instance]
+            self.ordered_parameter_adjustments[_parameter].append(component)
+            if component in self.overwrite_parameters:
+                break
 
     """
     methods to be called during the process of model running
@@ -1615,8 +1625,8 @@ if __name__ == "__main__":
 
     sir_model.run_model()
 
-    create_flowchart(sir_model, strata=len(sir_model.all_stratifications))
-
-    sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
+    # create_flowchart(sir_model, strata=len(sir_model.all_stratifications))
+    #
+    # sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
 
 
