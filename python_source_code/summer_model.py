@@ -1028,13 +1028,13 @@ class StratifiedModel(EpiModel):
         elif "age" in self.strata:
             raise ValueError(
                 "requested stratification by age, but this has specific behaviour and can only be applied once")
-        if _strata_request != sorted(_strata_request):
-            _strata_request = sorted(_strata_request)
-            self.output_to_user("requested age strata not ordered, so have been sorted to: %s" % _strata_request)
         if 0 not in _strata_request:
             self.output_to_user("adding age stratum called '0' as not requested, to represent those aged less than %s"
                                 % min(_strata_request))
             _strata_request.append(0)
+        if _strata_request != sorted(_strata_request):
+            _strata_request = sorted(_strata_request)
+            self.output_to_user("requested age strata not ordered, so have been sorted to: %s" % _strata_request)
         return _strata_request
 
     def find_strata_names_from_input(self, _strata_request):
@@ -1556,6 +1556,12 @@ class StratifiedModel(EpiModel):
             adjusted_parameter *= self.time_variants[time_variant](_time)
         return adjusted_parameter
 
+    def get_parameter_value_shadow(self, _parameter, _time):
+        adjusted_parameter = self.parameters[_parameter]
+        for component in self.ordered_parameter_adjustments[_parameter][1:]:
+            adjusted_parameter *= self.parameters[component]
+        return adjusted_parameter
+
     def find_infectious_population(self, _compartment_values):
         """
         calculations to find the effective infectious population
@@ -1627,6 +1633,6 @@ if __name__ == "__main__":
 
     # create_flowchart(sir_model, strata=len(sir_model.all_stratifications))
     #
-    # sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
+    sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
 
 
