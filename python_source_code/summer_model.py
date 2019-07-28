@@ -1532,8 +1532,16 @@ class StratifiedModel(EpiModel):
             self.find_parameter_components(parameter)
 
     def find_parameter_components(self, _parameter):
+        """
+        builds up parameter as a function, recursively creating an outer function that calls the inner function.
+        unsure why, but the approach wasn't working when I tried to calculate the first unadapted parameter function as
+        the first cycle of the loop
 
-        # start from base value as a function
+        :param _parameter: str
+            full name of the parameter of interest
+        """
+
+        # start from base value as a function, time variable currently a place-holder
         def return_starting_parameter_value(time):
             return self.parameters[find_stem(_parameter)]
         self.parameter_functions[_parameter] = return_starting_parameter_value
@@ -1542,9 +1550,8 @@ class StratifiedModel(EpiModel):
         for x_instance in extract_x_positions(_parameter)[1:]:
             component = _parameter[: x_instance]
             if component in self.parameters:
-                outer_function = self.find_parameter_adaptation(component)
-                self.parameter_functions[_parameter] = \
-                    create_function_of_function(outer_function, self.parameter_functions[_parameter])
+                self.parameter_functions[_parameter] = create_function_of_function(
+                    self.find_parameter_adaptation(component), self.parameter_functions[_parameter])
             if component in self.overwrite_parameters:
                 break
 
