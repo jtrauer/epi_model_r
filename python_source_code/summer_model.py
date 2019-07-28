@@ -1556,6 +1556,15 @@ class StratifiedModel(EpiModel):
                 break
 
     def find_parameter_adaptation(self, _component):
+        """
+        finds the parameter function using its string in the case that it is a function or creates a multiplicative
+
+        function as the default if a numeric value is provided as the default behaviour for this user request format
+        :param _component: str
+            name of the parameter component
+        :return: function
+            a function that can act within the recursive approach to function creation described in the previous method
+        """
         parameter_value = self.parameters[_component]
         if type(parameter_value) == str:
             return self.mapped_adaptation_functions[_component]
@@ -1567,6 +1576,17 @@ class StratifiedModel(EpiModel):
     """
 
     def get_parameter_value(self, _parameter, _time):
+        """
+        returns a parameter value by calling the function represented by its string within the parameter_functions
+        attribute
+
+        :param _parameter: str
+            name of the parameter to be called (key to the parameter_functions dictionary)
+        :param _time: float
+            current time of model integration
+        :return: float
+            the parameter value needed
+        """
         return self.parameter_functions[_parameter](_time)
 
     def find_infectious_population(self, _compartment_values):
