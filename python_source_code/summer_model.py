@@ -1007,7 +1007,7 @@ class StratifiedModel(EpiModel):
         self.stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests)
 
         # under development - implement heterogeneous mixing across multiple population groups
-        # self.prepare_mixing(mixing_matrix, stratification_name, strata_names)
+        self.prepare_mixing(mixing_matrix, stratification_name, strata_names)
 
         # heterogeneous infectiousness adjustments
         self.apply_heterogeneous_infectiousness(stratification_name, strata_request, infectiousness_adjustments)
@@ -1639,13 +1639,22 @@ class StratifiedModel(EpiModel):
             self.tracked_quantities["infectious_population"] += \
                 _compartment_values[self.compartment_names.index(compartment)] * infectiousness_modifier
 
+        # compartment_indices = {}
         # for from_stratum in self.mixing_matrix.columns:
-        #     print("_____")
-        #     print(from_stratum)
         #     x_positions = [0] + extract_x_positions(" " + from_stratum)
-        #     print("-----")
-        #     for i in range(1, len(x_positions)):
-        #         print(from_stratum[x_positions[i - 1]: x_positions[i] - 1])
+        #     current_strata = [from_stratum[x_positions[i - 1]: x_positions[i] - 1] for i in range(1, len(x_positions))]
+        #     compartment_indices[from_stratum] = []
+        #     for i_comp, compartment in enumerate(self.compartment_names):
+        #         print("_______")
+        #         x_positions = extract_x_positions(compartment)
+        #         for n_x, x in enumerate(x_positions):
+        #             print(compartment[x_positions[n_x - 1] + 1: x])
+        #         compartment_strata = []
+        #
+        #         if all(stratum in compartment for stratum in current_strata) and self.infectious_compartment in compartment:
+        #             compartment_indices[from_stratum].append(i_comp)
+        # print(len(compartment_indices))
+        # print(compartment_indices)
 
     def apply_birth_rate(self, _ode_equations, _compartment_values):
         """
@@ -1703,8 +1712,8 @@ if __name__ == "__main__":
     sir_model.stratify("age", [1, 10, 3], [], {"recovery": {"1": 0.5, "10": 0.8}},
                        mixing_matrix=age_mixing, verbose=False)
 
-    print(sir_model.mixing_matrix)
     sir_model.run_model()
+    # print(sir_model.compartment_names)
 
     # create_flowchart(sir_model, strata=len(sir_model.all_stratifications))
     #
