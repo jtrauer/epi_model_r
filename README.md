@@ -198,7 +198,10 @@ smallest branches of the tree of stratificaion towards the trunk. At each branch
 an adjustment to the parameter at the level below (closer to the trunk) in the hierarchy. If this is the case, the lower
 parameter is multiplied by the value specified, if no value was specified, the parameter remains unadjusted and if an
 overwrite parameter was specified the process stops at that point in the branching process with the parameter value
-specified at that point of stratification.
+specified at that point of stratification. If a string is provided rather than a numeric/float value, this will be
+interpreted as representing a function, that will then be looked for as the key to the parameter_function attribute of
+the model. Therefore, a function must be provided before integration as the corresponding value to the
+parameter_function attribute.
 
 ### Heterogeneous infectiousness
 Heterogeneous infectiousness of specific compartments has been implemented, but this is currently under further

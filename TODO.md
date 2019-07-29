@@ -1,6 +1,4 @@
 ## Tasks and thoughts to look into
-* think about whether find_parameter_components could cope with functions rather than just multipliers, overwrites or
-constants
+* comment the code that allows for functions to be applied sequentially up the tree of stratification and convert this
+into R
 * heterogeneous mixing
-* perhaps try to understand why plugging in values of one for unrequested parameter adjustments seems to change model
-behaviour, because it shouldn't
