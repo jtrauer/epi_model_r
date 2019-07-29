@@ -1546,14 +1546,19 @@ class StratifiedModel(EpiModel):
             return self.parameters[find_stem(_parameter)]
         self.parameter_functions[_parameter] = return_starting_parameter_value
 
-        # cycle through remaining components and extend function recursively until an overwrite parameter is met
-        for x_instance in extract_x_positions(_parameter)[1:]:
+        # find the parameter component to cycle through for recursive function calls, excluding the first one
+        parameters_of_interest = []
+        for x_instance in extract_reversed_x_positions(_parameter)[: -1]:
             component = _parameter[: x_instance]
+            parameters_of_interest.append(_parameter[: x_instance])
+            if component in self.overwrite_parameters:
+                break
+
+        # cycle through applicable components and extend function recursively
+        for component in parameters_of_interest:
             if component in self.parameters:
                 self.parameter_functions[_parameter] = create_function_of_function(
                     self.find_parameter_adaptation(component), self.parameter_functions[_parameter])
-            if component in self.overwrite_parameters:
-                break
 
     def find_parameter_adaptation(self, _component):
         """
