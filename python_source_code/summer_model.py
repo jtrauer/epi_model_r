@@ -7,6 +7,7 @@ from graphviz import Digraph
 from sqlalchemy import create_engine
 import os
 from sqlalchemy import FLOAT
+import itertools
 
 # set path - sachin
 os.environ["PATH"] += os.pathsep + 'C:/Users/swas0001/graphviz-2.38/release/bin'
@@ -954,18 +955,18 @@ class StratifiedModel(EpiModel):
                           integration_type=integration_type, output_connections=output_connections)
 
         self.all_stratifications, self.removed_compartments, self.overwrite_parameters, \
-        self.compartment_types_to_stratify, self.strata = \
-            [[] for _ in range(5)]
+            self.compartment_types_to_stratify, self.strata = [[] for _ in range(5)]
         self.heterogeneous_infectiousness = False
         self.infectiousness_adjustments, self.parameter_components, self.parameter_functions, \
             self.adaptation_functions, self.mapped_adaptation_functions = [{} for _ in range(5)]
+        self.mixing_matrix = None
 
     """
     main master method for model stratification
     """
 
     def stratify(self, stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests=(),
-                 requested_proportions={}, infectiousness_adjustments=(), verbose=True):
+                 requested_proportions={}, infectiousness_adjustments=(), mixing_matrix=None, verbose=True):
         """
         calls to initial preparation, checks and methods that stratify the various aspects of the model
 
@@ -1004,6 +1005,8 @@ class StratifiedModel(EpiModel):
         if self.death_flows.shape[0] > 0:
             self.stratify_death_flows(stratification_name, strata_names, adjustment_requests)
         self.stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests)
+
+        self.prepare_mixing(mixing_matrix, strata_names)
 
         # heterogeneous infectiousness adjustments
         self.apply_heterogeneous_infectiousness(stratification_name, strata_request, infectiousness_adjustments)
@@ -1376,6 +1379,24 @@ class StratifiedModel(EpiModel):
                 self.overwrite_parameters.append(parameter_adjustment_name)
         return parameter_adjustment_name
 
+    def prepare_mixing(self, _mixing_matrix, _strata_names):
+        if type(_mixing_matrix) == numpy.ndarray:
+            if len(_mixing_matrix.shape) != 2:
+                raise ValueError("submitted mixing matrix is not in two dimensions")
+            elif _mixing_matrix.shape[0] != _mixing_matrix.shape[1]:
+                raise ValueError("submitted mixing is not square")
+            elif _mixing_matrix.shape[0] != len(_strata_names):
+                raise ValueError("mixing matrix does not correctly sized to number of strata being implemented")
+            else:
+                if self.mixing_matrix is None:
+                    self.mixing_matrix = pd.DataFrame(_mixing_matrix, columns=_strata_names, index=_strata_names)
+                else:
+                    mixing_cols = \
+                        [i + "X" + j for i, j in itertools.product(list(self.mixing_matrix.columns), _strata_names)]
+                    self.mixing_matrix = pd.DataFrame(numpy.kron(
+                        self.mixing_matrix.as_matrix(), _mixing_matrix), columns=mixing_cols, index=mixing_cols)
+                print(self.mixing_matrix)
+
     def apply_heterogeneous_infectiousness(self, stratification_name, strata_request, infectiousness_adjustments):
         """
         work out infectiousness adjustments and set as model attributes
@@ -1656,13 +1677,21 @@ if __name__ == "__main__":
         verbose=False, integration_type="solve_ivp")
     sir_model.adaptation_functions["increment_by_one"] = create_increment_function(1.)
 
+    # hiv_mixing = mixing_matrix=numpy.array((4., 3., 2., 1.)).reshape(2, 2)
+    hiv_mixing = None
+
     sir_model.stratify("hiv", ["negative", "positive"], [],
                        {"recovery": {"negative": "increment_by_one", "positive": 0.5},
                         "infect_death": {"negative": 0.5},
                         "entry_fraction": {"negative": 0.6, "positive": 0.4}},
-                       {"negative": 0.6}, verbose=False)
+                       {"negative": 0.6},
+                       mixing_matrix=hiv_mixing,
+                       verbose=False)
 
-    sir_model.stratify("age", [1, 10, 3], [], {"recovery": {"1": 0.5, "10": 0.8}}, verbose=False)
+    # age_mixing = numpy.eye(4)
+    age_mixing = None
+    sir_model.stratify("age", [1, 10, 3], [], {"recovery": {"1": 0.5, "10": 0.8}},
+                       mixing_matrix=age_mixing, verbose=False)
     sir_model.run_model()
 
     # create_flowchart(sir_model, strata=len(sir_model.all_stratifications))
