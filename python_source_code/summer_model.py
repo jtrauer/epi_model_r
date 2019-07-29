@@ -1007,7 +1007,7 @@ class StratifiedModel(EpiModel):
         self.stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests)
 
         # under development - implement heterogeneous mixing across multiple population groups
-        # self.prepare_mixing(mixing_matrix, strata_names)
+        # self.prepare_mixing(mixing_matrix, stratification_name, strata_names)
 
         # heterogeneous infectiousness adjustments
         self.apply_heterogeneous_infectiousness(stratification_name, strata_request, infectiousness_adjustments)
@@ -1380,7 +1380,7 @@ class StratifiedModel(EpiModel):
                 self.overwrite_parameters.append(parameter_adjustment_name)
         return parameter_adjustment_name
 
-    def prepare_mixing(self, _mixing_matrix, _strata_names):
+    def prepare_mixing(self, _mixing_matrix, _stratification_name, _strata_names):
         if type(_mixing_matrix) == numpy.ndarray:
             if len(_mixing_matrix.shape) != 2:
                 raise ValueError("submitted mixing matrix is not in two dimensions")
@@ -1390,13 +1390,14 @@ class StratifiedModel(EpiModel):
                 raise ValueError("mixing matrix does not correctly sized to number of strata being implemented")
             else:
                 if self.mixing_matrix is None:
-                    self.mixing_matrix = pd.DataFrame(_mixing_matrix, columns=_strata_names, index=_strata_names)
+                    mixing_cols = [_stratification_name + "_" + i for i in _strata_names]
+                    self.mixing_matrix = pd.DataFrame(_mixing_matrix, columns=mixing_cols, index=mixing_cols)
                 else:
                     mixing_cols = \
-                        [i + "X" + j for i, j in itertools.product(list(self.mixing_matrix.columns), _strata_names)]
+                        [i + "X" + _stratification_name + "_" + j
+                         for i, j in itertools.product(list(self.mixing_matrix.columns), _strata_names)]
                     self.mixing_matrix = pd.DataFrame(numpy.kron(
                         self.mixing_matrix.as_matrix(), _mixing_matrix), columns=mixing_cols, index=mixing_cols)
-                print(self.mixing_matrix)
 
     def apply_heterogeneous_infectiousness(self, stratification_name, strata_request, infectiousness_adjustments):
         """
@@ -1638,6 +1639,14 @@ class StratifiedModel(EpiModel):
             self.tracked_quantities["infectious_population"] += \
                 _compartment_values[self.compartment_names.index(compartment)] * infectiousness_modifier
 
+        # for from_stratum in self.mixing_matrix.columns:
+        #     print("_____")
+        #     print(from_stratum)
+        #     x_positions = [0] + extract_x_positions(" " + from_stratum)
+        #     print("-----")
+        #     for i in range(1, len(x_positions)):
+        #         print(from_stratum[x_positions[i - 1]: x_positions[i] - 1])
+
     def apply_birth_rate(self, _ode_equations, _compartment_values):
         """
         apply a population-wide death rate to all compartments
@@ -1678,8 +1687,8 @@ if __name__ == "__main__":
         verbose=False, integration_type="solve_ivp")
     sir_model.adaptation_functions["increment_by_one"] = create_increment_function(1.)
 
-    # hiv_mixing = mixing_matrix=numpy.array((4., 3., 2., 1.)).reshape(2, 2)
-    hiv_mixing = None
+    hiv_mixing = mixing_matrix=numpy.array((4., 3., 2., 1.)).reshape(2, 2)
+    # hiv_mixing = None
 
     sir_model.stratify("hiv", ["negative", "positive"], [],
                        {"recovery": {"negative": "increment_by_one", "positive": 0.5},
@@ -1689,14 +1698,16 @@ if __name__ == "__main__":
                        mixing_matrix=hiv_mixing,
                        verbose=False)
 
-    # age_mixing = numpy.eye(4)
-    age_mixing = None
+    age_mixing = numpy.eye(4)
+    # age_mixing = None
     sir_model.stratify("age", [1, 10, 3], [], {"recovery": {"1": 0.5, "10": 0.8}},
                        mixing_matrix=age_mixing, verbose=False)
+
+    print(sir_model.mixing_matrix)
     sir_model.run_model()
 
     # create_flowchart(sir_model, strata=len(sir_model.all_stratifications))
     #
-    sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
+    # sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
 
 
