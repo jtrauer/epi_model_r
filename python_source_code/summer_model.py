@@ -315,6 +315,10 @@ def create_increment_function(increment):
     return increment_function
 
 
+def find_name_components(compartment_or_parameter):
+    x_positions = [-1] + extract_x_positions(compartment_or_parameter)
+    return [compartment_or_parameter[x_positions[n_x] + 1: x_positions[n_x + 1]] for n_x in range(len(x_positions) - 1)]
+
 class EpiModel:
     """
     general epidemiological model for constructing compartment-based models, typically of infectious disease
@@ -1639,22 +1643,15 @@ class StratifiedModel(EpiModel):
             self.tracked_quantities["infectious_population"] += \
                 _compartment_values[self.compartment_names.index(compartment)] * infectiousness_modifier
 
+        # # find the indices for the infectious compartments relevant to the column of the mixing matrix
         # compartment_indices = {}
         # for from_stratum in self.mixing_matrix.columns:
-        #     x_positions = [0] + extract_x_positions(" " + from_stratum)
-        #     current_strata = [from_stratum[x_positions[i - 1]: x_positions[i] - 1] for i in range(1, len(x_positions))]
         #     compartment_indices[from_stratum] = []
-        #     for i_comp, compartment in enumerate(self.compartment_names):
-        #         print("_______")
-        #         x_positions = extract_x_positions(compartment)
-        #         for n_x, x in enumerate(x_positions):
-        #             print(compartment[x_positions[n_x - 1] + 1: x])
-        #         compartment_strata = []
-        #
-        #         if all(stratum in compartment for stratum in current_strata) and self.infectious_compartment in compartment:
-        #             compartment_indices[from_stratum].append(i_comp)
-        # print(len(compartment_indices))
-        # print(compartment_indices)
+        #     for n_comp, compartment in enumerate(self.compartment_names):
+        #         compartment_strata = find_name_components(compartment)[1:]
+        #         if all(stratum in compartment_strata for stratum in find_name_components(from_stratum)) \
+        #                 and self.infectious_compartment in compartment:
+        #             compartment_indices[from_stratum].append(n_comp)
 
     def apply_birth_rate(self, _ode_equations, _compartment_values):
         """
@@ -1696,8 +1693,8 @@ if __name__ == "__main__":
         verbose=False, integration_type="solve_ivp")
     sir_model.adaptation_functions["increment_by_one"] = create_increment_function(1.)
 
-    hiv_mixing = mixing_matrix=numpy.array((4., 3., 2., 1.)).reshape(2, 2)
-    # hiv_mixing = None
+    # hiv_mixing = numpy.array((4., 3., 2., 1.)).reshape(2, 2)
+    hiv_mixing = None
 
     sir_model.stratify("hiv", ["negative", "positive"], [],
                        {"recovery": {"negative": "increment_by_one", "positive": 0.5},
@@ -1707,8 +1704,8 @@ if __name__ == "__main__":
                        mixing_matrix=hiv_mixing,
                        verbose=False)
 
-    age_mixing = numpy.eye(4)
-    # age_mixing = None
+    # age_mixing = numpy.eye(4)
+    age_mixing = None
     sir_model.stratify("age", [1, 10, 3], [], {"recovery": {"1": 0.5, "10": 0.8}},
                        mixing_matrix=age_mixing, verbose=False)
 
@@ -1718,5 +1715,7 @@ if __name__ == "__main__":
     # create_flowchart(sir_model, strata=len(sir_model.all_stratifications))
     #
     # sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
+
+
 
 
