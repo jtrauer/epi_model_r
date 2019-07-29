@@ -1006,7 +1006,8 @@ class StratifiedModel(EpiModel):
             self.stratify_death_flows(stratification_name, strata_names, adjustment_requests)
         self.stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests)
 
-        self.prepare_mixing(mixing_matrix, strata_names)
+        # under development - implement heterogeneous mixing across multiple population groups
+        # self.prepare_mixing(mixing_matrix, strata_names)
 
         # heterogeneous infectiousness adjustments
         self.apply_heterogeneous_infectiousness(stratification_name, strata_request, infectiousness_adjustments)
