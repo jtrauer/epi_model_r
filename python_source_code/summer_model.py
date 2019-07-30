@@ -319,6 +319,11 @@ def find_name_components(compartment_or_parameter):
     x_positions = [-1] + extract_x_positions(compartment_or_parameter)
     return [compartment_or_parameter[x_positions[n_x] + 1: x_positions[n_x + 1]] for n_x in range(len(x_positions) - 1)]
 
+
+def element_list_division(list_1, list_2):
+    return [a / b for a, b in zip(list_1, list_2)]
+
+
 class EpiModel:
     """
     general epidemiological model for constructing compartment-based models, typically of infectious disease
@@ -699,7 +704,7 @@ class EpiModel:
             adjusted_parameter = self.get_parameter_value(self.transition_flows.parameter[n_flow], _time)
 
             # find from compartment and "infectious population" (which is 1 for standard flows)
-            infectious_population = self.find_infectious_multiplier(self.transition_flows.type[n_flow])
+            infectious_population = self.find_infectious_multiplier(n_flow)
 
             # calculate the n_flow and apply to the odes
             from_compartment = self.compartment_names.index(self.transition_flows.origin[n_flow])
@@ -801,19 +806,19 @@ class EpiModel:
         else:
             return 0.0
 
-    def find_infectious_multiplier(self, flow_type):
+    def find_infectious_multiplier(self, n_flow):
         """
         find the multiplier to account for the infectious population in dynamic flows
 
-        :param flow_type: str
-            type of flow, as per the standard naming approach to flow types for the dataframes flow attribute
+        :param n_flow: int
+            index for the row of the transition_flows dataframe
         :return:
             the total infectious quantity, whether that be the number or proportion of infectious persons
             needs to return as one for flows that are not transmission dynamic infectiousness flows
         """
-        if flow_type == "infection_density":
+        if self.transition_flows.at[n_flow, "type"] == "infection_density":
             return self.tracked_quantities["infectious_population"]
-        elif flow_type == "infection_frequency":
+        elif self.transition_flows.at[n_flow, "type"] == "infection_frequency":
             return self.tracked_quantities["infectious_population"] / self.tracked_quantities["total_population"]
         else:
             return 1.0
@@ -959,11 +964,13 @@ class StratifiedModel(EpiModel):
                           integration_type=integration_type, output_connections=output_connections)
 
         self.all_stratifications, self.removed_compartments, self.overwrite_parameters, \
-            self.compartment_types_to_stratify, self.strata = [[] for _ in range(5)]
+            self.compartment_types_to_stratify, self.strata, self.infectious_populations, \
+            self.infectious_denominators = [[] for _ in range(7)]
         self.heterogeneous_infectiousness = False
         self.infectiousness_adjustments, self.parameter_components, self.parameter_functions, \
             self.adaptation_functions, self.mapped_adaptation_functions, self.mixing_numerator_indices, \
             self.mixing_denominator_indices = [{} for _ in range(7)]
+        self.heterogeneous_mixing = False
         self.mixing_matrix = None
 
     """
@@ -1012,7 +1019,7 @@ class StratifiedModel(EpiModel):
         self.stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests)
 
         # under development - implement heterogeneous mixing across multiple population groups
-        self.prepare_mixing(mixing_matrix, stratification_name, strata_names)
+        self.check_mixing(mixing_matrix, stratification_name, strata_names)
 
         # heterogeneous infectiousness adjustments
         self.apply_heterogeneous_infectiousness(stratification_name, strata_request, infectiousness_adjustments)
@@ -1385,7 +1392,17 @@ class StratifiedModel(EpiModel):
                 self.overwrite_parameters.append(parameter_adjustment_name)
         return parameter_adjustment_name
 
-    def prepare_mixing(self, _mixing_matrix, _stratification_name, _strata_names):
+    def check_mixing(self, _mixing_matrix, _stratification_name, _strata_names):
+        """
+        check that the mixing matrix has been correctly specified and call the other relevant functions
+
+        :param _mixing_matrix: ndarray
+            array, which must be square representing the mixing of the strata within this stratification
+        :param _stratification_name: str
+            the name of the stratification - i.e. the reason for implementing this type of stratification
+        :param _strata_names: list
+            see find_strata_names_from_input
+        """
         if type(_mixing_matrix) == numpy.ndarray:
             if len(_mixing_matrix.shape) != 2:
                 raise ValueError("submitted mixing matrix is not in two dimensions")
@@ -1393,29 +1410,65 @@ class StratifiedModel(EpiModel):
                 raise ValueError("submitted mixing is not square")
             elif _mixing_matrix.shape[0] != len(_strata_names):
                 raise ValueError("mixing matrix does not correctly sized to number of strata being implemented")
-            else:
-                if self.mixing_matrix is None:
-                    mixing_cols = [_stratification_name + "_" + i for i in _strata_names]
-                    self.mixing_matrix = pd.DataFrame(_mixing_matrix, columns=mixing_cols, index=mixing_cols)
-                else:
-                    mixing_cols = \
-                        [i + "X" + _stratification_name + "_" + j
-                         for i, j in itertools.product(list(self.mixing_matrix.columns), _strata_names)]
-                    self.mixing_matrix = pd.DataFrame(numpy.kron(
-                        self.mixing_matrix.as_matrix(), _mixing_matrix), columns=mixing_cols, index=mixing_cols)
-        self.find_mixing_indices()
+            self.combine_new_mixing_matrix_with_existing(_mixing_matrix, _stratification_name, _strata_names)
+            self.find_mixing_indices()
+            self.add_force_indices_to_transitions()
+
+    def combine_new_mixing_matrix_with_existing(self, _mixing_matrix, _stratification_name, _strata_names):
+        """
+        master mixing matrix function to take in a new mixing matrix and combine with the existing ones
+
+        :param _mixing_matrix: ndarray
+            array, which must be square representing the mixing of the strata within this stratification
+        :param _stratification_name: str
+            the name of the stratification - i.e. the reason for implementing this type of stratification
+        :param _strata_names: list
+            see find_strata_names_from_input
+        """
+
+        # if no mixing matrix yet, just convert the existing one to a dataframe
+        if self.mixing_matrix is None:
+            mixing_cols = [_stratification_name + "_" + i for i in _strata_names]
+            self.mixing_matrix = pd.DataFrame(_mixing_matrix, columns=mixing_cols, index=mixing_cols)
+
+        # otherwise take the kronecker product to get the new mixing matrix
+        else:
+            mixing_cols = \
+                [i + "X" + _stratification_name + "_" + j
+                 for i, j in itertools.product(list(self.mixing_matrix.columns), _strata_names)]
+            self.mixing_matrix = pd.DataFrame(numpy.kron(
+                self.mixing_matrix.as_matrix(), _mixing_matrix), columns=mixing_cols, index=mixing_cols)
 
     def find_mixing_indices(self):
-
-        # find the indices for the infectious compartments relevant to the column of the mixing matrix
+        """
+        find the indices for the infectious compartments relevant to the column of the mixing matrix
+        """
         for from_stratum in self.mixing_matrix.columns:
             self.mixing_numerator_indices[from_stratum], self.mixing_denominator_indices[from_stratum] = [], []
             for n_comp, compartment in enumerate(self.compartment_names):
-                compartment_strata = find_name_components(compartment)[1:]
-                if all(stratum in compartment_strata for stratum in find_name_components(from_stratum)):
+                if all(stratum in find_name_components(compartment)[1:]
+                       for stratum in find_name_components(from_stratum)):
                     self.mixing_denominator_indices[from_stratum].append(n_comp)
                     if self.infectious_compartment in compartment:
                         self.mixing_numerator_indices[from_stratum].append(n_comp)
+
+    def add_force_indices_to_transitions(self):
+        """
+        find the indices from the force of infection vector to be applied for each infection flow and populate to the
+        force_index column of the flows frame
+        """
+
+        # identify the indices of the infection-related flows to be implemented
+        infection_flow_indices = \
+            [n_flow for n_flow, flow in enumerate(self.transition_flows.type)
+             if "infection" in flow and self.transition_flows.implement[n_flow] == len(self.all_stratifications)]
+
+        # loop through them and find the indices of the mixing matrix that will apply to that flow
+        for n_flow in infection_flow_indices:
+            for n_group, force_group in enumerate(self.mixing_matrix.index):
+                if all(stratum in find_name_components(self.transition_flows.origin[n_flow])[1:]
+                       for stratum in find_name_components(force_group)):
+                    self.transition_flows.at[n_flow, "force_index"] = n_group
 
     def apply_heterogeneous_infectiousness(self, stratification_name, strata_request, infectiousness_adjustments):
         """
@@ -1657,16 +1710,42 @@ class StratifiedModel(EpiModel):
             self.tracked_quantities["infectious_population"] += \
                 _compartment_values[self.compartment_names.index(compartment)] * infectiousness_modifier
 
-        # self.find_heterogeneous_force_infection(_compartment_values)
+        if self.mixing_matrix is not None:
+            self.find_heterogeneous_force_infection(_compartment_values)
 
     def find_heterogeneous_force_infection(self, _compartment_values):
+        """
+        find vectors for the total infectious populations and the infectious denominators that they would need to be
+        divided through in the case of frequency-dependent transmission
 
-        infectious_populations = []
+        :param _compartment_values: ndarray
+            current values for the compartment sizes
+        """
+        self.infectious_populations, self.infectious_denominators = [], []
         for from_stratum in self.mixing_matrix.columns:
-            infectious_populations.append(
-                sum([_compartment_values[i] for i in self.mixing_numerator_indices[from_stratum]]) /
+            self.infectious_populations.append(
+                sum([_compartment_values[i] for i in self.mixing_numerator_indices[from_stratum]]))
+            self.infectious_denominators.append(
                 sum([_compartment_values[i] for i in self.mixing_denominator_indices[from_stratum]]))
-        return list(self.mixing_matrix.dot(infectious_populations))
+
+    def find_infectious_multiplier(self, n_flow):
+        """
+        find the multiplier to account for the infectious population in dynamic flows
+
+        :param n_flow: int
+            index for the row of the transition_flows dataframe
+        :return:
+            the total infectious quantity, whether that be the number or proportion of infectious persons
+            needs to return as one for flows that are not transmission dynamic infectiousness flows
+        """
+        if self.transition_flows.at[n_flow, "type"] == "infection_density" and self.mixing_matrix is not None:
+            return list(self.mixing_matrix.dot(self.infectious_populations))
+        elif self.transition_flows.at[n_flow, "type"] == "infection_frequency" and self.mixing_matrix is not None:
+            return list(self.mixing_matrix.dot(element_list_division(
+                self.infectious_populations, self.infectious_denominators)))[
+                int(self.transition_flows.force_index[n_flow])]
+        else:
+            return 1.0
 
     def apply_birth_rate(self, _ode_equations, _compartment_values):
         """
@@ -1702,7 +1781,7 @@ if __name__ == "__main__":
         {"infectious": 0.001},
         {"beta": 400, "recovery": 365 / 13, "infect_death": 1},
         [{"type": "standard_flows", "parameter": "recovery", "origin": "infectious", "to": "recovered"},
-         {"type": "infection_density", "parameter": "beta", "origin": "susceptible", "to": "infectious"},
+         {"type": "infection_frequency", "parameter": "beta", "origin": "susceptible", "to": "infectious"},
          {"type": "compartment_death", "parameter": "infect_death", "origin": "infectious"}],
         output_connections={"incidence": {"origin": "susceptible", "to": "infectious"}},
         verbose=False, integration_type="solve_ivp")
@@ -1725,10 +1804,12 @@ if __name__ == "__main__":
                        mixing_matrix=age_mixing, verbose=False)
 
     sir_model.run_model()
+    # print(sir_model.mixing_matrix)
+    # print(sir_model.transition_flows)
 
     # create_flowchart(sir_model, strata=len(sir_model.all_stratifications))
     #
-    # sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
+    sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
 
 
 
