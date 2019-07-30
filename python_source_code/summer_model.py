@@ -962,7 +962,8 @@ class StratifiedModel(EpiModel):
             self.compartment_types_to_stratify, self.strata = [[] for _ in range(5)]
         self.heterogeneous_infectiousness = False
         self.infectiousness_adjustments, self.parameter_components, self.parameter_functions, \
-            self.adaptation_functions, self.mapped_adaptation_functions = [{} for _ in range(5)]
+            self.adaptation_functions, self.mapped_adaptation_functions, self.mixing_numerator_indices, \
+            self.mixing_denominator_indices = [{} for _ in range(7)]
         self.mixing_matrix = None
 
     """
@@ -1402,6 +1403,19 @@ class StratifiedModel(EpiModel):
                          for i, j in itertools.product(list(self.mixing_matrix.columns), _strata_names)]
                     self.mixing_matrix = pd.DataFrame(numpy.kron(
                         self.mixing_matrix.as_matrix(), _mixing_matrix), columns=mixing_cols, index=mixing_cols)
+        self.find_mixing_indices()
+
+    def find_mixing_indices(self):
+
+        # find the indices for the infectious compartments relevant to the column of the mixing matrix
+        for from_stratum in self.mixing_matrix.columns:
+            self.mixing_numerator_indices[from_stratum], self.mixing_denominator_indices[from_stratum] = [], []
+            for n_comp, compartment in enumerate(self.compartment_names):
+                compartment_strata = find_name_components(compartment)[1:]
+                if all(stratum in compartment_strata for stratum in find_name_components(from_stratum)):
+                    self.mixing_denominator_indices[from_stratum].append(n_comp)
+                    if self.infectious_compartment in compartment:
+                        self.mixing_numerator_indices[from_stratum].append(n_comp)
 
     def apply_heterogeneous_infectiousness(self, stratification_name, strata_request, infectiousness_adjustments):
         """
@@ -1643,15 +1657,16 @@ class StratifiedModel(EpiModel):
             self.tracked_quantities["infectious_population"] += \
                 _compartment_values[self.compartment_names.index(compartment)] * infectiousness_modifier
 
-        # # find the indices for the infectious compartments relevant to the column of the mixing matrix
-        # compartment_indices = {}
-        # for from_stratum in self.mixing_matrix.columns:
-        #     compartment_indices[from_stratum] = []
-        #     for n_comp, compartment in enumerate(self.compartment_names):
-        #         compartment_strata = find_name_components(compartment)[1:]
-        #         if all(stratum in compartment_strata for stratum in find_name_components(from_stratum)) \
-        #                 and self.infectious_compartment in compartment:
-        #             compartment_indices[from_stratum].append(n_comp)
+        # self.find_heterogeneous_force_infection(_compartment_values)
+
+    def find_heterogeneous_force_infection(self, _compartment_values):
+
+        infectious_populations = []
+        for from_stratum in self.mixing_matrix.columns:
+            infectious_populations.append(
+                sum([_compartment_values[i] for i in self.mixing_numerator_indices[from_stratum]]) /
+                sum([_compartment_values[i] for i in self.mixing_denominator_indices[from_stratum]]))
+        return list(self.mixing_matrix.dot(infectious_populations))
 
     def apply_birth_rate(self, _ode_equations, _compartment_values):
         """
@@ -1693,8 +1708,8 @@ if __name__ == "__main__":
         verbose=False, integration_type="solve_ivp")
     sir_model.adaptation_functions["increment_by_one"] = create_increment_function(1.)
 
-    # hiv_mixing = numpy.array((4., 3., 2., 1.)).reshape(2, 2)
-    hiv_mixing = None
+    hiv_mixing = numpy.array((4., 3., 2., 1.)).reshape(2, 2)
+    # hiv_mixing = None
 
     sir_model.stratify("hiv", ["negative", "positive"], [],
                        {"recovery": {"negative": "increment_by_one", "positive": 0.5},
@@ -1704,13 +1719,12 @@ if __name__ == "__main__":
                        mixing_matrix=hiv_mixing,
                        verbose=False)
 
-    # age_mixing = numpy.eye(4)
-    age_mixing = None
+    age_mixing = numpy.eye(4)
+    # age_mixing = None
     sir_model.stratify("age", [1, 10, 3], [], {"recovery": {"1": 0.5, "10": 0.8}},
                        mixing_matrix=age_mixing, verbose=False)
 
     sir_model.run_model()
-    # print(sir_model.compartment_names)
 
     # create_flowchart(sir_model, strata=len(sir_model.all_stratifications))
     #
