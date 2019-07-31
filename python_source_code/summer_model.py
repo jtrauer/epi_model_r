@@ -994,6 +994,8 @@ class StratifiedModel(EpiModel):
             see prepare_starting_proportions
         :param infectiousness_adjustments:
 
+        :param mixing_matrix:
+            see check_mixing
         :param verbose: bool
             whether to report on progress, note that this can be changed at this stage from what was requested at
             the original unstratified model construction
@@ -1018,7 +1020,7 @@ class StratifiedModel(EpiModel):
             self.stratify_death_flows(stratification_name, strata_names, adjustment_requests)
         self.stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests)
 
-        # under development - implement heterogeneous mixing across multiple population groups
+        # implement heterogeneous mixing across multiple population groups
         self.check_mixing(mixing_matrix, stratification_name, strata_names)
 
         # heterogeneous infectiousness adjustments
@@ -1403,16 +1405,19 @@ class StratifiedModel(EpiModel):
         :param _strata_names: list
             see find_strata_names_from_input
         """
-        if type(_mixing_matrix) == numpy.ndarray:
-            if len(_mixing_matrix.shape) != 2:
-                raise ValueError("submitted mixing matrix is not in two dimensions")
-            elif _mixing_matrix.shape[0] != _mixing_matrix.shape[1]:
-                raise ValueError("submitted mixing is not square")
-            elif _mixing_matrix.shape[0] != len(_strata_names):
-                raise ValueError("mixing matrix does not correctly sized to number of strata being implemented")
-            self.combine_new_mixing_matrix_with_existing(_mixing_matrix, _stratification_name, _strata_names)
-            self.find_mixing_indices()
-            self.add_force_indices_to_transitions()
+        if _mixing_matrix is None:
+            return
+        elif type(_mixing_matrix) != numpy.ndarray:
+            raise ValueError("submitted mixing matrix is wrong data type")
+        elif len(_mixing_matrix.shape) != 2:
+            raise ValueError("submitted mixing matrix is not two-dimensional")
+        elif _mixing_matrix.shape[0] != _mixing_matrix.shape[1]:
+            raise ValueError("submitted mixing is not square")
+        elif _mixing_matrix.shape[0] != len(_strata_names):
+            raise ValueError("mixing matrix does not sized to number of strata being implemented")
+        self.combine_new_mixing_matrix_with_existing(_mixing_matrix, _stratification_name, _strata_names)
+        self.find_mixing_indices()
+        self.add_force_indices_to_transitions()
 
     def combine_new_mixing_matrix_with_existing(self, _mixing_matrix, _stratification_name, _strata_names):
         """
@@ -1787,8 +1792,8 @@ if __name__ == "__main__":
         verbose=False, integration_type="solve_ivp")
     sir_model.adaptation_functions["increment_by_one"] = create_increment_function(1.)
 
-    hiv_mixing = numpy.array((4., 3., 2., 1.)).reshape(2, 2)
-    # hiv_mixing = None
+    # hiv_mixing = numpy.array((4., 3., 2., 1.)).reshape(2, 2)
+    hiv_mixing = None
 
     sir_model.stratify("hiv", ["negative", "positive"], [],
                        {"recovery": {"negative": "increment_by_one", "positive": 0.5},
@@ -1798,10 +1803,10 @@ if __name__ == "__main__":
                        mixing_matrix=hiv_mixing,
                        verbose=False)
 
-    age_mixing = numpy.eye(4)
+    # age_mixing = numpy.eye(4)
     # age_mixing = None
-    sir_model.stratify("age", [1, 10, 3], [], {"recovery": {"1": 0.5, "10": 0.8}},
-                       mixing_matrix=age_mixing, verbose=False)
+    # sir_model.stratify("age", [1, 10, 3], [], {"recovery": {"1": 0.5, "10": 0.8}},
+    #                    mixing_matrix=age_mixing, verbose=False)
 
     sir_model.run_model()
     # print(sir_model.mixing_matrix)
