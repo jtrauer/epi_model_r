@@ -1759,7 +1759,7 @@ class StratifiedModel(EpiModel):
         elif self.transition_flows.at[n_flow, "type"] == "infection_density":
             return sum(element_list_multiplication(
                 self.infectious_populations,
-                list(self.mixing_matrix.loc[int(self.transition_flows.force_index[n_flow]), :])))
+                list(self.mixing_matrix.iloc[int(self.transition_flows.force_index[n_flow]), :])))
         elif self.transition_flows.at[n_flow, "type"] == "infection_frequency" and self.mixing_matrix is None:
             return self.infectious_populations / self.infectious_denominators
         elif self.transition_flows.at[n_flow, "type"] == "infection_frequency":
