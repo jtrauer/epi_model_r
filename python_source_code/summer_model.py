@@ -969,7 +969,7 @@ class StratifiedModel(EpiModel):
         self.heterogeneous_infectiousness = False
         self.infectiousness_adjustments, self.parameter_components, self.parameter_functions, \
             self.adaptation_functions, self.mapped_adaptation_functions, self.mixing_numerator_indices, \
-            self.mixing_denominator_indices = [{} for _ in range(7)]
+            self.mixing_denominator_indices, self.infectiousness_levels = [{} for _ in range(8)]
         self.heterogeneous_mixing = False
         self.mixing_matrix = None
 
@@ -978,7 +978,7 @@ class StratifiedModel(EpiModel):
     """
 
     def stratify(self, stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests=(),
-                 requested_proportions={}, infectiousness_adjustments=(), mixing_matrix=None, verbose=True):
+                 requested_proportions={}, infectiousness_adjustments={}, mixing_matrix=None, verbose=True):
         """
         calls to initial preparation, checks and methods that stratify the various aspects of the model
 
@@ -1028,6 +1028,7 @@ class StratifiedModel(EpiModel):
 
         # heterogeneous infectiousness adjustments
         self.apply_heterogeneous_infectiousness(stratification_name, strata_request, infectiousness_adjustments)
+        # self.apply_infectiousness_levels(stratification_name, strata_names, infectiousness_adjustments)
 
     """
     other pre-integration methods
@@ -1504,6 +1505,30 @@ class StratifiedModel(EpiModel):
                 self.infectiousness_adjustments[create_stratified_name("", stratification_name, stratum)] = \
                     infectiousness_adjustments[stratum]
 
+    def apply_infectiousness_levels(self, _stratification_name, _strata_names, _infectiousness_adjustments):
+        """
+        store infectiousness adjustments as dictionary attribute to the model object, with first tier of keys the
+        stratification and second tier the strata to be modified
+
+        :param _stratification_name:
+            see prepare_and_check_stratification
+        :param _strata_names:
+             see find_strata_names_from_input
+        :param _infectiousness_adjustments: dict
+            requested adjustments to infectiousness for this stratification
+        """
+        if type(_infectiousness_adjustments) != dict:
+            raise ValueError("infectiousness adjustments not submitted as dictionary")
+        elif not all(key in _strata_names for key in _infectiousness_adjustments.keys()):
+            raise ValueError("infectiousness adjustment key not in strata being implemented")
+        elif _infectiousness_adjustments == {}:
+            return
+        else:
+            for stratum in _strata_names:
+                if stratum not in _infectiousness_adjustments:
+                    _infectiousness_adjustments[stratum] = 1.0
+            self.infectiousness_levels[_stratification_name] = _infectiousness_adjustments
+
     def set_ageing_rates(self, _strata_names):
         """
         set intercompartmental flows for ageing from one stratum to the next as the reciprocal of the width of the age
@@ -1815,6 +1840,7 @@ if __name__ == "__main__":
                         "infect_death": {"negative": 0.5},
                         "entry_fraction": {"negative": 0.6, "positive": 0.4}},
                        {"negative": 0.6},
+                       infectiousness_adjustments={"positive": 0.5},
                        mixing_matrix=hiv_mixing,
                        verbose=False)
 
