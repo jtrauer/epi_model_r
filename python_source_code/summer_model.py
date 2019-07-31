@@ -1466,7 +1466,7 @@ class StratifiedModel(EpiModel):
         find the indices for the infectious compartments relevant to the column of the mixing matrix
         """
         self.mixing_numerator_indices, self.mixing_denominator_indices = {}, {}
-        for from_stratum in self.mixing_matrix.columns:
+        for from_stratum in self.mixing_matrix.index:
             self.mixing_numerator_indices[from_stratum], self.mixing_denominator_indices[from_stratum] = [], []
             for n_comp, compartment in enumerate(self.compartment_names):
                 if all(stratum in find_name_components(compartment)[1:]
@@ -1492,24 +1492,6 @@ class StratifiedModel(EpiModel):
                 if all(stratum in find_name_components(self.transition_flows.origin[n_flow])[1:]
                        for stratum in find_name_components(force_group)):
                     self.transition_flows.at[n_flow, "force_index"] = n_group
-
-    def apply_heterogeneous_infectiousness(self, stratification_name, strata_request, infectiousness_adjustments):
-        """
-        work out infectiousness adjustments and set as model attributes
-        this has not been fully documented, as we are intending to revise this to permit any approach to heterogeneous
-        infectiousness or mixing assumptions
-        """
-        if len(infectiousness_adjustments) == 0:
-            self.output_to_user("heterogeneous infectiousness not requested for this stratification")
-        elif self.infectious_compartment not in self.compartment_types_to_stratify:
-            raise ValueError("request for infectiousness stratification does not apply to the infectious compartment")
-        else:
-            self.heterogeneous_infectiousness = True
-            for stratum in infectiousness_adjustments:
-                if stratum not in strata_request:
-                    raise ValueError("stratum to have infectiousness modified not found within requested strata")
-                self.infectiousness_adjustments[create_stratified_name("", stratification_name, stratum)] = \
-                    infectiousness_adjustments[stratum]
 
     def prepare_infectiousness_levels(self, _stratification_name, _strata_names, _infectiousness_adjustments):
         """
@@ -1742,44 +1724,23 @@ class StratifiedModel(EpiModel):
 
     def find_infectious_population(self, _compartment_values):
         """
-        calculations to find the effective infectious population
-
-        :param _compartment_values:
-        """
-
-        # loop through all compartments and find the ones representing active infectious disease
-        for compartment in [comp for comp in self.compartment_names if find_stem(comp) == self.infectious_compartment]:
-
-            # assume homogeneous infectiousness until/unless requested otherwise
-            infectiousness_modifier = 1.0
-
-            # haven't yet finished heterogeneous infectiousness - want to implement all forms of heterogeneous mixing
-            if self.heterogeneous_infectiousness:
-                for adjustment in [adj for adj in self.infectiousness_adjustments if adj in compartment]:
-                    infectiousness_modifier = self.infectiousness_adjustments[adjustment]
-
-            # update total infectious population
-            self.tracked_quantities["infectious_population"] += \
-                _compartment_values[self.compartment_names.index(compartment)] * infectiousness_modifier
-
-        if self.mixing_matrix is not None:
-            self.find_heterogeneous_force_infection(_compartment_values)
-
-    def find_heterogeneous_force_infection(self, _compartment_values):
-        """
         find vectors for the total infectious populations and the infectious denominators that they would need to be
         divided through in the case of frequency-dependent transmission
 
         :param _compartment_values: ndarray
             current values for the compartment sizes
         """
-        self.infectious_denominators = []
-        infectious_compartment_values = list(itertools.compress(_compartment_values, self.infectious_indices))
         self.infectious_populations = \
-            element_list_multiplication(infectious_compartment_values, self.infectiousness_multipliers)
-        for to_stratum in self.mixing_matrix.index:
-            self.infectious_denominators.append(
-                sum([_compartment_values[i] for i in self.mixing_denominator_indices[to_stratum]]))
+            element_list_multiplication(list(itertools.compress(_compartment_values, self.infectious_indices)),
+                                        self.infectiousness_multipliers)
+        if self.mixing_matrix is None:
+            self.infectious_populations = sum(self.infectious_populations)
+            self.infectious_denominators = sum(_compartment_values)
+        else:
+            self.infectious_denominators = []
+            for from_stratum in self.mixing_matrix.columns:
+                self.infectious_denominators.append(
+                    sum([_compartment_values[i] for i in self.mixing_denominator_indices[from_stratum]]))
 
     def find_infectious_multiplier(self, n_flow):
         """
@@ -1791,20 +1752,20 @@ class StratifiedModel(EpiModel):
             the total infectious quantity, whether that be the number or proportion of infectious persons
             needs to return as one for flows that are not transmission dynamic infectiousness flows
         """
-        if self.transition_flows.at[n_flow, "type"] == "infection_density" and self.mixing_matrix is not None:
+        if "infection" not in self.transition_flows.at[n_flow, "type"]:
+            return 1.0
+        elif self.transition_flows.at[n_flow, "type"] == "infection_density" and self.mixing_matrix is None:
+            return self.infectious_populations
+        elif self.transition_flows.at[n_flow, "type"] == "infection_density":
             return sum(element_list_multiplication(
                 self.infectious_populations,
                 list(self.mixing_matrix.loc[int(self.transition_flows.force_index[n_flow]), :])))
-        elif self.transition_flows.at[n_flow, "type"] == "infection_density":
-            return self.tracked_quantities["infectious_population"]
-        elif self.transition_flows.at[n_flow, "type"] == "infection_frequency" and self.mixing_matrix is not None:
+        elif self.transition_flows.at[n_flow, "type"] == "infection_frequency" and self.mixing_matrix is None:
+            return self.infectious_populations / self.infectious_denominators
+        elif self.transition_flows.at[n_flow, "type"] == "infection_frequency":
             return sum(element_list_multiplication(element_list_division(
                 self.infectious_populations, self.infectious_denominators),
                 list(self.mixing_matrix.iloc[int(self.transition_flows.force_index[n_flow]), :])))
-        elif self.transition_flows.at[n_flow, "type"] == "infection_frequency":
-            return self.tracked_quantities["infectious_population"] / self.tracked_quantities["total_population"]
-        else:
-            return 1.0
 
     def apply_birth_rate(self, _ode_equations, _compartment_values):
         """
@@ -1858,11 +1819,12 @@ if __name__ == "__main__":
                        mixing_matrix=hiv_mixing,
                        verbose=False)
 
-    age_mixing = numpy.eye(4)
+    # age_mixing = numpy.eye(4)
     # age_mixing = None
-    sir_model.stratify("age", [1, 10, 3], [], {"recovery": {"1": 0.5, "10": 0.8}},
-                       infectiousness_adjustments={"1": 0.8},
-                       mixing_matrix=age_mixing, verbose=False)
+    # sir_model.stratify("age", [1, 10, 3], [], {"recovery": {"1": 0.5, "10": 0.8}},
+    #                    infectiousness_adjustments={"1": 0.8},
+    #                    mixing_matrix=age_mixing, verbose=False)
+
 
     sir_model.run_model()
     # print(sir_model.mixing_matrix)
