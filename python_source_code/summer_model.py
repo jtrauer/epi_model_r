@@ -1020,8 +1020,11 @@ class StratifiedModel(EpiModel):
             self.stratify_death_flows(stratification_name, strata_names, adjustment_requests)
         self.stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests)
 
+        # check submitted mixing matrix and combine with existing matrix, if any
+        self.prepare_mixing_matrix(mixing_matrix, stratification_name, strata_names)
+
         # implement heterogeneous mixing across multiple population groups
-        self.check_mixing(mixing_matrix, stratification_name, strata_names)
+        self.prepare_implement_mixing()
 
         # heterogeneous infectiousness adjustments
         self.apply_heterogeneous_infectiousness(stratification_name, strata_request, infectiousness_adjustments)
@@ -1394,7 +1397,7 @@ class StratifiedModel(EpiModel):
                 self.overwrite_parameters.append(parameter_adjustment_name)
         return parameter_adjustment_name
 
-    def check_mixing(self, _mixing_matrix, _stratification_name, _strata_names):
+    def prepare_mixing_matrix(self, _mixing_matrix, _stratification_name, _strata_names):
         """
         check that the mixing matrix has been correctly specified and call the other relevant functions
 
@@ -1416,8 +1419,6 @@ class StratifiedModel(EpiModel):
         elif _mixing_matrix.shape[0] != len(_strata_names):
             raise ValueError("mixing matrix does not sized to number of strata being implemented")
         self.combine_new_mixing_matrix_with_existing(_mixing_matrix, _stratification_name, _strata_names)
-        self.find_mixing_indices()
-        self.add_force_indices_to_transitions()
 
     def combine_new_mixing_matrix_with_existing(self, _mixing_matrix, _stratification_name, _strata_names):
         """
@@ -1439,15 +1440,25 @@ class StratifiedModel(EpiModel):
         # otherwise take the kronecker product to get the new mixing matrix
         else:
             mixing_cols = \
-                [i + "X" + _stratification_name + "_" + j
-                 for i, j in itertools.product(list(self.mixing_matrix.columns), _strata_names)]
+                [old_strata + "X" + _stratification_name + "_" + new_strata
+                 for old_strata, new_strata in itertools.product(list(self.mixing_matrix.columns), _strata_names)]
             self.mixing_matrix = pd.DataFrame(numpy.kron(
                 self.mixing_matrix.as_matrix(), _mixing_matrix), columns=mixing_cols, index=mixing_cols)
+
+    def prepare_implement_mixing(self):
+        """
+        methods to be run if there is a mixing matrix being applied at all, regardless of whether one is being
+        introduced during this stratification process
+        """
+        if self.mixing_matrix is not None:
+            self.find_mixing_indices()
+            self.add_force_indices_to_transitions()
 
     def find_mixing_indices(self):
         """
         find the indices for the infectious compartments relevant to the column of the mixing matrix
         """
+        self.mixing_numerator_indices, self.mixing_denominator_indices = {}, {}
         for from_stratum in self.mixing_matrix.columns:
             self.mixing_numerator_indices[from_stratum], self.mixing_denominator_indices[from_stratum] = [], []
             for n_comp, compartment in enumerate(self.compartment_names):
@@ -1745,10 +1756,14 @@ class StratifiedModel(EpiModel):
         """
         if self.transition_flows.at[n_flow, "type"] == "infection_density" and self.mixing_matrix is not None:
             return list(self.mixing_matrix.dot(self.infectious_populations))
+        elif self.transition_flows.at[n_flow, "type"] == "infection_density":
+            return self.tracked_quantities["infectious_population"]
         elif self.transition_flows.at[n_flow, "type"] == "infection_frequency" and self.mixing_matrix is not None:
             return list(self.mixing_matrix.dot(element_list_division(
                 self.infectious_populations, self.infectious_denominators)))[
                 int(self.transition_flows.force_index[n_flow])]
+        elif self.transition_flows.at[n_flow, "type"] == "infection_frequency":
+            return self.tracked_quantities["infectious_population"] / self.tracked_quantities["total_population"]
         else:
             return 1.0
 
@@ -1804,9 +1819,9 @@ if __name__ == "__main__":
                        verbose=False)
 
     # age_mixing = numpy.eye(4)
-    # age_mixing = None
-    # sir_model.stratify("age", [1, 10, 3], [], {"recovery": {"1": 0.5, "10": 0.8}},
-    #                    mixing_matrix=age_mixing, verbose=False)
+    age_mixing = None
+    sir_model.stratify("age", [1, 10, 3], [], {"recovery": {"1": 0.5, "10": 0.8}},
+                       mixing_matrix=age_mixing, verbose=False)
 
     sir_model.run_model()
     # print(sir_model.mixing_matrix)
