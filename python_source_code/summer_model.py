@@ -1763,9 +1763,10 @@ class StratifiedModel(EpiModel):
         elif self.transition_flows.at[n_flow, "type"] == "infection_frequency" and self.mixing_matrix is None:
             return self.infectious_populations / self.infectious_denominators
         elif self.transition_flows.at[n_flow, "type"] == "infection_frequency":
-            return sum(element_list_multiplication(element_list_division(
-                self.infectious_populations, self.infectious_denominators),
-                list(self.mixing_matrix.iloc[int(self.transition_flows.force_index[n_flow]), :])))
+            return sum(element_list_multiplication(
+                self.infectious_populations,
+                list(self.mixing_matrix.iloc[int(self.transition_flows.force_index[n_flow]), :]))) / \
+                   sum(self.infectious_denominators)
 
     def apply_birth_rate(self, _ode_equations, _compartment_values):
         """
@@ -1807,7 +1808,7 @@ if __name__ == "__main__":
         verbose=False, integration_type="solve_ivp")
     sir_model.adaptation_functions["increment_by_one"] = create_increment_function(1.)
 
-    hiv_mixing = numpy.array((4., 3., 2., 1.)).reshape(2, 2)
+    hiv_mixing = numpy.ones(4).reshape(2, 2)
     # hiv_mixing = None
 
     sir_model.stratify("hiv", ["negative", "positive"], [],
