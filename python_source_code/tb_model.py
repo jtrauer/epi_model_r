@@ -175,7 +175,7 @@ if __name__ == "__main__":
     # store_database(pbi_outputs, table_name="pbi_outputs")
 
     # easy enough to output a flow diagram if needed:
-    # create_flowchart(tb_model, strata=1)
+    # create_flowchart(tb_model)
 
     # output some basic quantities if not bothered with the PowerBI bells and whistles
     # tb_model.plot_compartment_size(["early_latent", "late_latent"])

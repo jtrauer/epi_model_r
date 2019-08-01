@@ -198,10 +198,13 @@ def store_database(outputs, table_name='outputs'):
         outputs.to_sql(table_name, con=engine, if_exists="replace", index=False)
 
 
-def create_flowchart(model_object, strata=-1, stratify=True, name="flow_chart"):
+def create_flowchart(model_object, strata=None, stratify=True, name="flow_chart"):
     """
     use graphviz module to create flow diagram of compartments and intercompartmental flows.
     """
+
+    if strata is None:
+        strata = len(model_object.all_stratifications)
 
     # set styles for graph
     styles = {"graph": {"label": "",
