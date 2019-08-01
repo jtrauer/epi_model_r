@@ -109,11 +109,11 @@ def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
              {"type": "compartment_death", "parameter": "infect_death", "origin": "infectious"}]
     flows = add_standard_latency_flows(flows)
 
-    tb_model_ = StratifiedModel(
+    _tb_model = StratifiedModel(
         times_, ["susceptible", "early_latent", "late_latent", "infectious", "recovered"], {"infectious": 1e-3},
         parameters, flows, birth_approach="replace_deaths")
 
-    tb_model_.add_transition_flow(
+    _tb_model.add_transition_flow(
         {"type": "standard_flows", "parameter": "case_detection", "origin": "infectious", "to": "recovered"})
 
     # loading time-variant case detection rate
@@ -130,26 +130,28 @@ def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
     cdr_scaleup = scale_up_function(cdr_mongolia_year, cdr_mongolia, smoothness=0.2, method=5)
     prop_to_rate = convert_competing_proportion_to_rate(1.0 / untreated_disease_duration)
     detect_rate = return_function_of_function(cdr_scaleup, prop_to_rate)
-    tb_model_.time_variants["case_detection"] = detect_rate
+    _tb_model.time_variants["case_detection"] = detect_rate
 
     # store scaling functions in database if required
     # function_dataframe = pd.DataFrame(times)
     # function_dataframe["cdr_values"] = [cdr_scaleup(t) for t in times]
     # store_database(function_dataframe, table_name="functions")
 
+    _tb_model.stratify("strain", ["ds", "mdr"], ["early_latent", "late_latent", "infectious"], {}, verbose=False)
+
     # add age stratification
     age_breakpoints = [0, 6, 13, 15]
     age_infectiousness = get_parameter_dict_from_function(logistic_scaling_function(15.0), age_breakpoints)
-    tb_model_.stratify("age", age_breakpoints, [],
+    _tb_model.stratify("age", age_breakpoints, [], {},
                        adjustment_requests=get_adapted_age_parameters(age_breakpoints),
                        infectiousness_adjustments=age_infectiousness,
                        verbose=False)
 
-    # tb_model_.stratify("smear",
+    # _tb_model.stratify("smear",
     #                   ["smearpos", "smearneg", "extrapul"],
     #                   ["infectious"], adjustment_requests=[], report=False)
 
-    return tb_model_
+    return _tb_model
 
 
 if __name__ == "__main__":
@@ -175,7 +177,7 @@ if __name__ == "__main__":
     # store_database(pbi_outputs, table_name="pbi_outputs")
 
     # easy enough to output a flow diagram if needed:
-    # create_flowchart(tb_model)
+    create_flowchart(tb_model)
 
     # output some basic quantities if not bothered with the PowerBI bells and whistles
     # tb_model.plot_compartment_size(["early_latent", "late_latent"])

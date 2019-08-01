@@ -986,8 +986,8 @@ class StratifiedModel(EpiModel):
     main master method for model stratification
     """
 
-    def stratify(self, stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests=(),
-                 requested_proportions={}, infectiousness_adjustments={}, mixing_matrix=None, verbose=True):
+    def stratify(self, stratification_name, strata_request, compartment_types_to_stratify, requested_proportions,
+                 adjustment_requests=(), infectiousness_adjustments={}, mixing_matrix=None, verbose=True):
         """
         calls to initial preparation, checks and methods that stratify the various aspects of the model
 
@@ -1814,18 +1814,17 @@ if __name__ == "__main__":
     hiv_mixing = numpy.ones(4).reshape(2, 2)
     # hiv_mixing = None
 
-    sir_model.stratify("hiv", ["negative", "positive"], [],
+    sir_model.stratify("hiv", ["negative", "positive"], [], {"negative": 0.6},
                        {"recovery": {"negative": "increment_by_one", "positive": 0.5},
                         "infect_death": {"negative": 0.5},
                         "entry_fraction": {"negative": 0.6, "positive": 0.4}},
-                       {"negative": 0.6},
                        infectiousness_adjustments={"positive": 0.5},
                        mixing_matrix=hiv_mixing,
                        verbose=False)
 
     # age_mixing = numpy.eye(4)
-    # age_mixing = None
-    # sir_model.stratify("age", [1, 10, 3], [], {"recovery": {"1": 0.5, "10": 0.8}},
+    # # age_mixing = None
+    # sir_model.stratify("age", [1, 10, 3], [], {}, {"recovery": {"1": 0.5, "10": 0.8}},
     #                    infectiousness_adjustments={"1": 0.8},
     #                    mixing_matrix=age_mixing, verbose=False)
 
