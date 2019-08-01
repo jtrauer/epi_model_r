@@ -252,9 +252,13 @@ def create_flowchart(model_object, strata=None, stratify=True, name="flow_chart"
             if label in broken_down_nodes[0]:
                 node_color = '#F0FFFF'
             if label in broken_down_nodes[1]:
-                node_color = '#FAEBD7'
+                node_color = '#A64942'
             if label in broken_down_nodes[2]:
-                node_color = '#E9967A'
+                node_color = '#A64942'
+            if label in broken_down_nodes[3]:
+                node_color = '#FE5F55'
+            if label in broken_down_nodes[4]:
+                node_color = '#FFF1C1'
             model_object.flow_diagram.node(label, fillcolor=node_color)
     else:
         for label in model_object.compartment_names:
@@ -262,9 +266,13 @@ def create_flowchart(model_object, strata=None, stratify=True, name="flow_chart"
             if label in broken_down_nodes[0]:
                 node_color = '#F0FFFF'
             if label in broken_down_nodes[1]:
-                node_color = '#FAEBD7'
+                node_color = '#A64942'
             if label in broken_down_nodes[2]:
-                node_color = '#E9967A'
+                node_color = '#A64942'
+            if label in broken_down_nodes[3]:
+                node_color = '#FE5F55'
+            if label in broken_down_nodes[4]:
+                node_color = '#FFF1C1'
             model_object.flow_diagram.node(label, fillcolor=node_color)
 
     # build the graph edges
@@ -1843,7 +1851,7 @@ if __name__ == "__main__":
     # print(sir_model.mixing_matrix)
     # print(sir_model.transition_flows)
 
-    # create_flowchart(sir_model, strata=len(sir_model.all_stratifications))
+    create_flowchart(sir_model, strata=len(sir_model.all_stratifications))
     #
     sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
 
