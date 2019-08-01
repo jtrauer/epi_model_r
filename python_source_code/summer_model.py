@@ -640,7 +640,7 @@ class EpiModel:
         """
         main function to integrate model odes, called externally in the master running script
         """
-        self.output_to_user("now integrating")
+        self.output_to_user("\nnow integrating")
         self.prepare_stratified_parameter_calculations()
 
         # basic default integration method
@@ -1065,7 +1065,7 @@ class StratifiedModel(EpiModel):
                 revised version of _adjustment_requests after adaptation to class requirements
         """
         self.verbose = _verbose
-        self.output_to_user("\nimplementing stratification for: %s" % _stratification_name)
+        self.output_to_user("\n___________________\nimplementing stratification for: %s" % _stratification_name)
         if _stratification_name == "age":
             _strata_request = self.check_age_stratification(_strata_request, _compartment_types_to_stratify)
 
@@ -1229,6 +1229,7 @@ class StratifiedModel(EpiModel):
             raise ValueError("requested a starting proportion value of greater than one")
 
         # assuming an equal proportion of the total for the compartment if not otherwise specified
+        self.output_to_user("\n")
         for stratum in _strata_names:
             if stratum not in _requested_proportions:
                 starting_proportion = 1.0 / len(_strata_names)
@@ -1252,6 +1253,7 @@ class StratifiedModel(EpiModel):
         """
 
         # find the existing compartments that need stratification
+        self.output_to_user("\n")
         for compartment in \
                 [comp for comp in self.compartment_names if find_stem(comp) in self.compartment_types_to_stratify]:
 
@@ -1274,13 +1276,14 @@ class StratifiedModel(EpiModel):
         :param _adjustment_requests:
             see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
         """
+        self.output_to_user("\n")
         for n_flow in self.transition_flows[self.transition_flows.implement == len(self.all_stratifications) - 1].index:
             self.add_stratified_flows(
                 n_flow, _stratification_name, _strata_names,
                 find_stem(self.transition_flows.origin[n_flow]) in self.compartment_types_to_stratify,
                 find_stem(self.transition_flows.to[n_flow]) in self.compartment_types_to_stratify,
                 _adjustment_requests)
-        self.output_to_user("stratified transition flows matrix:\n%s" % self.transition_flows)
+        self.output_to_user("\nstratified transition flows matrix:\n%s" % self.transition_flows)
 
     def stratify_entry_flows(self, _stratification_name, _strata_names, _requested_proportions):
         """
@@ -1388,10 +1391,17 @@ class StratifiedModel(EpiModel):
 
         # find the adjustment requests that are extensions of the base parameter type being considered
         for parameter_request in [req for req in _adjustment_requests if _unadjusted_parameter.startswith(req)]:
-            parameter_adjustment_name = create_stratified_name(_unadjusted_parameter, _stratification_name, _stratum)
-            self.output_to_user(
-                "modifying %s for %s stratum of %s with new parameter called %s"
-                % (_unadjusted_parameter, _stratum, _stratification_name, parameter_adjustment_name))
+            if _stratum in _adjustment_requests[parameter_request]:
+                parameter_adjustment_name = \
+                    create_stratified_name(_unadjusted_parameter, _stratification_name, _stratum)
+                self.output_to_user(
+                    "\tmodifying %s for %s stratum of %s with new parameter called %s"
+                    % (_unadjusted_parameter, _stratum, _stratification_name, parameter_adjustment_name))
+            else:
+                parameter_adjustment_name = _unadjusted_parameter
+                self.output_to_user(
+                    "\tretaining existing parameter value %s for %s stratum of %s"
+                    % (_unadjusted_parameter, _stratum, _stratification_name))
 
             # implement request, otherwise parameter will be left out, essentially assumed to be one when integrating
             if _stratum in _adjustment_requests[parameter_request] and \
@@ -1570,7 +1580,7 @@ class StratifiedModel(EpiModel):
         """
         if stratify_from or stratify_to:
             self.output_to_user(
-                "for flow from %s to %s in stratification %s"
+                "\nfor flow from %s to %s in stratification %s"
                 % (self.transition_flows.origin[_n_flow], self.transition_flows.to[_n_flow], _stratification_name))
 
             # loop over each stratum in the requested stratification structure
@@ -1582,7 +1592,7 @@ class StratifiedModel(EpiModel):
                 if not parameter_name:
                     parameter_name = self.sort_absent_parameter_request(
                         _stratification_name, _strata_names, stratum, stratify_from, stratify_to, _n_flow)
-                self.output_to_user("\tadding parameter %s" % parameter_name)
+                self.output_to_user("\t\tadding parameter %s" % parameter_name)
 
                 # determine whether to and/or from compartments are stratified
                 from_compartment = \

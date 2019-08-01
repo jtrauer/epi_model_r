@@ -137,15 +137,17 @@ def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
     # function_dataframe["cdr_values"] = [cdr_scaleup(t) for t in times]
     # store_database(function_dataframe, table_name="functions")
 
-    _tb_model.stratify("strain", ["ds", "mdr"], ["early_latent", "late_latent", "infectious"], {}, verbose=False)
+    _tb_model.stratify("strain", ["ds", "mdr"], ["early_latent", "late_latent", "infectious"], {},
+                       adjustment_requests={"beta": {"mdr": 0.0, "overwrite": "mdr"}},
+                       verbose=True)
 
     # add age stratification
-    age_breakpoints = [0, 6, 13, 15]
-    age_infectiousness = get_parameter_dict_from_function(logistic_scaling_function(15.0), age_breakpoints)
-    _tb_model.stratify("age", age_breakpoints, [], {},
-                       adjustment_requests=get_adapted_age_parameters(age_breakpoints),
-                       infectiousness_adjustments=age_infectiousness,
-                       verbose=False)
+    # age_breakpoints = [0, 6, 13, 15]
+    # age_infectiousness = get_parameter_dict_from_function(logistic_scaling_function(15.0), age_breakpoints)
+    # _tb_model.stratify("age", age_breakpoints, [], {},
+    #                    adjustment_requests=get_adapted_age_parameters(age_breakpoints),
+    #                    infectiousness_adjustments=age_infectiousness,
+    #                    verbose=False)
 
     # _tb_model.stratify("smear",
     #                   ["smearpos", "smearneg", "extrapul"],
