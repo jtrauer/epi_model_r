@@ -1177,15 +1177,13 @@ class StratifiedModel(EpiModel):
 
             # accept the key representing the overwrite parameters
             revised_adjustments[parameter] = {}
-            revised_adjustments[parameter]["overwrite"] = \
-                _adjustment_requests[parameter]["overwrite"] if "overwrite" in _adjustment_requests[parameter] else []
 
-            # then loop through all the other keys of the user request
+            # ignore overwrite if submitted with the original approach
             for stratum in _adjustment_requests[parameter]:
                 if stratum == "overwrite":
                     continue
 
-                # if the parameter ends in W, it is interpreted as an overwrite parameter and added to this key
+                # if the parameter ends in W, interpret as an overwrite parameter and added to this key
                 elif stratum[-1] == "W":
                     revised_adjustments[parameter][stratum[: -1]] = _adjustment_requests[parameter][stratum]
                     revised_adjustments[parameter]["overwrite"].append(stratum[: -1])
@@ -1193,7 +1191,9 @@ class StratifiedModel(EpiModel):
                 # otherwise just accept the parameter in its submitted form
                 else:
                     revised_adjustments[parameter][stratum] = _adjustment_requests[parameter][stratum]
-            _adjustment_requests[parameter] = revised_adjustments[parameter]
+            if "overwrite" not in revised_adjustments:
+                revised_adjustments["overwrite"] = []
+
         return revised_adjustments
 
     def check_parameter_adjustment_requests(self, _adjustment_requests, _strata_names):
