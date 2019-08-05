@@ -471,9 +471,12 @@ class EpiModel:
         """
         find the value of a parameter with time-variant values trumping constant ones
 
-        :param parameter_name: string for the name of the parameter of interest
-        :param time: model integration time (if needed)
-        :return: parameter value, whether constant or time variant
+        :param parameter_name: str
+            string for the name of the parameter of interest
+        :param time: float
+            model integration time (if needed)
+        :return: float
+            parameter value, whether constant or time variant
         """
         return self.time_variants[parameter_name](time) if parameter_name in self.time_variants \
             else self.parameters[parameter_name]
@@ -505,7 +508,7 @@ class EpiModel:
             this object class
         """
 
-        # set flow attributes as pandas dataframes with fixed column names
+        # set flow attributes as pandas data frames with fixed column names
         self.transition_flows = pd.DataFrame(columns=("type", "parameter", "origin", "to", "implement"))
         self.death_flows = pd.DataFrame(columns=("type", "parameter", "origin", "implement"))
 
@@ -536,6 +539,9 @@ class EpiModel:
                  "starting_population", "starting_compartment", "infectious_compartment",
                  "equilibrium_stopping_tolerance", "integration_type", "output_connections"]:
             setattr(self, attribute, eval(attribute))
+
+        # keep copy of the compartment types in case the compartment names are stratified later
+        self.compartment_names = copy.copy(self.compartment_types)
 
         # set initial conditions and implement flows
         self.set_initial_conditions(initial_conditions_to_total)
@@ -601,16 +607,13 @@ class EpiModel:
 
     def set_initial_conditions(self, _initial_conditions_to_total):
         """
-        set starting compartment values
+        set starting compartment values according to user request
 
         :param _initial_conditions_to_total: bool
             unchanged from argument to __init__
         """
 
-        # keep copy of the compartment types for when the compartment names are stratified later
-        self.compartment_names = copy.copy(self.compartment_types)
-
-        # start from making sure all compartments are set to zero values
+        # start by setting all compartments to zero
         self.compartment_values = [0.0] * len(self.compartment_names)
 
         # set starting values of unstratified compartments to requested value
@@ -645,15 +648,14 @@ class EpiModel:
         :return: str
             name of the compartment to assign the remaining population size to
         """
-        if len(self.starting_compartment) > 0 and \
-                self.starting_compartment not in self.compartment_types:
-            raise ValueError("starting compartment to populate with initial values not found in available compartments")
-        elif len(self.starting_compartment) > 0:
-            return self.starting_compartment
-        else:
+        if len(self.starting_compartment) == 0:
             self.output_to_user("no default starting compartment requested for unallocated population, " +
                                 "so will be allocated to entry compartment %s" % self.entry_compartment)
             return self.entry_compartment
+        elif self.starting_compartment not in self.compartment_types:
+            raise ValueError("starting compartment to populate with initial values not found in available compartments")
+        else:
+            return self.starting_compartment
 
     def implement_flows(self, _requested_flows):
         """
