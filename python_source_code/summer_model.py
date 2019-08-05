@@ -96,6 +96,19 @@ def add_w_to_param_names(parameter_dict):
     return {str(age_group) + "W": value for age_group, value in parameter_dict.items()}
 
 
+def find_name_components(compartment):
+    """
+    extract all the components of a stratified compartment or parameter name
+
+    :param compartment: str
+        name of the compartment or parameter to be interrogated
+    :return:
+        list of the extracted compartment components
+    """
+    x_positions = [-1] + extract_x_positions(compartment)
+    return [compartment[x_positions[n_x] + 1: x_positions[n_x + 1]] for n_x in range(len(x_positions) - 1)]
+
+
 """
 basic data manipulation functions
 """
@@ -145,8 +158,38 @@ def change_parameter_unit(parameter_dict, multiplier):
     return {param_key: param_value * multiplier for param_key, param_value in parameter_dict.items()}
 
 
+def element_list_multiplication(list_1, list_2):
+    """
+    multiply elements of two lists to return another list with the same dimensions
+
+    :param list_1: list
+        first list of numeric values to be multiplied
+    :param list_2: list
+        first list of numeric values to be multiplied
+    :return: list
+        list populated with multiplied values
+    """
+    return [a * b for a, b in zip(list_1, list_2)]
+
+
+def element_list_division(list_1, list_2):
+    """
+    divide elements of two lists to return another list with the same dimensions
+
+    :param list_1: list
+        first list of numeric values for numerators of division
+    :param list_2: list
+        first list of numeric values for denominators of division
+    :return: list
+        list populated with divided values
+    """
+    return [a / b for a, b in zip(list_1, list_2)]
+
+
 """
 functions for use as inputs to the model
+
+considering moving to different file
 """
 
 
@@ -154,17 +197,22 @@ def create_step_function_from_dict(input_dict):
     """
     create a step function out of dictionary with numeric keys and values, where the keys determine the values of the
     independent variable at which the steps between the output values occur
+
+    :param input_dict: dict
+        dictionary in standard format as described above
+    :return: function
+        the function constructed from input data
     """
     dict_keys = list(input_dict.keys())
     dict_keys.sort()
     dict_values = [input_dict[key] for key in dict_keys]
 
-    def step_function(argument):
-        if argument >= dict_keys[-1]:
+    def step_function(input_value):
+        if input_value >= dict_keys[-1]:
             return dict_values[-1]
         else:
             for key in range(len(dict_keys)):
-                if argument < dict_keys[key + 1]:
+                if input_value < dict_keys[key + 1]:
                     return dict_values[key]
 
     return step_function
@@ -172,22 +220,35 @@ def create_step_function_from_dict(input_dict):
 
 def sinusoidal_scaling_function(start_time, baseline_value, end_time, final_value):
     """
-    with a view to implementing scale-up functions over time, use the cosine function to produce smooth scale-up
-    functions from one point to another
+    in order to implement scale-up functions over time, use the cosine function to produce smooth scale-up functions
+    from one point to another, returning the starting value before the starting point and the final value after the
+    end point
+
+    :param start_time: float
+        starting value of the independent variable
+    :param baseline_value: float
+        starting value of the dependent variable
+    :param end_time: float
+        final value of the independent variable
+    :param final_value: float
+        final value of the dependent variable
+    :return:
+        function scaling from the starting value to the final value
     """
-    def sinusoidal_function(x):
-        if not isinstance(x, float):
-            raise ValueError("value fed into scaling function not a float")
+    def sinusoidal_function(time):
+        if not isinstance(time, float):
+            raise ValueError("value provided to scaling function not a float")
         elif start_time > end_time:
             raise ValueError("start time is later than end time")
-        elif x < start_time:
+        elif time < start_time:
             return baseline_value
-        elif start_time <= x <= end_time:
+        elif start_time <= time <= end_time:
             return baseline_value + \
                    (final_value - baseline_value) * \
-                   (0.5 - 0.5 * numpy.cos((x - start_time) * numpy.pi / (end_time - start_time)))
+                   (0.5 - 0.5 * numpy.cos((time - start_time) * numpy.pi / (end_time - start_time)))
         else:
             return final_value
+
     return sinusoidal_function
 
 
@@ -196,15 +257,78 @@ def logistic_scaling_function(parameter):
     a specific sigmoidal form of function that scales up from zero to one around the point of parameter
     won't be useful in all situations and is specifically for age-specific infectiousness - should be the same as in
     Romain's BMC Medicine manuscript
+
+    :param parameter: float
+        the single parameter to the function
+    :return: function
+        the logistic function
     """
     def sigmoidal_function(x):
         return 1.0 - 1.0 / (1.0 + numpy.exp(-(parameter - x)))
+
     return sigmoidal_function
 
 
-def get_average_value_function(input_function, start_value, end_value):
+def create_multiplicative_function(multiplier):
+    """
+    return multiplication by a fixed value as a function
+
+    :param multiplier: float
+        value that the returned function multiplies by
+    :return: function
+        function that can multiply by the multiplier parameter when called
+    """
+    def multiplicative_function(value):
+        return multiplier * value
+
+    return multiplicative_function
+
+
+def create_additive_function(increment):
+    """
+    return the addition of a fixed value as a function itself
+
+    :param increment: float
+        value that the returned function increments by
+    :return: function
+        function that can increment by the value parameter when called
+    """
+
+    def increment_function(value):
+        return value + increment
+
+    return increment_function
+
+
+def create_function_of_function(outer_function, inner_function):
+    """
+    function that can itself return a function that sequentially apply two functions
+
+    :param outer_function: function
+        last function to be called
+    :param inner_function: function
+        first function to be called
+    :return: function
+        composite function that applies the inner and then the outer function, allowing the time parameter to be passed
+            through if necessary
+    """
+
+    def function_to_return(time):
+        return outer_function(inner_function(time))
+
+    return function_to_return
+
+
+def get_average_value_of_function(input_function, start_value, end_value):
     """
     use numeric integration to find the average value of a function between two extremes
+
+    :param input_function: function
+        function to be interrogated
+    :param start_value: float
+        lower limit of the independent variable over which to integrate the function
+    :param end_value: float
+        upper limit of the independent variable over which to integrate the function
     """
     return quad(input_function, start_value, end_value)[0] / (end_value - start_value)
 
@@ -218,17 +342,22 @@ def get_parameter_dict_from_function(input_function, breakpoints, upper_value=10
     breakpoints_with_upper.append(upper_value)
     param_values = []
     for param_breakpoints in range(len(breakpoints)):
-        param_values.append(get_average_value_function(
+        param_values.append(get_average_value_of_function(
             input_function, breakpoints_with_upper[param_breakpoints], breakpoints_with_upper[param_breakpoints + 1]))
     return {str(key): value for key, value in zip(breakpoints, param_values)}
 
 
-def store_database(outputs, table_name='outputs'):
+"""
+other specific functions for application to the model object
+"""
+
+
+def store_database(outputs, table_name="outputs"):
     """
     store outputs from the model in sql database for use in producing outputs later
     """
     engine = create_engine("sqlite:///../databases/outputs.db", echo=True)
-    if table_name == 'functions':
+    if table_name == "functions":
         outputs.to_sql(table_name, con=engine, if_exists="replace", index=False, dtype={"cdr_values": FLOAT()})
     else:
         outputs.to_sql(table_name, con=engine, if_exists="replace", index=False)
@@ -262,17 +391,18 @@ def create_flowchart(model_object, strata=None, stratify=True, name="flow_chart"
     # find input nodes and edges
     if stratify:
         input_nodes = model_object.compartment_names
-        type_of_flow = model_object.transition_flows[model_object.transition_flows.implement == strata] if strata != -1 else \
+        type_of_flow = model_object.transition_flows[model_object.transition_flows.implement == strata]\
+            if strata != -1 else \
             model_object.transition_flows[model_object.transition_flows.implement == len(model_object.strata)]
     else:
         input_nodes = model_object.compartment_types
         type_of_flow = model_object.unstratified_flows
 
-
     model_object.flow_diagram = Digraph(format="png")
 
-    # color dictionary for different nodes indicating different stages of infection
-    color_dict = {'susceptible': '#F0FFFF', 'early_latent' : '#A64942', 'late_latent' : '#A64942', 'infectious' : '#FE5F55', 'recovered' : '#FFF1C1'}
+    # colour dictionary for different nodes indicating different stages of infection
+    colour_dict = {"susceptible": "#F0FFFF", "early_latent": "#A64942", "late_latent": "#A64942",
+                   "infectious": "#FE5F55", "recovered": "#FFF1C1"}
     if strata != -1:
 
         # find the compartment names that will be used to make the graph
@@ -280,11 +410,11 @@ def create_flowchart(model_object, strata=None, stratify=True, name="flow_chart"
 
         for label in new_labels:
             # inputs are sectioned according to the stem value so colours can be added to each type
-            node_color = color_dict[find_name_components(label)[0]]
+            node_color = colour_dict[find_name_components(label)[0]]
             model_object.flow_diagram.node(label, fillcolor=node_color)
     else:
         for label in model_object.compartment_names:
-            node_color = color_dict[find_name_components(label)[0]]
+            node_color = colour_dict[find_name_components(label)[0]]
             model_object.flow_diagram.node(label, fillcolor=node_color)
 
     # build the graph edges
@@ -292,64 +422,6 @@ def create_flowchart(model_object, strata=None, stratify=True, name="flow_chart"
         model_object.flow_diagram.edge(row[1]["origin"], row[1]["to"], row[1]["parameter"])
     model_object.flow_diagram = apply_styles(model_object.flow_diagram, styles)
     model_object.flow_diagram.render(name)
-
-
-def create_multiplicative_function(multiplier):
-    """
-    return the multiplication by a fixed value as a function itself
-
-    :param multiplier: float
-        value that the returned function multiplies by
-    :return: function
-        function that can multiply by the multiplier parameter when called
-    """
-    def multiplicative_function(value):
-        return multiplier * value
-    return multiplicative_function
-
-
-def create_function_of_function(outer_function, inner_function):
-    """
-    function that can itself return a function that sequentially apply two functions
-
-    :param outer_function: function
-        last function to be called
-    :param inner_function: function
-        first function to be called
-    :return: function
-        composite function that applies the inner and then the outer function, allowing the time parameter to be passed
-            through if necessary
-    """
-    def function_to_return(time):
-        return outer_function(inner_function(time))
-    return function_to_return
-
-
-def create_increment_function(increment):
-    """
-    return the addition of a fixed value as a function itself
-
-    :param increment: float
-        value that the returned function increments by
-    :return: function
-        function that can increment by the value parameter when called
-    """
-    def increment_function(value):
-        return value + increment
-    return increment_function
-
-
-def find_name_components(compartment_or_parameter):
-    x_positions = [-1] + extract_x_positions(compartment_or_parameter)
-    return [compartment_or_parameter[x_positions[n_x] + 1: x_positions[n_x + 1]] for n_x in range(len(x_positions) - 1)]
-
-
-def element_list_multiplication(list_1, list_2):
-    return [a * b for a, b in zip(list_1, list_2)]
-
-
-def element_list_division(list_1, list_2):
-    return [a / b for a, b in zip(list_1, list_2)]
 
 
 class EpiModel:
@@ -1876,7 +1948,7 @@ if __name__ == "__main__":
          {"type": "compartment_death", "parameter": "infect_death", "origin": "infectious"}],
         output_connections={"incidence": {"origin": "susceptible", "to": "infectious"}},
         verbose=False, integration_type="solve_ivp")
-    sir_model.adaptation_functions["increment_by_one"] = create_increment_function(1.)
+    sir_model.adaptation_functions["increment_by_one"] = create_additive_function(1.)
 
     hiv_mixing = numpy.ones(4).reshape(2, 2)
     # hiv_mixing = None

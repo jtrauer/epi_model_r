@@ -28,7 +28,7 @@ def provide_age_specific_latency_parameters():
 
 
 def get_adapted_age_parameters(
-        age_breakpoints_, parameter_names=("early_progression", "stabilisation", "late_progression")):
+        age_breakpoints, parameter_names=("early_progression", "stabilisation", "late_progression")):
     """
     get age-specific parameters adapted to any specification of age breakpoints
     """
@@ -39,7 +39,7 @@ def get_adapted_age_parameters(
                 change_parameter_unit(
                     get_parameter_dict_from_function(
                         create_step_function_from_dict(
-                            provide_age_specific_latency_parameters()[parameter]), age_breakpoints_)))
+                            provide_age_specific_latency_parameters()[parameter]), age_breakpoints)))
     return adapted_parameter_dict
 
 
