@@ -19,19 +19,9 @@ os.environ["PATH"] += os.pathsep + 'C:/Program Files (x86)/Graphviz2.38/bin'
 os.environ["PATH"] += os.pathsep + 'C:/Users/rrag0004/Models/graphviz-2.38/release/bin'
 
 
-def find_stem(stratified_string):
-    """
-    find the stem of the compartment name as the text leading up to the first occurrence of "X"
-    """
-    first_x_location = stratified_string.find("X")
-    return stratified_string if first_x_location == -1 else stratified_string[: first_x_location]
-
-
-def create_stratified_name(stem, stratification_name, stratum_name):
-    """
-    function to generate a standardised stratified compartment name
-    """
-    return stem + create_stratum_name(stratification_name, stratum_name)
+"""
+string manipulation functions
+"""
 
 
 def create_stratum_name(stratification_name, stratum_name, with_x=True):
@@ -42,9 +32,16 @@ def create_stratum_name(stratification_name, stratum_name, with_x=True):
     return "X" + stratum_name if with_x else stratum_name
 
 
+def create_stratified_name(stem, stratification_name, stratum_name):
+    """
+    generate a standardised stratified compartment name
+    """
+    return stem + create_stratum_name(stratification_name, stratum_name)
+
+
 def extract_x_positions(parameter):
     """
-    find the positions within a string which are X and return as list reversed, including length of list
+    find the positions within a string which are X and return as list, including length of list
     """
     result = [loc for loc in range(len(parameter)) if parameter[loc] == "X"]
     result.append(len(parameter))
@@ -58,6 +55,37 @@ def extract_reversed_x_positions(parameter):
     result = extract_x_positions(parameter)
     result.reverse()
     return result
+
+
+def find_stem(stratified_string):
+    """
+    find the stem of the compartment name as the text leading up to the first occurrence of "X"
+    """
+    return find_name_components(stratified_string)[0]
+
+
+def find_stratum_index_from_string(compartment, stratification, remove_stratification_name=True):
+    """
+    finds the stratum which the compartment (or parameter) name falls in when provided with the compartment name and the
+    name of the stratification of interest
+    for example, if the compartment name was infectiousXhiv_positiveXdiabetes_none and the stratification of interest
+    provided through the stratification argument was hiv, then
+
+    :param compartment: str
+        name of the compartment or parameter to be interrogated
+    :param stratification: str
+        the stratification of interest
+    :param remove_stratification_name: bool
+        whether to remove the stratification name and its trailing _ from the string to return
+    :return: str
+        the name of the stratum within which the compartment falls
+    """
+    stratum_name = [name for n_name, name in enumerate(find_name_components(compartment)) if stratification in name][0]
+    return stratum_name[stratum_name.find("_") + 1:] if remove_stratification_name else stratum_name
+
+
+"""
+"""
 
 
 def increment_compartment(ode_equations, compartment_number, increment):
@@ -314,10 +342,6 @@ def element_list_multiplication(list_1, list_2):
 
 def element_list_division(list_1, list_2):
     return [a / b for a, b in zip(list_1, list_2)]
-
-
-def find_stratum_index_from_string(string, stratification):
-    return [n_name for n_name, name in enumerate(find_name_components(string)) if stratification in name][0]
 
 
 class EpiModel:
@@ -1788,8 +1812,9 @@ class StratifiedModel(EpiModel):
         if not self.strains:
             infectious_populations = self.infectious_populations
         else:
-            infectious_populations = self.infectious_populations[self.strains[
-                find_stratum_index_from_string(self.transition_flows.at[n_flow, "parameter"], "strain")]]
+            infectious_populations = \
+                self.infectious_populations[find_stratum_index_from_string(
+                    self.transition_flows.at[n_flow, "parameter"], "strain")]
 
         if self.transition_flows.at[n_flow, "type"] == "infection_density" and self.mixing_matrix is None:
             return infectious_populations
