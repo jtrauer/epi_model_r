@@ -138,8 +138,7 @@ def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
     # store_database(function_dataframe, table_name="functions")
 
     _tb_model.stratify("strain", ["ds", "mdr"], ["early_latent", "late_latent", "infectious"], {},
-                       adjustment_requests={"beta": {"mdr": 0.0, "overwrite": "mdr"}},
-                       verbose=True)
+                       verbose=False)
 
     # add age stratification
     # age_breakpoints = [0, 6, 13, 15]
