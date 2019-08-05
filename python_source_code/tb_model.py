@@ -101,7 +101,7 @@ def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
          "infect_death": (1.0 - case_fatality_rate) / untreated_disease_duration,
          "universal_death_rate": 1.0 / 50.0,
          "case_detection": 0.0}
-    parameters.update(change_parameter_unit(provide_aggregated_latency_parameters()))
+    parameters.update(change_parameter_unit(provide_aggregated_latency_parameters(), 365.251))
 
     flows = [{"type": "infection_frequency", "parameter": "beta", "origin": "susceptible", "to": "early_latent"},
              {"type": "infection_frequency", "parameter": "beta", "origin": "recovered", "to": "early_latent"},

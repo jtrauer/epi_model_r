@@ -84,62 +84,70 @@ def find_stratum_index_from_string(compartment, stratification, remove_stratific
     return stratum_name[stratum_name.find("_") + 1:] if remove_stratification_name else stratum_name
 
 
+def add_w_to_param_names(parameter_dict):
+    """
+    add a "W" string to the end of the parameter name to indicate that we should over-write up the chain
+
+    :param parameter_dict: dict
+        the dictionary before the adjustments
+    :return: dict
+        same dictionary but with the "W" string added to each of the keys
+    """
+    return {str(age_group) + "W": value for age_group, value in parameter_dict.items()}
+
+
 """
+basic data manipulation functions
 """
 
 
-def increment_compartment(ode_equations, compartment_number, increment):
+def increment_list_by_index(list_to_increment, index_to_increment, increment_value):
     """
     general method to increment the odes by a value specified as an argument
+
+    :param list_to_increment: list
+        the list to be incremented
+    :param index_to_increment: int
+        the index of the list that needs to be incremented
+    :param increment_value:
+        the value to increment the list by
+    :return: list
+        the list after it has been incremented
     """
-    ode_equations[compartment_number] += increment
-    return ode_equations
+    list_to_increment[index_to_increment] += increment_value
+    return list_to_increment
 
 
 def normalise_dict(value_dict):
     """
     simple function to normalise the values from a list
+
+    :param value_dict: dict
+        dictionary whose values will be adjusted
+    :return: dict
+        same dictionary after values have been normalised to the total of the original values
     """
     return {key: value_dict[key] / sum(value_dict.values()) for key in value_dict}
 
 
-def num_str(f):
-    """
-    currently unused function to convert number to a readable string
-    """
-    abs_f = abs(f)
-    if abs_f > 1e9:
-        return "%.1fB" % (f / 1e9)
-    if abs_f > 1e6:
-        return "%.1fM" % (f / 1e6)
-    if abs_f > 1e3:
-        return "%.1fK" % (f / 1e3)
-    if abs_f > 100.:
-        return "%.0f" % f
-    if abs_f > 0.5:
-        return "%.1f" % f
-    if abs_f > 5e-2:
-        return "%.2f" % f
-    if abs_f > 5e-4:
-        return "%.4f" % f
-    if abs_f > 5e-6:
-        return "%.6f" % f
-    return str(f)
-
-
-def add_w_to_param_names(parameter_dict):
-    """
-    add a W string to the end of the parameter name to indicate that we should over-write up the chain
-    """
-    return {str(age_group) + "W": value for age_group, value in parameter_dict.items()}
-
-
-def change_parameter_unit(parameter_dict, unit_change=365.25):
+def change_parameter_unit(parameter_dict, multiplier):
     """
     adapt the latency parameters from the earlier functions according to whether they are needed as by year rather than
     by day
+
+    :param parameter_dict: dict
+        dictionary whose values need to be adjusted
+    :param multiplier: float
+        multiplier 
+    :return: dict
+        dictionary with values multiplied by the multiplier argument
     """
-    return {param_key: param_value * unit_change for param_key, param_value in parameter_dict.items()}
+    return {param_key: param_value * multiplier for param_key, param_value in parameter_dict.items()}
+
+
+"""
+functions for use as inputs to the model
+"""
 
 
 def create_step_function_from_dict(input_dict):
@@ -729,8 +737,8 @@ class EpiModel:
             # calculate the n_flow and apply to the odes
             from_compartment = self.compartment_names.index(self.transition_flows.origin[n_flow])
             net_flow = adjusted_parameter * _compartment_values[from_compartment] * infectious_population
-            _ode_equations = increment_compartment(_ode_equations, from_compartment, -net_flow)
-            _ode_equations = increment_compartment(
+            _ode_equations = increment_list_by_index(_ode_equations, from_compartment, -net_flow)
+            _ode_equations = increment_list_by_index(
                 _ode_equations, self.compartment_names.index(self.transition_flows.to[n_flow]), net_flow)
 
             # track any quantities dependent on n_flow rates
@@ -779,7 +787,7 @@ class EpiModel:
             adjusted_parameter = self.get_parameter_value(self.death_flows.parameter[n_flow], _time)
             from_compartment = self.compartment_names.index(self.death_flows.origin[n_flow])
             net_flow = adjusted_parameter * _compartment_values[from_compartment]
-            _ode_equations = increment_compartment(_ode_equations, from_compartment, -net_flow)
+            _ode_equations = increment_list_by_index(_ode_equations, from_compartment, -net_flow)
             if "total_deaths" in self.tracked_quantities:
                 self.tracked_quantities["total_deaths"] += net_flow
         return _ode_equations
@@ -794,7 +802,7 @@ class EpiModel:
             adjusted_parameter = self.get_parameter_value("universal_death_rate", _time)
             from_compartment = self.compartment_names.index(compartment)
             net_flow = adjusted_parameter * _compartment_values[from_compartment]
-            _ode_equations = increment_compartment(_ode_equations, from_compartment, -net_flow)
+            _ode_equations = increment_list_by_index(_ode_equations, from_compartment, -net_flow)
 
             # track deaths in case births need to replace deaths
             if "total_deaths" in self.tracked_quantities:
@@ -807,8 +815,8 @@ class EpiModel:
 
         :parameters and return: see previous method apply_all_flow_types_to_odes
         """
-        return increment_compartment(_ode_equations, self.compartment_names.index(self.entry_compartment),
-                                     self.find_total_births(_compartment_values))
+        return increment_list_by_index(_ode_equations, self.compartment_names.index(self.entry_compartment),
+                                       self.find_total_births(_compartment_values))
 
     def find_total_births(self, _compartment_values):
         """
@@ -1850,7 +1858,7 @@ class StratifiedModel(EpiModel):
                         self.parameters["entry_fractionX%s"
                                         % compartment[x_positions[x_instance] + 1: x_positions[x_instance + 1]]]
             compartment_births = entry_fraction * total_births
-            _ode_equations = increment_compartment(
+            _ode_equations = increment_list_by_index(
                 _ode_equations, self.compartment_names.index(compartment), compartment_births)
         return _ode_equations
 
