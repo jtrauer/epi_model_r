@@ -232,47 +232,23 @@ def create_flowchart(model_object, strata=None, stratify=True, name="flow_chart"
         input_nodes = model_object.compartment_types
         type_of_flow = model_object.unstratified_flows
 
-    # inputs are sectioned according to the stem value so colours can be added to each type, not yet implemented
-    broken_down_nodes = []
-    for stem_value in range(len(model_object.compartment_types)):
-        x_vector = []
-        for stem_type in range(len(input_nodes)):
-            if model_object.compartment_types[stem_value] == find_stem(input_nodes[stem_type]):
-                x_vector.append(input_nodes[stem_type])
-        broken_down_nodes.append(stem_value)
-        broken_down_nodes[stem_value] = x_vector
 
     model_object.flow_diagram = Digraph(format="png")
+
+    # color dictionary for different nodes indicating different stages of infection
+    color_dict = {'susceptible': '#F0FFFF', 'early_latent' : '#A64942', 'late_latent' : '#A64942', 'infectious' : '#FE5F55', 'recovered' : '#FFF1C1'}
     if strata != -1:
 
         # find the compartment names that will be used to make the graph
         new_labels = list(set().union(type_of_flow["origin"].values, type_of_flow["to"].values))
-        node_color = '#F0FFFF'
+
         for label in new_labels:
-            if label in broken_down_nodes[0]:
-                node_color = '#F0FFFF'
-            if label in broken_down_nodes[1]:
-                node_color = '#A64942'
-            if label in broken_down_nodes[2]:
-                node_color = '#A64942'
-            if label in broken_down_nodes[3]:
-                node_color = '#FE5F55'
-            if label in broken_down_nodes[4]:
-                node_color = '#FFF1C1'
+            # inputs are sectioned according to the stem value so colours can be added to each type
+            node_color = color_dict[find_name_components(label)[0]]
             model_object.flow_diagram.node(label, fillcolor=node_color)
     else:
         for label in model_object.compartment_names:
-            node_color = '#F0FFFF'
-            if label in broken_down_nodes[0]:
-                node_color = '#F0FFFF'
-            if label in broken_down_nodes[1]:
-                node_color = '#A64942'
-            if label in broken_down_nodes[2]:
-                node_color = '#A64942'
-            if label in broken_down_nodes[3]:
-                node_color = '#FE5F55'
-            if label in broken_down_nodes[4]:
-                node_color = '#FFF1C1'
+            node_color = color_dict[find_name_components(label)[0]]
             model_object.flow_diagram.node(label, fillcolor=node_color)
 
     # build the graph edges
@@ -1882,17 +1858,12 @@ if __name__ == "__main__":
 
     sir_model.stratify("strain", ["sensitive", "resistant"], ["infectious"], requested_proportions={}, verbose=False)
 
-    # age_mixing = numpy.eye(4)
-    # # age_mixing = None
+    # age_mixing = None
     # sir_model.stratify("age", [1, 10, 3], [], {}, {"recovery": {"1": 0.5, "10": 0.8}},
-    #                    infectiousness_adjustments={"1": 0.8},
-    #                    mixing_matrix=age_mixing, verbose=False)
-
-    # print(sir_model.transition_flows)
+    #                     infectiousness_adjustments={"1": 0.8},
+    #                     mixing_matrix=age_mixing, verbose=False)
 
     sir_model.run_model()
-    # print(sir_model.mixing_matrix)
-    # print(sir_model.transition_flows)
 
     # create_flowchart(sir_model)
     #
