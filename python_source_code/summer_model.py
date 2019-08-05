@@ -316,6 +316,10 @@ def element_list_division(list_1, list_2):
     return [a / b for a, b in zip(list_1, list_2)]
 
 
+def find_stratum_index_from_string(string, stratification):
+    return [n_name for n_name, name in enumerate(find_name_components(string)) if stratification in name][0]
+
+
 class EpiModel:
     """
     general epidemiological model for constructing compartment-based models, typically of infectious disease
@@ -957,12 +961,12 @@ class StratifiedModel(EpiModel):
 
         self.all_stratifications, self.removed_compartments, self.overwrite_parameters, \
             self.compartment_types_to_stratify, self.strata, self.infectious_populations, \
-            self.infectious_denominators, self.infectiousness_multipliers, self.infectious_indices, \
-            self.infectious_compartments = [[] for _ in range(10)]
+            self.infectious_denominators, self.strains = [[] for _ in range(8)]
         self.heterogeneous_infectiousness = False
         self.infectiousness_adjustments, self.parameter_components, self.parameter_functions, \
             self.adaptation_functions, self.mapped_adaptation_functions, self.mixing_numerator_indices, \
-            self.mixing_denominator_indices, self.infectiousness_levels = [{} for _ in range(8)]
+            self.mixing_denominator_indices, self.infectiousness_levels, self.infectious_indices, \
+            self.infectious_compartments, self.infectiousness_multipliers = [{} for _ in range(11)]
         self.heterogeneous_mixing = False
         self.mixing_matrix = None
 
@@ -1018,6 +1022,9 @@ class StratifiedModel(EpiModel):
 
         # implement heterogeneous mixing across multiple population groups
         self.prepare_implement_mixing()
+
+        if stratification_name == "strain":
+            self.strains = strata_names
 
         # heterogeneous infectiousness adjustments
         # self.apply_heterogeneous_infectiousness(stratification_name, strata_request, infectiousness_adjustments)
@@ -1510,14 +1517,27 @@ class StratifiedModel(EpiModel):
             for stratum in _infectiousness_adjustments:
                 self.infectiousness_levels[create_stratum_name(_stratification_name, stratum, with_x=False)] = \
                     _infectiousness_adjustments[stratum]
+        self.find_infectious_indices()
+        for strain in self.infectious_indices:
+            self.infectious_compartments[strain] = \
+                list(itertools.compress(self.compartment_names, self.infectious_indices[strain]))
+            self.infectiousness_multipliers[strain] = [1.] * len(self.infectious_compartments[strain])
+            for n_comp, compartment in enumerate(self.infectious_compartments[strain]):
+                for infectiousness_modifier in self.infectiousness_levels:
+                    if infectiousness_modifier in find_name_components(compartment):
+                        self.infectiousness_multipliers[strain][n_comp] *= \
+                            self.infectiousness_levels[infectiousness_modifier]
 
-        self.infectious_indices = [self.infectious_compartment in comp for comp in self.compartment_names]
-        self.infectious_compartments = list(itertools.compress(self.compartment_names, self.infectious_indices))
-        self.infectiousness_multipliers = numpy.ones(len(self.infectious_compartments))
-        for n_comp, compartment in enumerate(self.infectious_compartments):
-            for infectiousness_modifier in self.infectiousness_levels:
-                if infectiousness_modifier in find_name_components(compartment):
-                    self.infectiousness_multipliers[n_comp] *= self.infectiousness_levels[infectiousness_modifier]
+    def find_infectious_indices(self):
+        """
+
+        """
+        self.infectious_indices["all_strains"] = \
+            [self.infectious_compartment in comp for comp in self.compartment_names]
+        if self.strains:
+            for strain in self.strains:
+                self.infectious_indices[strain] = \
+                    [self.infectious_compartment in comp and strain in comp for comp in self.compartment_names]
 
     def set_ageing_rates(self, _strata_names):
         """
@@ -1727,11 +1747,24 @@ class StratifiedModel(EpiModel):
         :param _compartment_values: ndarray
             current values for the compartment sizes
         """
-        self.infectious_populations = \
-            element_list_multiplication(list(itertools.compress(_compartment_values, self.infectious_indices)),
-                                        self.infectiousness_multipliers)
+        if not self.strains:
+            self.infectious_populations = \
+                element_list_multiplication(list(itertools.compress(_compartment_values, self.infectious_indices)),
+                                            self.infectiousness_multipliers["all_strains"])
+        else:
+            self.infectious_populations = {}
+            for strain in self.strains:
+                self.infectious_populations[strain] = \
+                    element_list_multiplication(
+                        list(itertools.compress(_compartment_values, self.infectious_indices[strain])),
+                        self.infectiousness_multipliers[strain])
+
         if self.mixing_matrix is None:
-            self.infectious_populations = sum(self.infectious_populations)
+            if not self.strains:
+                self.infectious_populations = sum(self.infectious_populations)
+            else:
+                for strain in self.strains:
+                    self.infectious_populations[strain] = sum(self.infectious_populations[strain])
             self.infectious_denominators = sum(_compartment_values)
         else:
             self.infectious_denominators = []
@@ -1751,19 +1784,26 @@ class StratifiedModel(EpiModel):
         """
         if "infection" not in self.transition_flows.at[n_flow, "type"]:
             return 1.0
-        elif self.transition_flows.at[n_flow, "type"] == "infection_density" and self.mixing_matrix is None:
-            return self.infectious_populations
+
+        if not self.strains:
+            infectious_populations = self.infectious_populations
+        else:
+            infectious_populations = self.infectious_populations[self.strains[
+                find_stratum_index_from_string(self.transition_flows.at[n_flow, "parameter"], "strain")]]
+
+        if self.transition_flows.at[n_flow, "type"] == "infection_density" and self.mixing_matrix is None:
+            return infectious_populations
         elif self.transition_flows.at[n_flow, "type"] == "infection_density":
             return sum(element_list_multiplication(
-                self.infectious_populations,
+                infectious_populations,
                 list(self.mixing_matrix.iloc[int(self.transition_flows.force_index[n_flow]), :])))
         elif self.transition_flows.at[n_flow, "type"] == "infection_frequency" and self.mixing_matrix is None:
-            return self.infectious_populations / self.infectious_denominators
+            return infectious_populations / self.infectious_denominators
         elif self.transition_flows.at[n_flow, "type"] == "infection_frequency":
             return sum(element_list_multiplication(
-                self.infectious_populations,
+                infectious_populations,
                 list(self.mixing_matrix.iloc[int(self.transition_flows.force_index[n_flow]), :]))) / \
-                   sum(self.infectious_denominators)
+                sum(self.infectious_denominators)
 
     def apply_birth_rate(self, _ode_equations, _compartment_values):
         """
@@ -1816,18 +1856,16 @@ if __name__ == "__main__":
                        mixing_matrix=hiv_mixing,
                        verbose=False)
 
-    age_mixing = numpy.eye(4)
-    # # age_mixing = None
+    sir_model.stratify("strain", ["sensitive", "resistant"], ["infectious"], requested_proportions={}, verbose=False)
+
+    # age_mixing = None
     # sir_model.stratify("age", [1, 10, 3], [], {}, {"recovery": {"1": 0.5, "10": 0.8}},
     #                     infectiousness_adjustments={"1": 0.8},
     #                     mixing_matrix=age_mixing, verbose=False)
 
-
     sir_model.run_model()
-    print(sir_model.mixing_matrix)
-    print(sir_model.transition_flows)
 
-    create_flowchart(sir_model, strata=len(sir_model.all_stratifications))
+    # create_flowchart(sir_model)
     #
     sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
 
