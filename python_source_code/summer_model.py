@@ -1076,13 +1076,11 @@ class StratifiedModel(EpiModel):
 
         :parameters: all parameters coming in as arguments are those that are also attributes of the parent class
         """
-
         EpiModel.__init__(self, times, compartment_types, initial_conditions, parameters, requested_flows,
                           initial_conditions_to_total=initial_conditions_to_total,
                           infectious_compartment=infectious_compartment, birth_approach=birth_approach,
                           verbose=verbose, reporting_sigfigs=reporting_sigfigs, entry_compartment=entry_compartment,
-                          starting_population=starting_population,
-                          starting_compartment=starting_compartment,
+                          starting_population=starting_population, starting_compartment=starting_compartment,
                           equilibrium_stopping_tolerance=equilibrium_stopping_tolerance,
                           integration_type=integration_type, output_connections=output_connections)
 
@@ -1129,7 +1127,7 @@ class StratifiedModel(EpiModel):
         strata_names, adjustment_requests = self.prepare_and_check_stratification(
             stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests, verbose)
 
-        # work out ageing flows (comes first so that the compartment names are still in the unstratified form)
+        # work out ageing flows - comes first, so that the compartment names remain in the unstratified form
         if stratification_name == "age":
             self.set_ageing_rates(strata_names)
 
@@ -1150,25 +1148,25 @@ class StratifiedModel(EpiModel):
         # implement heterogeneous mixing across multiple population groups
         self.prepare_implement_mixing()
 
+        # if a multi-strain model
         if stratification_name == "strain":
             self.strains = strata_names
 
         # heterogeneous infectiousness adjustments
-        # self.apply_heterogeneous_infectiousness(stratification_name, strata_request, infectiousness_adjustments)
         self.prepare_infectiousness_levels(stratification_name, strata_names, infectiousness_adjustments)
 
     """
     other pre-integration methods
     """
 
-    def prepare_and_check_stratification(self, _stratification_name, _strata_request, _compartment_types_to_stratify,
+    def prepare_and_check_stratification(self, _stratification_name, _strata_names, _compartment_types_to_stratify,
                                          _adjustment_requests, _verbose):
         """
-        initial preparation and checks
+        initial preparation and checks of user-submitted arguments
 
         :param _stratification_name: str
             the name of the stratification - i.e. the reason for implementing this type of stratification
-        :param _strata_request:
+        :param _strata_names:
             see find_strata_names_from_input
         :param _compartment_types_to_stratify:
             see check_compartment_request
@@ -1178,14 +1176,16 @@ class StratifiedModel(EpiModel):
             see stratify
         :return:
             _strata_names: list
-                revised version of _strata_request after adaptation to class requirements
+                revised version of user request after adaptation to class requirements
             adjustment_requests:
                 revised version of _adjustment_requests after adaptation to class requirements
         """
         self.verbose = _verbose
         self.output_to_user("\n___________________\nimplementing stratification for: %s" % _stratification_name)
         if _stratification_name == "age":
-            _strata_request = self.check_age_stratification(_strata_request, _compartment_types_to_stratify)
+            _strata_names = self.check_age_stratification(_strata_names, _compartment_types_to_stratify)
+        elif _stratification_name == "strain":
+            self.output_to_user("implementing strain stratification with specific behaviour")
 
         # make sure the stratification name is a string
         if type(_stratification_name) != str:
@@ -1198,40 +1198,40 @@ class StratifiedModel(EpiModel):
 
         # record stratification as model attribute, find the names to apply strata and check requests
         self.all_stratifications.append(_stratification_name)
-        _strata_names = self.find_strata_names_from_input(_strata_request)
+        _strata_names = self.find_strata_names_from_input(_strata_names)
         _adjustment_requests = self.incorporate_alternative_overwrite_approach(_adjustment_requests)
         self.check_compartment_request(_compartment_types_to_stratify)
         self.check_parameter_adjustment_requests(_adjustment_requests, _strata_names)
         return _strata_names, _adjustment_requests
 
-    def check_age_stratification(self, _strata_request, _compartment_types_to_stratify):
+    def check_age_stratification(self, _strata_names, _compartment_types_to_stratify):
         """
         check that request meets the requirements for stratification by age
 
         :parameters: all parameters have come directly from the stratification (stratify) method unchanged and have been
             renamed with a preceding _ character
-        :return: _strata_request: list
+        :return: _strata_names: list
             revised names of the strata tiers to be implemented
         """
         self.output_to_user("implementing age stratification with specific behaviour")
         if len(_compartment_types_to_stratify) > 0:
             raise ValueError("requested age stratification, but compartment request should be passed as empty vector " +
                              "in order to apply to all compartments")
-        elif any([type(stratum) != int and type(stratum) != float for stratum in _strata_request]):
+        elif any([type(stratum) != int and type(stratum) != float for stratum in _strata_names]):
             raise ValueError("inputs for age strata breakpoints are not numeric")
         elif "age" in self.strata:
             raise ValueError(
                 "requested stratification by age, but this has specific behaviour and can only be applied once")
-        if 0 not in _strata_request:
+        if 0 not in _strata_names:
+            _strata_names.append(0)
             self.output_to_user("adding age stratum called '0' as not requested, to represent those aged less than %s"
-                                % min(_strata_request))
-            _strata_request.append(0)
-        if _strata_request != sorted(_strata_request):
-            _strata_request = sorted(_strata_request)
-            self.output_to_user("requested age strata not ordered, so have been sorted to: %s" % _strata_request)
-        return _strata_request
+                                % min(_strata_names))
+        if _strata_names != sorted(_strata_names):
+            _strata_names = sorted(_strata_names)
+            self.output_to_user("requested age strata not ordered, so have been sorted to: %s" % _strata_names)
+        return _strata_names
 
-    def find_strata_names_from_input(self, _strata_request):
+    def find_strata_names_from_input(self, _strata_names):
         """
         find the names of the strata to be implemented from a particular user request
 
@@ -1241,21 +1241,21 @@ class StratifiedModel(EpiModel):
         :return: strata_names: list
             modified list of strata to be implemented in model
         """
-        if type(_strata_request) == int:
-            strata_names = numpy.arange(1, _strata_request + 1)
+        if type(_strata_names) == int:
+            _strata_names = numpy.arange(1, _strata_names + 1)
             self.output_to_user("single integer provided as strata labels for stratification, hence strata " +
-                                "implemented are integers from 1 to %s" % _strata_request)
-        elif type(_strata_request) == float:
-            raise ValueError("single number passed as request for strata labels, but not an integer greater than " +
+                                "implemented are integers from 1 to %s" % _strata_names)
+        elif type(_strata_names) == float:
+            raise ValueError("single value passed as request for strata labels, but not an integer greater than " +
                              "one, so unclear what to do - therefore stratification failed")
-        elif type(_strata_request) == list and len(_strata_request) > 0:
-            strata_names = _strata_request
+        elif type(_strata_names) == list and len(_strata_names) > 0:
+            pass
         else:
             raise ValueError("requested to stratify, but strata level names not submitted in correct format")
-        for name in range(len(strata_names)):
-            strata_names[name] = str(strata_names[name])
-            self.output_to_user("adding stratum: %s" % strata_names[name])
-        return strata_names
+        for name in range(len(_strata_names)):
+            _strata_names[name] = str(_strata_names[name])
+            self.output_to_user("adding stratum: %s" % _strata_names[name])
+        return _strata_names
 
     def check_compartment_request(self, _compartment_types_to_stratify):
         """
