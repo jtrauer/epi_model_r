@@ -1952,29 +1952,30 @@ class StratifiedModel(EpiModel):
             the total infectious quantity, whether that be the number or proportion of infectious persons
             needs to return as one for flows that are not transmission dynamic infectiousness flows
         """
+
+        # first return a value of one if the flow isn't related to transmission
         if "infection" not in self.transition_flows.at[n_flow, "type"]:
             return 1.0
 
+        # next find the infectious population overall or by strain as needed
         if not self.strains:
             infectious_populations = self.infectious_populations
         else:
-            infectious_populations = \
-                self.infectious_populations[find_stratum_index_from_string(
-                    self.transition_flows.at[n_flow, "parameter"], "strain")]
+            infectious_populations = self.infectious_populations[find_stratum_index_from_string(
+                self.transition_flows.at[n_flow, "parameter"], "strain")]
 
-        if self.transition_flows.at[n_flow, "type"] == "infection_density" and self.mixing_matrix is None:
+        # multiply through by the applicable row of the mixing matrix if needed
+        if self.mixing_matrix is not None:
+            infectious_populations = element_list_multiplication(
+                infectious_populations, self.mixing_matrix[int(self.transition_flows.force_index[n_flow]), :])
+            infectious_populations = sum(infectious_populations)
+
+        # return infectious populations divided through by the population denominator if necessary
+        if self.transition_flows.at[n_flow, "type"] == "infection_density":
             return infectious_populations
-        elif self.transition_flows.at[n_flow, "type"] == "infection_density":
-            return sum(element_list_multiplication(
-                infectious_populations,
-                self.mixing_matrix[int(self.transition_flows.force_index[n_flow]), :]))
-        elif self.transition_flows.at[n_flow, "type"] == "infection_frequency" and self.mixing_matrix is None:
-            return infectious_populations / self.infectious_denominators
         elif self.transition_flows.at[n_flow, "type"] == "infection_frequency":
-            return sum(element_list_multiplication(
-                infectious_populations,
-                self.mixing_matrix[int(self.transition_flows.force_index[n_flow]), :])) / \
-                   sum(self.infectious_denominators)
+            return infectious_populations / \
+                   (self.infectious_denominators if self.mixing_matrix is None else sum(self.infectious_denominators))
 
     def apply_birth_rate(self, _ode_equations, _compartment_values):
         """
