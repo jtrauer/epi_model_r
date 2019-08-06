@@ -1400,6 +1400,98 @@ class StratifiedModel(EpiModel):
                 _adjustment_requests)
         self.output_to_user("\nstratified transition flows matrix:\n%s" % self.transition_flows)
 
+    def add_stratified_flows(self, _n_flow, _stratification_name, _strata_names, stratify_from, stratify_to,
+                             _adjustment_requests):
+        """
+        add additional stratified flow to the transition flow data frame attribute of the class
+
+        :param _n_flow: int
+            location of the unstratified flow within the transition flow attribute
+        :param _stratification_name:
+            see prepare_and_check_stratification
+        :param _strata_names:
+            see find_strata_names_from_input
+        :param stratify_from: bool
+            whether to stratify the from/origin compartment
+        :param stratify_to:
+            whether to stratify the to/destination compartment
+        :param _adjustment_requests:
+            see incorporate _alternative_overwrite_approach and check_parameter_adjustment_requests
+        """
+        if stratify_from or stratify_to:
+            self.output_to_user(
+                "\nfor flow from %s to %s in stratification %s"
+                % (self.transition_flows.origin[_n_flow], self.transition_flows.to[_n_flow], _stratification_name))
+
+            # loop over each stratum in the requested stratification structure
+            for stratum in _strata_names:
+
+                # find parameter name
+                parameter_name = self.add_adjusted_parameter(
+                    self.transition_flows.parameter[_n_flow], _stratification_name, stratum, _adjustment_requests)
+                if not parameter_name:
+                    parameter_name = self.sort_absent_parameter_request(
+                        _stratification_name, _strata_names, stratum, stratify_from, stratify_to, _n_flow)
+                self.output_to_user("\t\tadding parameter %s" % parameter_name)
+
+                # determine whether to and/or from compartments are stratified
+                from_compartment = create_stratified_name(
+                    self.transition_flows.origin[_n_flow], _stratification_name, stratum) \
+                    if stratify_from else self.transition_flows.origin[_n_flow]
+                to_compartment = create_stratified_name(
+                    self.transition_flows.to[_n_flow], _stratification_name, stratum) \
+                    if stratify_to else self.transition_flows.to[_n_flow]
+
+                # add the new flow
+                self.transition_flows = self.transition_flows.append(
+                    {"type": self.transition_flows.type[_n_flow],
+                     "parameter": parameter_name,
+                     "origin": from_compartment,
+                     "to": to_compartment,
+                     "implement": len(self.all_stratifications)},
+                    ignore_index=True)
+
+        # if flow applies to a transition not involved in the stratification, still increment to ensure implemented
+        else:
+            new_flow = self.transition_flows.loc[_n_flow, :].to_dict()
+            new_flow["implement"] += 1
+            self.transition_flows = self.transition_flows.append(new_flow, ignore_index=True)
+
+    def sort_absent_parameter_request(self, _stratification_name, _strata_names, _stratum, _stratify_from, _stratify_to,
+                                      _n_flow):
+        """
+        work out what to do if a specific parameter adjustment has not been requested, either retaining or splitting
+
+        :param _stratification_name:
+            see prepare_and_check_stratification
+        :param _strata_names:
+            see find_strata_names_from_input
+        :param _stratum: str
+            stratum being implemented within loop of add_stratified_flows
+        :param _stratify_from:
+            see add_stratified_flows
+        :param _stratify_to:
+            see add_stratified_flows
+        :param _n_flow: int
+            index of the flow being dealt with
+        :return: str
+            parameter name for revised parameter than wasn't provided
+        """
+
+        # default behaviour if not specified is to split the parameter into equal parts if to compartment is split
+        if not _stratify_from and _stratify_to:
+            self.output_to_user("\tsplitting existing parameter value %s into %s equal parts"
+                                % (self.transition_flows.parameter[_n_flow], len(_strata_names)))
+            parameter_name = \
+                create_stratified_name(self.transition_flows.parameter[_n_flow], _stratification_name, _stratum)
+            self.parameters[parameter_name] = 1.0 / len(_strata_names)
+
+        # otherwise if no request, retain the existing parameter
+        else:
+            parameter_name = self.transition_flows.parameter[_n_flow]
+            self.output_to_user("\tretaining existing parameter value %s" % parameter_name)
+        return parameter_name
+
     def find_transition_indices_to_implement(self):
         """
         find all the indices of the transition flows that need to be stratified
@@ -1617,7 +1709,8 @@ class StratifiedModel(EpiModel):
 
     def find_mixing_indices(self):
         """
-        find the indices for the infectious compartments relevant to the column of the mixing matrix
+        find the indices for the infectious compartments relevant to the column of the mixing matrix, as well as the
+        indices for all the compartments relevant to that column for the denominator calculation
         """
         self.mixing_numerator_indices, self.mixing_denominator_indices = {}, {}
         for from_stratum in self.mixing_categories:
@@ -1646,6 +1739,10 @@ class StratifiedModel(EpiModel):
                 if all(stratum in find_name_components(self.transition_flows.origin[n_flow])[1:]
                        for stratum in find_name_components(force_group)):
                     self.transition_flows.at[n_flow, "force_index"] = n_group
+
+    """
+    heterogeneous infectiousness-related methods
+    """
 
     def prepare_infectiousness_levels(self, _stratification_name, _strata_names, _infectiousness_adjustments):
         """
@@ -1680,7 +1777,7 @@ class StratifiedModel(EpiModel):
 
     def find_infectious_indices(self):
         """
-
+        find the compartments that are infectious by strain and overall
         """
         self.infectious_indices["all_strains"] = \
             [self.infectious_compartment in comp for comp in self.compartment_names]
@@ -1689,9 +1786,13 @@ class StratifiedModel(EpiModel):
                 self.infectious_indices[strain] = \
                     [self.infectious_compartment in comp and strain in comp for comp in self.compartment_names]
 
+    """
+    ageing-related method
+    """
+
     def set_ageing_rates(self, _strata_names):
         """
-        set intercompartmental flows for ageing from one stratum to the next as the reciprocal of the width of the age
+        set inter-compartmental flows for ageing from one stratum to the next as the reciprocal of the width of the age
         bracket
 
         :param _strata_names:
@@ -1714,96 +1815,9 @@ class StratifiedModel(EpiModel):
                      "implement": len(self.all_stratifications)},
                     ignore_index=True)
 
-    def add_stratified_flows(self, _n_flow, _stratification_name, _strata_names, stratify_from, stratify_to,
-                             _adjustment_requests):
-        """
-        add additional stratified flow to the transition flow data frame attribute of the class
-
-        :param _n_flow: int
-            location of the unstratified flow within the transition flow attribute
-        :param _stratification_name:
-            see prepare_and_check_stratification
-        :param _strata_names:
-            see find_strata_names_from_input
-        :param stratify_from: bool
-            whether to stratify the from/origin compartment
-        :param stratify_to:
-            whether to stratify the to/destination compartment
-        :param _adjustment_requests:
-            see incorporate _alternative_overwrite_approach and check_parameter_adjustment_requests
-        """
-        if stratify_from or stratify_to:
-            self.output_to_user(
-                "\nfor flow from %s to %s in stratification %s"
-                % (self.transition_flows.origin[_n_flow], self.transition_flows.to[_n_flow], _stratification_name))
-
-            # loop over each stratum in the requested stratification structure
-            for stratum in _strata_names:
-
-                # find parameter name
-                parameter_name = self.add_adjusted_parameter(
-                    self.transition_flows.parameter[_n_flow], _stratification_name, stratum, _adjustment_requests)
-                if not parameter_name:
-                    parameter_name = self.sort_absent_parameter_request(
-                        _stratification_name, _strata_names, stratum, stratify_from, stratify_to, _n_flow)
-                self.output_to_user("\t\tadding parameter %s" % parameter_name)
-
-                # determine whether to and/or from compartments are stratified
-                from_compartment = \
-                    create_stratified_name(self.transition_flows.origin[_n_flow], _stratification_name, stratum) if \
-                        stratify_from else self.transition_flows.origin[_n_flow]
-                to_compartment = \
-                    create_stratified_name(self.transition_flows.to[_n_flow], _stratification_name, stratum) if \
-                        stratify_to else self.transition_flows.to[_n_flow]
-
-                # add the new flow
-                self.transition_flows = self.transition_flows.append(
-                    {"type": self.transition_flows.type[_n_flow],
-                     "parameter": parameter_name,
-                     "origin": from_compartment,
-                     "to": to_compartment,
-                     "implement": len(self.all_stratifications)},
-                    ignore_index=True)
-
-        # if flow applies to a transition not involved in the stratification, still increment to ensure implemented
-        else:
-            new_flow = self.transition_flows.loc[_n_flow, :].to_dict()
-            new_flow["implement"] += 1
-            self.transition_flows = self.transition_flows.append(new_flow, ignore_index=True)
-
-    def sort_absent_parameter_request(self, _stratification_name, _strata_names, _stratum, _stratify_from, _stratify_to,
-                                      _n_flow):
-        """
-        work out what to do if a specific parameter adjustment has not been requested
-
-        :param _stratification_name:
-            see prepare_and_check_stratification
-        :param _strata_names:
-            see find_strata_names_from_input
-        :param _stratum:
-        :param _stratify_from:
-            see add_stratified_flows
-        :param _stratify_to:
-            see add_stratified_flows
-        :param _n_flow: int
-            index of the flow being dealt with
-        :return: str
-            parameter name for revised parameter than wasn't provided
-        """
-
-        # default behaviour if not specified is to split the parameter into equal parts if to compartment is split
-        if not _stratify_from and _stratify_to:
-            self.output_to_user("\tsplitting existing parameter value %s into %s equal parts"
-                                % (self.transition_flows.parameter[_n_flow], len(_strata_names)))
-            parameter_name = \
-                create_stratified_name(self.transition_flows.parameter[_n_flow], _stratification_name, _stratum)
-            self.parameters[parameter_name] = 1.0 / len(_strata_names)
-
-        # otherwise if no request, retain the existing parameter
-        else:
-            parameter_name = self.transition_flows.parameter[_n_flow]
-            self.output_to_user("\tretaining existing parameter value %s" % parameter_name)
-        return parameter_name
+    """
+    methods to prepare parameters for integration
+    """
 
     def prepare_stratified_parameter_calculations(self):
         """
@@ -1822,7 +1836,7 @@ class StratifiedModel(EpiModel):
                 parameters_to_adjust.append(self.death_flows.parameter[n_flow])
         parameters_to_adjust.append("universal_death_rate")
 
-        # and adjust
+        # adjust the parameters
         for parameter in parameters_to_adjust:
             self.find_parameter_components(parameter)
 
@@ -1839,6 +1853,7 @@ class StratifiedModel(EpiModel):
         # start from base value as a function, time variable currently a place-holder
         def return_starting_parameter_value(time):
             return self.parameters[find_stem(_parameter)]
+
         self.parameter_functions[_parameter] = return_starting_parameter_value
 
         # find the parameter component to cycle through for recursive function calls, excluding the first one
@@ -1897,6 +1912,8 @@ class StratifiedModel(EpiModel):
         :param _compartment_values: ndarray
             current values for the compartment sizes
         """
+
+        # calculate infectious populations by mixing sub-population, either strain-specific or overall
         if not self.strains:
             self.infectious_populations = \
                 element_list_multiplication(list(itertools.compress(_compartment_values, self.infectious_indices)),
@@ -1909,6 +1926,7 @@ class StratifiedModel(EpiModel):
                         list(itertools.compress(_compartment_values, self.infectious_indices[strain])),
                         self.infectiousness_multipliers[strain])
 
+        # if no mixing matrix, can sum infectious populations here, by strain if necessary
         if self.mixing_matrix is None:
             if not self.strains:
                 self.infectious_populations = sum(self.infectious_populations)
@@ -1916,6 +1934,8 @@ class StratifiedModel(EpiModel):
                 for strain in self.strains:
                     self.infectious_populations[strain] = sum(self.infectious_populations[strain])
             self.infectious_denominators = sum(_compartment_values)
+
+        # if mixing matrix present, leave infectious populations unchanged and find denominators for force calculations 
         else:
             self.infectious_denominators = []
             for from_stratum in self.mixing_categories:
