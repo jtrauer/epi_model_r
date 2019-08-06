@@ -1156,6 +1156,7 @@ class StratifiedModel(EpiModel):
 
         # heterogeneous infectiousness adjustments
         self.prepare_infectiousness_levels(stratification_name, strata_names, infectiousness_adjustments)
+        self.prepare_infectiousness_multipliers()
 
     """
     standard pre-integration methods
@@ -1766,6 +1767,12 @@ class StratifiedModel(EpiModel):
             for stratum in _infectiousness_adjustments:
                 self.infectiousness_levels[create_stratum_name(_stratification_name, stratum, with_x=False)] = \
                     _infectiousness_adjustments[stratum]
+
+    def prepare_infectiousness_multipliers(self):
+        """
+        implement the previously created dictionary of infectiousness multipliers by repeatedly applying the multipliers
+        determined to a list of starting values of one
+        """
         self.find_infectious_indices()
         for strain in self.infectious_indices:
             self.infectious_compartments[strain] = \
