@@ -2059,7 +2059,7 @@ class StratifiedModel(EpiModel):
 
 if __name__ == "__main__":
 
-    # example code to test out many aspects of SUMMER function - intended to be equivalent to the example in R
+    # example code to test out many aspects of SUMMER function
     sir_model = StratifiedModel(
         numpy.linspace(0, 60 / 365, 61).tolist(),
         ["susceptible", "infectious", "recovered"],
