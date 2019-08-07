@@ -1008,9 +1008,8 @@ class EpiModel:
         :param _compartment_values:
             as for preceding methods
         """
-        self.infectious_populations = 0.0
-        for compartment in self.infectious_indices_int:
-            self.infectious_populations += _compartment_values[compartment]
+        self.infectious_populations = sum(element_list_multiplication(
+            list(itertools.compress(_compartment_values, self.infectious_indices)), self.infectiousness_multipliers))
         self.infectious_denominators = sum(_compartment_values)
 
     def get_parameter_value(self, _parameter, _time):
