@@ -975,6 +975,8 @@ class EpiModel:
             raise ValueError("compartment infectiousness adjustments not submitted as dictionary")
         elif not all(key in self.infectious_compartment for key in self.compartment_infectiousness_adjustments):
             raise ValueError("infectiousness adjustment key not in infectious compartments being implemented")
+        else:
+            self.infectiousness_levels.update(self.compartment_infectiousness_adjustments)
 
     def prepare_infectiousness_multipliers(self):
         """
@@ -1132,7 +1134,8 @@ class StratifiedModel(EpiModel):
         self.infectiousness_adjustments, self.parameter_components, self.parameter_functions, \
             self.adaptation_functions, self.mapped_adaptation_functions, self.mixing_numerator_indices, \
             self.mixing_denominator_indices, self.infectious_indices, self.infectious_compartments, \
-        self.infectiousness_multipliers = [{} for _ in range(10)]
+            self.infectiousness_multipliers = [{} for _ in range(10)]
+
         self.overwrite_character, self.overwrite_key = "W", "overwrite"
         self.heterogeneous_mixing = False
         self.mixing_matrix = None
@@ -1195,7 +1198,8 @@ class StratifiedModel(EpiModel):
             self.strains = strata_names
 
         # heterogeneous infectiousness adjustments
-        self.prepare_infectiousness_levels(stratification_name, strata_names, infectiousness_adjustments)
+        self.find_infectious_indices()
+        self.prepare_strata_infectiousness_levels(stratification_name, strata_names, infectiousness_adjustments)
         self.prepare_infectiousness_multipliers()
 
     """
@@ -1787,7 +1791,7 @@ class StratifiedModel(EpiModel):
     heterogeneous infectiousness-related methods
     """
 
-    def prepare_infectiousness_levels(self, _stratification_name, _strata_names, _infectiousness_adjustments):
+    def prepare_strata_infectiousness_levels(self, _stratification_name, _strata_names, _infectiousness_adjustments):
         """
         store infectiousness adjustments as dictionary attribute to the model object, with first tier of keys the
         stratification and second tier the strata to be modified
@@ -1801,7 +1805,7 @@ class StratifiedModel(EpiModel):
         """
         if type(_infectiousness_adjustments) != dict:
             raise ValueError("infectiousness adjustments not submitted as dictionary")
-        elif not all(key in _strata_names for key in _infectiousness_adjustments.keys()):
+        elif not all(key in _strata_names for key in _infectiousness_adjustments):
             raise ValueError("infectiousness adjustment key not in strata being implemented")
         else:
             for stratum in _infectiousness_adjustments:
@@ -1813,7 +1817,6 @@ class StratifiedModel(EpiModel):
         implement the previously created dictionary of infectiousness multipliers by repeatedly applying the multipliers
         determined to a list of starting values of one
         """
-        self.find_infectious_indices()
         self.infectiousness_multipliers = {}
         for strain in self.infectious_indices:
             self.infectious_compartments[strain] = \
