@@ -481,6 +481,19 @@ class EpiModel:
         return self.time_variants[parameter_name](time) if parameter_name in self.time_variants \
             else self.parameters[parameter_name]
 
+    def get_parameter_value(self, _parameter, _time):
+        """
+        essentially place-holding, but need to split this out as a function in order to stratification later
+
+        :param _parameter: str
+            parameter name
+        :param _time: float
+            current integration time
+        :return: float
+            parameter value
+        """
+        return self.find_parameter_value(_parameter, _time)
+
     def output_to_user(self, comment):
         """
         short function to save the if statement in every call to output some information, may be adapted later and was
@@ -499,7 +512,7 @@ class EpiModel:
                  initial_conditions_to_total=True, infectious_compartment=["infectious"], birth_approach="no_birth",
                  verbose=False, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1,
                  starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint",
-                 output_connections={}):
+                 output_connections={}, compartment_infectiousness_adjustments={}):
         """
         construction method to create a basic (and at this stage unstratified) compartmental model, including checking
         that the arguments have been provided correctly (in a separate method called here)
@@ -513,17 +526,18 @@ class EpiModel:
         self.death_flows = pd.DataFrame(columns=("type", "parameter", "origin", "implement"))
 
         # attributes with specific format that are independent of user inputs
-        self.tracked_quantities, self.time_variants, self.adaptation_functions = ({} for _ in range(3))
+        self.tracked_quantities, self.time_variants, self.adaptation_functions, \
+            self.infectiousness_levels, self.infectious_compartments = ({} for _ in range(5))
         self.derived_outputs = {"times": []}
         self.compartment_values, self.compartment_names, self.all_stratifications, self.infectious_indices, \
-            self.infectious_indices_int = ([] for _ in range(5))
+            self.infectious_indices_int, self.infectiousness_multipliers, self.strains = ([] for _ in range(7))
 
         # ensure requests are fed in correctly
         self.check_and_report_attributes(
             times, compartment_types, initial_conditions, parameters, requested_flows, initial_conditions_to_total,
             infectious_compartment, birth_approach, verbose, reporting_sigfigs, entry_compartment,
             starting_population, starting_compartment, equilibrium_stopping_tolerance, integration_type,
-            output_connections)
+            output_connections, compartment_infectiousness_adjustments)
 
         # stop ide complaining about attributes being defined outside __init__, even though they aren't
         self.times, self.compartment_types, self.initial_conditions, self.parameters, self.requested_flows, \
@@ -531,14 +545,15 @@ class EpiModel:
             self.reporting_sigfigs, self.entry_compartment, self.starting_population, \
             self.starting_compartment, self.default_starting_population, self.equilibrium_stopping_tolerance, \
             self.unstratified_flows, self.outputs, self.integration_type, self.flow_diagram, self.output_connections,\
-            self.infectious_populations, self.infectious_denominators = (None for _ in range(22))
+            self.infectious_populations, self.infectious_denominators, self.compartment_infectiousness_adjustments = \
+            (None for _ in range(23))
 
         # convert input arguments to model attributes
         for attribute in \
                 ["times", "compartment_types", "initial_conditions", "parameters", "initial_conditions_to_total",
                  "birth_approach", "verbose", "reporting_sigfigs", "entry_compartment", "starting_population",
                  "starting_compartment", "infectious_compartment", "equilibrium_stopping_tolerance", "integration_type",
-                 "output_connections"]:
+                 "output_connections", "compartment_infectiousness_adjustments"]:
             setattr(self, attribute, eval(attribute))
 
         # keep copy of the compartment types in case the compartment names are stratified later
@@ -556,14 +571,18 @@ class EpiModel:
         # find the compartments that are infectious
         self.infectious_indices = \
             [any(infect in comp for infect in self.infectious_compartment) for comp in self.compartment_names]
-
         self.infectious_indices_int = [n_bool for n_bool, boolean in enumerate(self.infectious_indices) if boolean]
+
+        # if user submitted request to make the infectious compartments differentially infectious
+        self.find_infectious_indices()
+        self.check_compartment_infectiousness_levels()
+        self.prepare_infectiousness_multipliers()
 
     def check_and_report_attributes(
             self, _times, _compartment_types, _initial_conditions, _parameters, _requested_flows,
             _initial_conditions_to_total, _infectious_compartment, _birth_approach, _verbose, _reporting_sigfigs,
             _entry_compartment, _starting_population, _starting_compartment, _equilibrium_stopping_tolerance,
-            _integration_type, _output_connections):
+            _integration_type, _output_connections, _compartment_infectiousness_adjustments):
         """
         check all input data have been requested correctly
 
@@ -589,12 +608,15 @@ class EpiModel:
         for expected_boolean in ["_initial_conditions_to_total", "_verbose"]:
             if not isinstance(eval(expected_boolean), bool):
                 raise TypeError("expected boolean for %s" % expected_boolean)
+        for expected_dict in ["_compartment_infectiousness_adjustments"]:
+            if not isinstance(eval(expected_dict), dict):
+                raise TypeError("expected dict for %s" % expected_dict)
 
         # check some specific requirements
         if any(infect not in _compartment_types for infect in _infectious_compartment):
-            ValueError("infectious compartment name is not one of the listed compartment types")
-        if _birth_approach not in ("add_crude_birth_rate", "replace_deaths", "no_births"):
-            ValueError("requested birth approach unavailable")
+            raise ValueError("infectious compartment name is not one of the listed compartment types")
+        if _birth_approach not in ("add_crude_birth_rate", "replace_deaths", "no_birth"):
+            raise ValueError("requested birth approach unavailable")
         if sorted(_times) != _times:
             self.output_to_user("requested integration times are not sorted, now sorting")
             self.times = sorted(self.times)
@@ -934,6 +956,39 @@ class EpiModel:
         else:
             return 0.0
 
+    """
+    infectiousness-related methods
+    """
+
+    def find_infectious_indices(self):
+        """
+        find the indices that represent the infectious compartments as a boolean list
+        """
+        self.infectious_indices = \
+            [any(infect in comp for infect in self.infectious_compartment) for comp in self.compartment_names]
+
+    def check_compartment_infectiousness_levels(self):
+        """
+        find multipliers for the infectiousness of any of the infectious compartments
+        """
+        if type(self.compartment_infectiousness_adjustments) != dict:
+            raise ValueError("compartment infectiousness adjustments not submitted as dictionary")
+        elif not all(key in self.infectious_compartment for key in self.compartment_infectiousness_adjustments):
+            raise ValueError("infectiousness adjustment key not in infectious compartments being implemented")
+        else:
+            self.infectiousness_levels.update(self.compartment_infectiousness_adjustments)
+
+    def prepare_infectiousness_multipliers(self):
+        """
+        calculate the relative infectiousness of the infectious compartments with an approach that will allow for
+        stratification later
+        """
+        self.infectiousness_multipliers = [1.] * len(self.infectious_compartment)
+        for n_comp, compartment in enumerate(self.infectious_compartments):
+            for infectiousness_modifier in self.infectiousness_levels:
+                if infectiousness_modifier == compartment:
+                    self.infectiousness_multipliers[n_comp] = self.infectiousness_levels[infectiousness_modifier]
+
     def find_infectious_multiplier(self, n_flow):
         """
         find the multiplier to account for the infectious population in dynamic flows
@@ -969,23 +1024,9 @@ class EpiModel:
         :param _compartment_values:
             as for preceding methods
         """
-        self.infectious_populations = 0.0
-        for compartment in self.infectious_indices_int:
-            self.infectious_populations += _compartment_values[compartment]
+        self.infectious_populations = sum(element_list_multiplication(
+            list(itertools.compress(_compartment_values, self.infectious_indices)), self.infectiousness_multipliers))
         self.infectious_denominators = sum(_compartment_values)
-
-    def get_parameter_value(self, _parameter, _time):
-        """
-        essentially place-holding, but need to split this out as a function in order to stratification later
-
-        :param _parameter: str
-            parameter name
-        :param _time: float
-            current integration time
-        :return: float
-            parameter value
-        """
-        return self.find_parameter_value(_parameter, _time)
 
     """
     simple output methods (most outputs will be managed outside of the python code)
@@ -1071,7 +1112,7 @@ class StratifiedModel(EpiModel):
                  initial_conditions_to_total=True, infectious_compartment=["infectious"], birth_approach="no_birth",
                  verbose=False, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1,
                  starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint",
-                 output_connections={}):
+                 output_connections={}, compartment_infectiousness_adjustments={}):
         """
         constructor mostly inherits from parent class, with a few additional attributes that are required for the
         stratified version
@@ -1084,15 +1125,17 @@ class StratifiedModel(EpiModel):
                           verbose=verbose, reporting_sigfigs=reporting_sigfigs, entry_compartment=entry_compartment,
                           starting_population=starting_population, starting_compartment=starting_compartment,
                           equilibrium_stopping_tolerance=equilibrium_stopping_tolerance,
-                          integration_type=integration_type, output_connections=output_connections)
+                          integration_type=integration_type, output_connections=output_connections,
+                          compartment_infectiousness_adjustments=compartment_infectiousness_adjustments)
 
         self.all_stratifications, self.removed_compartments, self.overwrite_parameters, \
             self.compartment_types_to_stratify, self.strata, self.infectious_populations, \
             self.infectious_denominators, self.strains, self.mixing_categories = [[] for _ in range(9)]
         self.infectiousness_adjustments, self.parameter_components, self.parameter_functions, \
             self.adaptation_functions, self.mapped_adaptation_functions, self.mixing_numerator_indices, \
-            self.mixing_denominator_indices, self.infectiousness_levels, self.infectious_indices, \
-            self.infectious_compartments, self.infectiousness_multipliers = [{} for _ in range(11)]
+            self.mixing_denominator_indices, self.infectious_indices, self.infectious_compartments, \
+            self.infectiousness_multipliers = [{} for _ in range(10)]
+
         self.overwrite_character, self.overwrite_key = "W", "overwrite"
         self.heterogeneous_mixing = False
         self.mixing_matrix = None
@@ -1155,7 +1198,8 @@ class StratifiedModel(EpiModel):
             self.strains = strata_names
 
         # heterogeneous infectiousness adjustments
-        self.prepare_infectiousness_levels(stratification_name, strata_names, infectiousness_adjustments)
+        self.find_infectious_indices()
+        self.prepare_strata_infectiousness_levels(stratification_name, strata_names, infectiousness_adjustments)
         self.prepare_infectiousness_multipliers()
 
     """
@@ -1747,7 +1791,7 @@ class StratifiedModel(EpiModel):
     heterogeneous infectiousness-related methods
     """
 
-    def prepare_infectiousness_levels(self, _stratification_name, _strata_names, _infectiousness_adjustments):
+    def prepare_strata_infectiousness_levels(self, _stratification_name, _strata_names, _infectiousness_adjustments):
         """
         store infectiousness adjustments as dictionary attribute to the model object, with first tier of keys the
         stratification and second tier the strata to be modified
@@ -1761,7 +1805,7 @@ class StratifiedModel(EpiModel):
         """
         if type(_infectiousness_adjustments) != dict:
             raise ValueError("infectiousness adjustments not submitted as dictionary")
-        elif not all(key in _strata_names for key in _infectiousness_adjustments.keys()):
+        elif not all(key in _strata_names for key in _infectiousness_adjustments):
             raise ValueError("infectiousness adjustment key not in strata being implemented")
         else:
             for stratum in _infectiousness_adjustments:
@@ -1773,7 +1817,7 @@ class StratifiedModel(EpiModel):
         implement the previously created dictionary of infectiousness multipliers by repeatedly applying the multipliers
         determined to a list of starting values of one
         """
-        self.find_infectious_indices()
+        self.infectiousness_multipliers = {}
         for strain in self.infectious_indices:
             self.infectious_compartments[strain] = \
                 list(itertools.compress(self.compartment_names, self.infectious_indices[strain]))
@@ -1788,6 +1832,7 @@ class StratifiedModel(EpiModel):
         """
         find the compartments that are infectious by strain and overall
         """
+        self.infectious_indices = {}
         self.infectious_indices["all_strains"] = \
             [any(infect in comp for infect in self.infectious_compartment) for comp in self.compartment_names]
         if self.strains:
@@ -2014,7 +2059,7 @@ class StratifiedModel(EpiModel):
 
 if __name__ == "__main__":
 
-    # example code to test out many aspects of SUMMER function - intended to be equivalent to the example in R
+    # example code to test out many aspects of SUMMER function
     sir_model = StratifiedModel(
         numpy.linspace(0, 60 / 365, 61).tolist(),
         ["susceptible", "infectious", "recovered"],
@@ -2024,7 +2069,7 @@ if __name__ == "__main__":
          {"type": "infection_frequency", "parameter": "beta", "origin": "susceptible", "to": "infectious"},
          {"type": "compartment_death", "parameter": "infect_death", "origin": "infectious"}],
         output_connections={"incidence": {"origin": "susceptible", "to": "infectious"}},
-        verbose=False, integration_type="solve_ivp")
+        verbose=False, integration_type="solve_ivp", compartment_infectiousness_adjustments={"infectious": 1.1})
     sir_model.adaptation_functions["increment_by_one"] = create_additive_function(1.)
 
     hiv_mixing = numpy.ones(4).reshape(2, 2)
@@ -2050,7 +2095,3 @@ if __name__ == "__main__":
     # create_flowchart(sir_model)
     #
     sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
-
-
-
-
