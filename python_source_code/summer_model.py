@@ -481,6 +481,19 @@ class EpiModel:
         return self.time_variants[parameter_name](time) if parameter_name in self.time_variants \
             else self.parameters[parameter_name]
 
+    def get_parameter_value(self, _parameter, _time):
+        """
+        essentially place-holding, but need to split this out as a function in order to stratification later
+
+        :param _parameter: str
+            parameter name
+        :param _time: float
+            current integration time
+        :return: float
+            parameter value
+        """
+        return self.find_parameter_value(_parameter, _time)
+
     def output_to_user(self, comment):
         """
         short function to save the if statement in every call to output some information, may be adapted later and was
@@ -561,7 +574,8 @@ class EpiModel:
         self.infectious_indices_int = [n_bool for n_bool, boolean in enumerate(self.infectious_indices) if boolean]
 
         # if user submitted request to make the infectious compartments differentially infectious
-        self.prepare_compartment_infectiousness_levels()
+        self.find_infectious_indices()
+        self.check_compartment_infectiousness_levels()
         self.prepare_infectiousness_multipliers()
 
     def check_and_report_attributes(
@@ -942,36 +956,36 @@ class EpiModel:
         else:
             return 0.0
 
-    def prepare_compartment_infectiousness_levels(self):
+    """
+    infectiousness-related methods
+    """
+
+    def find_infectious_indices(self):
+        """
+        find the indices that represent the infectious compartments as a boolean list
+        """
+        self.infectious_indices = \
+            [any(infect in comp for infect in self.infectious_compartment) for comp in self.compartment_names]
+
+    def check_compartment_infectiousness_levels(self):
         """
         find multipliers for the infectiousness of any of the infectious compartments
         """
         if type(self.compartment_infectiousness_adjustments) != dict:
             raise ValueError("compartment infectiousness adjustments not submitted as dictionary")
         elif not all(key in self.infectious_compartment for key in self.compartment_infectiousness_adjustments):
-            raise ValueError("infectiousness adjustment key not in strata being implemented")
-        else:
-            for compartment in self.compartment_infectiousness_adjustments:
-                self.infectiousness_levels[compartment] = self.compartment_infectiousness_adjustments[compartment]
+            raise ValueError("infectiousness adjustment key not in infectious compartments being implemented")
 
     def prepare_infectiousness_multipliers(self):
         """
         calculate the relative infectiousness of the infectious compartments with an approach that will allow for
         stratification later
         """
-        self.find_infectious_indices()
         self.infectiousness_multipliers = [1.] * len(self.infectious_compartment)
         for n_comp, compartment in enumerate(self.infectious_compartments):
             for infectiousness_modifier in self.infectiousness_levels:
                 if infectiousness_modifier == compartment:
                     self.infectiousness_multipliers[n_comp] = self.infectiousness_levels[infectiousness_modifier]
-
-    def find_infectious_indices(self):
-        """
-        find the indices that represent the infectious compartments
-        """
-        self.infectious_indices = \
-            [any(infect in comp for infect in self.infectious_compartment) for comp in self.compartment_names]
 
     def find_infectious_multiplier(self, n_flow):
         """
@@ -1011,19 +1025,6 @@ class EpiModel:
         self.infectious_populations = sum(element_list_multiplication(
             list(itertools.compress(_compartment_values, self.infectious_indices)), self.infectiousness_multipliers))
         self.infectious_denominators = sum(_compartment_values)
-
-    def get_parameter_value(self, _parameter, _time):
-        """
-        essentially place-holding, but need to split this out as a function in order to stratification later
-
-        :param _parameter: str
-            parameter name
-        :param _time: float
-            current integration time
-        :return: float
-            parameter value
-        """
-        return self.find_parameter_value(_parameter, _time)
 
     """
     simple output methods (most outputs will be managed outside of the python code)
@@ -1130,8 +1131,8 @@ class StratifiedModel(EpiModel):
             self.infectious_denominators, self.strains, self.mixing_categories = [[] for _ in range(9)]
         self.infectiousness_adjustments, self.parameter_components, self.parameter_functions, \
             self.adaptation_functions, self.mapped_adaptation_functions, self.mixing_numerator_indices, \
-            self.mixing_denominator_indices, self.infectiousness_levels, self.infectious_indices, \
-            self.infectious_compartments, self.infectiousness_multipliers = [{} for _ in range(11)]
+            self.mixing_denominator_indices, self.infectious_indices, self.infectious_compartments, \
+        self.infectiousness_multipliers = [{} for _ in range(10)]
         self.overwrite_character, self.overwrite_key = "W", "overwrite"
         self.heterogeneous_mixing = False
         self.mixing_matrix = None
