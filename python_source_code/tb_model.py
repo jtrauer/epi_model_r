@@ -149,8 +149,8 @@ def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
     #                    verbose=False)
 
     # _tb_model.stratify("smear",
-    #                   ["smearpos", "smearneg", "extrapul"],
-    #                   ["infectious"], adjustment_requests=[], report=False)
+    #                    ["smearpos", "smearneg", "extrapul"],
+    #                    ["infectious"], adjustment_requests=[], verbose=False, requested_proportions={})
 
     return _tb_model
 
