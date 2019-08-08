@@ -1347,6 +1347,8 @@ class StratifiedModel(EpiModel):
         revised_adjustments = {}
         for parameter in _adjustment_requests:
             revised_adjustments[parameter] = {}
+            if "overwrite" not in revised_adjustments:
+                revised_adjustments[parameter]["overwrite"] = []
 
             # ignore overwrite if submitted with the standard approach
             for stratum in _adjustment_requests[parameter]:
@@ -1361,8 +1363,6 @@ class StratifiedModel(EpiModel):
                 # otherwise just accept the parameter in its submitted form
                 else:
                     revised_adjustments[parameter][stratum] = _adjustment_requests[parameter][stratum]
-            if "overwrite" not in revised_adjustments:
-                revised_adjustments["overwrite"] = []
         return revised_adjustments
 
     def check_parameter_adjustment_requests(self, _adjustment_requests, _strata_names):
