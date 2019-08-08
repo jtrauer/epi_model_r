@@ -1514,7 +1514,8 @@ class StratifiedModel(EpiModel):
     def sort_absent_parameter_request(self, _stratification_name, _strata_names, _stratum, _stratify_from, _stratify_to,
                                       _n_flow):
         """
-        work out what to do if a specific parameter adjustment has not been requested, either retaining or splitting
+        work out what to do if a specific transition (not death) parameter adjustment has not been requested, either
+        retaining or splitting
 
         :param _stratification_name:
             see prepare_and_check_stratification
@@ -1657,7 +1658,8 @@ class StratifiedModel(EpiModel):
     def add_adjusted_parameter(self, _unadjusted_parameter, _stratification_name, _stratum, _adjustment_requests):
         """
         find the adjustment request that is relevant to a particular unadjusted parameter and stratum
-        otherwise allow return of None
+        otherwise allow return of None, which will be sorted out by sort_absent_parameter_request for transition flows
+            and original parameter retained in the case of death flows
 
         :param _unadjusted_parameter:
             name of the unadjusted parameter value
@@ -1667,39 +1669,33 @@ class StratifiedModel(EpiModel):
             stratum being considered by the method calling this method
         :param _adjustment_requests:
             see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
-        :return: parameter_adjustment_name: str or None
+        :return: parameter_name: str or None
             if returned as None, assumption will be that the original, unstratified parameter should be used
             otherwise create a new parameter name and value and store away in the appropriate model structure
         """
-        parameter_adjustment_name = None
+        parameter_name = None
 
-        # find the adjustment requests that are extensions of the base parameter type being considered
+        # loop over the adjustment requests that are extensions of the base parameter type being considered
         for parameter_request in [req for req in _adjustment_requests if _unadjusted_parameter.startswith(req)]:
             if _stratum in _adjustment_requests[parameter_request]:
-                parameter_adjustment_name = \
-                    create_stratified_name(_unadjusted_parameter, _stratification_name, _stratum)
-                self.output_to_user(
-                    "\tmodifying %s for %s stratum of %s with new parameter called %s"
-                    % (_unadjusted_parameter, _stratum, _stratification_name, parameter_adjustment_name))
-            else:
-                parameter_adjustment_name = _unadjusted_parameter
-                self.output_to_user(
-                    "\tretaining existing parameter value %s for %s stratum of %s"
-                    % (_unadjusted_parameter, _stratum, _stratification_name))
+                parameter_name = create_stratified_name(_unadjusted_parameter, _stratification_name, _stratum)
+                self.output_to_user("\tmodifying %s for %s stratum of %s with new parameter called %s"
+                                    % (_unadjusted_parameter, _stratum, _stratification_name, parameter_name))
 
-            # implement request, otherwise parameter will be left out, essentially assumed to be one when integrating
-            if _stratum in _adjustment_requests[parameter_request] and \
-                    type(_adjustment_requests[parameter_request][_stratum]) == str:
-                self.mapped_adaptation_functions[parameter_adjustment_name] = \
-                    self.adaptation_functions[_adjustment_requests[parameter_request][_stratum]]
-            elif _stratum in _adjustment_requests[parameter_request]:
-                self.parameters[parameter_adjustment_name] = _adjustment_requests[parameter_request][_stratum]
+                # implement request, otherwise will be left out, essentially assumed to be one when integrating
+                if type(_adjustment_requests[parameter_request][_stratum]) == str:
+                    self.mapped_adaptation_functions[parameter_name] = \
+                        self.adaptation_functions[_adjustment_requests[parameter_request][_stratum]]
+                elif type(_adjustment_requests[parameter_request][_stratum]) == float or \
+                        type(_adjustment_requests[parameter_request][_stratum]):
+                    self.parameters[parameter_name] = _adjustment_requests[parameter_request][_stratum]
+                else:
+                    raise TypeError("parameter adjustment requested not submitted as numeric or string")
 
-            # keep track of which parameters are to be over-written
-            if self.overwrite_key in _adjustment_requests[parameter_request] and \
-                    _stratum in _adjustment_requests[parameter_request][self.overwrite_key]:
-                self.overwrite_parameters.append(parameter_adjustment_name)
-        return parameter_adjustment_name
+            # keep track of which parameters are to be over-written from dictionary key of "overwrite"
+            if _stratum in _adjustment_requests[parameter_request][self.overwrite_key]:
+                self.overwrite_parameters.append(parameter_name)
+        return parameter_name
 
     """
     heterogeneous mixing-related methods
