@@ -762,6 +762,7 @@ class EpiModel:
         """
         main function to integrate model odes, called externally in the master running script
         """
+        self.check_stratified()
         self.output_to_user("\nnow integrating")
         self.prepare_stratified_parameter_calculations()
 
@@ -798,6 +799,12 @@ class EpiModel:
         else:
             raise ValueError("integration approach requested not available")
         self.output_to_user("integration complete")
+
+    def check_stratified(self):
+        """
+        fine to use EpiModel when no stratification implemented, for over-writing in StratifiedModel
+        """
+        pass
 
     def prepare_stratified_parameter_calculations(self):
         """
@@ -1944,6 +1951,13 @@ class StratifiedModel(EpiModel):
     """
     methods to be called during the process of model running
     """
+
+    def check_stratified(self):
+        """
+        check to ensure StratifiedModel is only used where stratify has been called
+        """
+        if len(self.all_stratifications) == 0:
+            raise RuntimeError("using StratifiedModel class to run an unstratified model")
 
     def get_parameter_value(self, _parameter, _time):
         """
