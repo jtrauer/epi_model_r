@@ -145,7 +145,6 @@ def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
                                verbose=False)
     create_flowchart(strain_only_model, name="stratified_by_strain")
 
-
     # test age stratification
     # age_only_model = copy.deepcopy(_tb_model)
     age_breakpoints = [0, 6, 13, 15]
@@ -161,28 +160,30 @@ def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
     # organ_only_model = copy.deepcopy(_tb_model)
     # organ_only_model.stratify("smear",
     #                           ["smearpos", "smearneg", "extrapul"],
-    #                           ["infectious"], adjustment_requests=[], verbose=False, requested_proportions={})
+    #                           ["infectious"], adjustment_requests={}, verbose=False, requested_proportions={})
     # create_flowchart(organ_only_model, name="stratified_by_organ")
 
     # test risk stratification
     # risk_only_model = copy.deepcopy(_tb_model)
     # risk_only_model.stratify("risk",
     #                          ["urban", "urbanpoor", "ruralpoor"], [], requested_proportions={},
-    #                          adjustment_requests=[], verbose=False)
+    #                          adjustment_requests={}, verbose=False)
     # create_flowchart(risk_only_model, name="stratified_by_risk")
 
-    _tb_model.stratify("strain", ["ds", "mdr"], ["early_latent", "late_latent", "infectious"], {},
-                       verbose=False)
-    _tb_model.stratify("age", age_breakpoints, [], {},
-                       adjustment_requests=age_params,
-                       infectiousness_adjustments=age_infectiousness,
-                       verbose=False)
+    # _tb_model.stratify("strain", ["ds", "mdr"], ["early_latent", "late_latent", "infectious"], {},
+    #                    verbose=False)
+    # _tb_model.stratify("age", age_breakpoints, [], {},
+    #                    adjustment_requests=age_params,
+    #                    infectiousness_adjustments=age_infectiousness,
+    #                    verbose=False)
     _tb_model.stratify("smear",
                        ["smearpos", "smearneg", "extrapul"],
-                       ["infectious"], adjustment_requests=[], verbose=False, requested_proportions={})
-    _tb_model.stratify("risk",
-                       ["urban", "urbanpoor", "ruralpoor"], [], requested_proportions={},
-                       adjustment_requests=[], verbose=False)
+                       ["infectious"],
+                       infectiousness_adjustments={"smearneg": 0.24, "extrapul": 0.0},
+                       verbose=False, requested_proportions={})
+    # _tb_model.stratify("risk",
+    #                    ["urban", "urbanpoor", "ruralpoor"], [], requested_proportions={},
+    #                    adjustment_requests=[], verbose=False)
     return _tb_model
 
 
@@ -218,7 +219,7 @@ if __name__ == "__main__":
     # store outputs into database
     # tb_model.store_database()
     #
-    # matplotlib.pyplot.plot(times, infectious_population * 1e5)
+    # matplotlib.pyplot.plot(numpy.linspace(1800., 2020.0, 201).tolist(), infectious_population * 1e5)
     # matplotlib.pyplot.xlim((1980., 2020.))
     # matplotlib.pyplot.ylim((0.0, 1e3))
     # matplotlib.pyplot.show()
