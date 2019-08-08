@@ -39,7 +39,7 @@ def get_adapted_age_parameters(
                 change_parameter_unit(
                     get_parameter_dict_from_function(
                         create_step_function_from_dict(
-                            provide_age_specific_latency_parameters()[parameter]), age_breakpoints)))
+                            provide_age_specific_latency_parameters()[parameter]), age_breakpoints), 365.251))
     return adapted_parameter_dict
 
 
@@ -116,6 +116,8 @@ def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
     _tb_model.add_transition_flow(
         {"type": "standard_flows", "parameter": "case_detection", "origin": "infectious", "to": "recovered"})
 
+    # create_flowchart(_tb_model, name="unstratified")
+
     # loading time-variant case detection rate
     input_database = InputDB(report=True)
     res = input_database.db_query("gtb_2015", column="c_cdr", is_filter="country", value="Mongolia")
@@ -137,21 +139,50 @@ def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
     # function_dataframe["cdr_values"] = [cdr_scaleup(t) for t in times]
     # store_database(function_dataframe, table_name="functions")
 
+    # test strain stratification
+    strain_only_model = copy.deepcopy(_tb_model)
+    strain_only_model.stratify("strain", ["ds", "mdr"], ["early_latent", "late_latent", "infectious"], {},
+                               verbose=False)
+    create_flowchart(strain_only_model, name="stratified_by_strain")
+
+
+    # test age stratification
+    # age_only_model = copy.deepcopy(_tb_model)
+    age_breakpoints = [0, 6, 13, 15]
+    age_infectiousness = get_parameter_dict_from_function(logistic_scaling_function(15.0), age_breakpoints)
+    age_params = get_adapted_age_parameters(age_breakpoints)
+    # age_only_model.stratify("age", copy.deepcopy(age_breakpoints), [], {},
+    #                         adjustment_requests=age_params,
+    #                         infectiousness_adjustments=age_infectiousness,
+    #                         verbose=False)
+    # create_flowchart(age_only_model, name="stratified_by_age")
+
+    # test organ stratification
+    # organ_only_model = copy.deepcopy(_tb_model)
+    # organ_only_model.stratify("smear",
+    #                           ["smearpos", "smearneg", "extrapul"],
+    #                           ["infectious"], adjustment_requests=[], verbose=False, requested_proportions={})
+    # create_flowchart(organ_only_model, name="stratified_by_organ")
+
+    # test risk stratification
+    # risk_only_model = copy.deepcopy(_tb_model)
+    # risk_only_model.stratify("risk",
+    #                          ["urban", "urbanpoor", "ruralpoor"], [], requested_proportions={},
+    #                          adjustment_requests=[], verbose=False)
+    # create_flowchart(risk_only_model, name="stratified_by_risk")
+
     _tb_model.stratify("strain", ["ds", "mdr"], ["early_latent", "late_latent", "infectious"], {},
                        verbose=False)
-
-    # add age stratification
-    # age_breakpoints = [0, 6, 13, 15]
-    # age_infectiousness = get_parameter_dict_from_function(logistic_scaling_function(15.0), age_breakpoints)
-    # _tb_model.stratify("age", age_breakpoints, [], {},
-    #                    adjustment_requests=get_adapted_age_parameters(age_breakpoints),
-    #                    infectiousness_adjustments=age_infectiousness,
-    #                    verbose=False)
-
-    # _tb_model.stratify("smear",
-    #                    ["smearpos", "smearneg", "extrapul"],
-    #                    ["infectious"], adjustment_requests=[], verbose=False, requested_proportions={})
-
+    _tb_model.stratify("age", age_breakpoints, [], {},
+                       adjustment_requests=age_params,
+                       infectiousness_adjustments=age_infectiousness,
+                       verbose=False)
+    _tb_model.stratify("smear",
+                       ["smearpos", "smearneg", "extrapul"],
+                       ["infectious"], adjustment_requests=[], verbose=False, requested_proportions={})
+    _tb_model.stratify("risk",
+                       ["urban", "urbanpoor", "ruralpoor"], [], requested_proportions={},
+                       adjustment_requests=[], verbose=False)
     return _tb_model
 
 
@@ -165,7 +196,7 @@ if __name__ == "__main__":
     tb_model.run_model()
 
     # get outputs
-    infectious_population = tb_model.get_total_compartment_size(["infectious"])
+    # infectious_population = tb_model.get_total_compartment_size(["infectious"])
 
     # print statements to enable crude manual calibration
     # time_2016 = [i for i in range(len(tb_model.times)) if tb_model.times[i] > 2016.][0]
@@ -178,7 +209,7 @@ if __name__ == "__main__":
     # store_database(pbi_outputs, table_name="pbi_outputs")
 
     # easy enough to output a flow diagram if needed:
-    create_flowchart(tb_model)
+    # create_flowchart(tb_model)
 
     # output some basic quantities if not bothered with the PowerBI bells and whistles
     # tb_model.plot_compartment_size(["early_latent", "late_latent"])
