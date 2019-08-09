@@ -1,6 +1,6 @@
 import numpy
 from scipy.integrate import odeint, solve_ivp, quad
-import matplotlib.pyplot
+from matplotlib.pyplot import plot, show, colorbar, matshow
 import copy
 import pandas as pd
 from graphviz import Digraph
@@ -422,6 +422,20 @@ def create_flowchart(model_object, strata=None, stratify=True, name="flow_chart"
         model_object.flow_diagram.edge(row[1]["origin"], row[1]["to"], row[1]["parameter"])
     model_object.flow_diagram = apply_styles(model_object.flow_diagram, styles)
     model_object.flow_diagram.render(name)
+
+
+def visualise_mixing(model_object):
+    """
+    use standard matplotlib function to visualise mixing matrix
+
+    :param model_object: SUMMER object
+        model object to look at the population heterogeneous mixing
+    """
+    matshow(model_object.mixing_matrix)
+    for n_cat, category in enumerate(model_object.mixing_categories):
+        print("category %s: %s" % (n_cat, category))
+    colorbar()
+    show()
 
 
 class EpiModel:
@@ -1061,8 +1075,8 @@ class EpiModel:
         :param multiplier: float
             scalar value to multiply the compartment values by
         """
-        matplotlib.pyplot.plot(self.times, multiplier * self.get_total_compartment_size(compartment_tags))
-        matplotlib.pyplot.show()
+        plot(self.times, multiplier * self.get_total_compartment_size(compartment_tags))
+        show()
 
 
 class StratifiedModel(EpiModel):
@@ -1830,7 +1844,7 @@ class StratifiedModel(EpiModel):
                     if infectiousness_modifier in find_name_components(compartment):
                         self.infectiousness_multipliers[strain][n_comp] *= \
                             self.infectiousness_levels[infectiousness_modifier]
-            self.output_to_user("\nfinal infectiousness multipliers for %s are: \n%s"
+            self.output_to_user("\ncompartment infectiousness multipliers for %s are: \n%s"
                                 % (strain, dict(zip(self.infectious_compartments[strain],
                                                     self.infectiousness_multipliers[strain]))))
 
@@ -2099,13 +2113,16 @@ if __name__ == "__main__":
 
     sir_model.stratify("strain", ["sensitive", "resistant"], ["infectious"], requested_proportions={}, verbose=False)
 
-    # age_mixing = None
-    # sir_model.stratify("age", [1, 10, 3], [], {}, {"recovery": {"1": 0.5, "10": 0.8}},
-    #                     infectiousness_adjustments={"1": 0.8},
-    #                     mixing_matrix=age_mixing, verbose=False)
+    age_mixing = None
+    # age_mixing = numpy.array([1., 2., 3., 2., 1., 2., 1., 2., 3., 4., 5., 1., 2., 3., 4., 5.]).reshape(4, 4)
+    sir_model.stratify("age", [1, 10, 3], [], {}, {"recovery": {"1": 0.5, "10": 0.8}},
+                       infectiousness_adjustments={"1": 0.8},
+                       mixing_matrix=age_mixing, verbose=False)
+
+    # visualise_mixing(sir_model)
 
     sir_model.run_model()
 
     # create_flowchart(sir_model)
     #
-    sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
+    # sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
