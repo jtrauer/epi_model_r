@@ -1830,6 +1830,9 @@ class StratifiedModel(EpiModel):
                     if infectiousness_modifier in find_name_components(compartment):
                         self.infectiousness_multipliers[strain][n_comp] *= \
                             self.infectiousness_levels[infectiousness_modifier]
+            self.output_to_user("\nfinal infectiousness multipliers for %s are: \n%s"
+                                % (strain, dict(zip(self.infectious_compartments[strain],
+                                                    self.infectiousness_multipliers[strain]))))
 
     def find_infectious_indices(self):
         """
