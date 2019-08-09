@@ -431,9 +431,12 @@ def visualise_mixing(model_object):
     :param model_object: SUMMER object
         model object to look at the population heterogeneous mixing
     """
-    matshow(model_object.mixing_matrix)
+    # print legend
     for n_cat, category in enumerate(model_object.mixing_categories):
         print("category %s: %s" % (n_cat, category))
+
+    # graph
+    matshow(model_object.mixing_matrix)
     colorbar()
     show()
 
