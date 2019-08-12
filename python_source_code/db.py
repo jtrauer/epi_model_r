@@ -7,6 +7,19 @@ import matplotlib.pyplot as plt
 from python_source_code.curve import scale_up_function
 
 
+def get_bcg_coverage(country_iso_code):
+    """
+    extract bcg coverage from inputs database
+
+    :param country_iso_code: string
+        three letter ISO3 code for the country of interest
+    :return: _bcg_coverage
+        pandas data frame with columns years and one row containing the values of BCG coverage in that year
+    """
+    _bcg_coverage = input_database.db_query("BCG", is_filter="ISO_code", value=country_iso_code)
+    return _bcg_coverage.filter(items=[column for column in _bcg_coverage.columns if column.isdigit()])
+
+
 class InputDB:
     """
     methods for loading input xls files
@@ -72,7 +85,7 @@ class InputDB:
         """
         method to query table_name
         """
-        query = "Select %s from  %s" % (column, table_name)
+        query = "Select %s from %s" % (column, table_name)
         if is_filter and value:
             query = query + " Where %s = \'%s\'" % (is_filter, value)
         return pd.read_sql_query(query, con=self.engine)
@@ -82,14 +95,14 @@ if __name__ == "__main__":
 
     # standard code to update the database
     input_database = InputDB(verbose=True)
-    input_database.update_xl_reads()
-    input_database.update_csv_reads()
+    # input_database.update_xl_reads()
+    # input_database.update_csv_reads()
 
     # example of accessing once loaded
-    res = input_database.db_query("gtb_2016", column="c_cdr", is_filter="country", value="Mongolia")
-    cdr_mongolia = res["c_cdr"].values
-    res = input_database.db_query("gtb_2016", column="year", is_filter="country", value="Mongolia")
-    cdr_mongolia_year = res["year"].values
+    result = input_database.db_query("gtb_2015", column="c_cdr", is_filter="iso3", value="MNG")
+    cdr_mongolia = result["c_cdr"].values
+    result = input_database.db_query("gtb_2015", column="year", is_filter="iso3", value="MNG")
+    cdr_mongolia_year = result["year"].values
     spl = scale_up_function(cdr_mongolia_year, cdr_mongolia, smoothness=0.2, method=5)
     times = list(np.linspace(1950, 2014, 1e3))
     scaled_up_cdr = []
@@ -98,3 +111,8 @@ if __name__ == "__main__":
     plt.plot(cdr_mongolia_year, cdr_mongolia, "ro", times, scaled_up_cdr)
     plt.title("CDR from GTB 2015")
     plt.show()
+
+    # extract data for BCG vaccination for a particular country
+    # for country in ["AFG", "ARM", "BRA", "IND"]:
+    #     bcg_coverage = get_bcg_coverage(country)
+    #     print(bcg_coverage)
