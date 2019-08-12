@@ -19,13 +19,7 @@ class InputDB:
         self.database_name = database_name
         self.engine = create_engine("sqlite:///" + database_name, echo=False)
         self.verbose = verbose
-        self.tabs_of_interest \
-            = ["default_constants", "country_constants", "default_programs", "country_programs", "BCG",
-               "rate_birth_2014", "rate_birth_2015", "life_expectancy_2014",
-               "life_expectancy_2015", "notifications_2014", "notifications_2015", "notifications_2016",
-               "outcomes_2013", "outcomes_2015", "mdr_2014", "mdr_2015", "mdr_2016", "laboratories_2014",
-               "laboratories_2015", "laboratories_2016", "strategy_2014", "strategy_2015", "strategy_2016", "diabetes",
-               "gtb_2015", "gtb_2016", "latent_2016", "tb_hiv_2016", "spending_inputs", "constants", "time_variants"]
+        self.tabs_of_interest = ["BCG", "Aggregated estimates"]
 
     def update_csv_reads(self, input_path="../xls/*.csv"):
         """
@@ -44,28 +38,28 @@ class InputDB:
         for filename in excel_file_list:
             xls = pd.ExcelFile(filename)
 
-            # for single work sheets
+            # for single tab in spreadsheet
             if len(xls.sheet_names) == 1:
                 df_name = xls.sheet_names[0]
                 df = pd.read_excel(filename, sheet_name=df_name)
                 df.to_sql(df_name, con=self.engine, if_exists="replace")
+                self.output_to_user("now reading '%s' tab of '%s' file" % (df_name, filename))
+
+            # if multiple tabs
             else:
-                n_sheets = 0
-                while n_sheets < len(xls.sheet_names):
-                    sheet_name = xls.sheet_names[n_sheets]
-                    if sheet_name in self.tabs_of_interest:
+                for n_sheets, sheet in enumerate(xls.sheet_names):
+                    if sheet in self.tabs_of_interest:
                         header_3_sheets = ["rate_birth_2015", "life_expectancy_2015"]
-                        n_header = 3 if sheet_name in header_3_sheets else 0
-                        df = pd.read_excel(filename, sheet_name=sheet_name, header=n_header)
-                        self.output_to_user("now reading %s" % sheet_name)
+                        n_header = 3 if sheet in header_3_sheets else 0
+                        df = pd.read_excel(filename, sheet_name=sheet, header=n_header)
+                        self.output_to_user("now reading '%s' tab of '%s' file" % (sheet, filename))
 
                         # to read constants and time variants
-                        if sheet_name == "constants":
-                            sheet_name = filename.replace(".xlsx", "").split("_")[1] + "_constants"
-                        if sheet_name == "time_variants":
-                            sheet_name = filename.replace(".xlsx", "").split("_")[1] + "_time_variants"
-                        df.to_sql(sheet_name, con=self.engine, if_exists="replace")
-                    n_sheets += 1
+                        if sheet == "constants":
+                            sheet = filename.replace(".xlsx", "").split("_")[1] + "_constants"
+                        if sheet == "time_variants":
+                            sheet = filename.replace(".xlsx", "").split("_")[1] + "_time_variants"
+                        df.to_sql(sheet, con=self.engine, if_exists="replace")
 
     def output_to_user(self, comment):
         """
@@ -92,9 +86,9 @@ if __name__ == "__main__":
     input_database.update_csv_reads()
 
     # example of accessing once loaded
-    res = input_database.db_query("gtb_2015", column="c_cdr", is_filter="country", value="Mongolia")
+    res = input_database.db_query("gtb_2016", column="c_cdr", is_filter="country", value="Mongolia")
     cdr_mongolia = res["c_cdr"].values
-    res = input_database.db_query("gtb_2015", column="year", is_filter="country", value="Mongolia")
+    res = input_database.db_query("gtb_2016", column="year", is_filter="country", value="Mongolia")
     cdr_mongolia_year = res["year"].values
     spl = scale_up_function(cdr_mongolia_year, cdr_mongolia, smoothness=0.2, method=5)
     times = list(np.linspace(1950, 2014, 1e3))
@@ -104,12 +98,3 @@ if __name__ == "__main__":
     plt.plot(cdr_mongolia_year, cdr_mongolia, "ro", times, scaled_up_cdr)
     plt.title("CDR from GTB 2015")
     plt.show()
-
-    # res = input_database.db_query("notifications_2016", is_filter="Country", value="Bhutan")
-    # print(res)
-    # res = input_database.db_query("default_time_variants", is_filter="program", value="econ_cpi")
-    # print(res)
-    # res = input_database.db_query("bhutan_constants", is_filter="parameter", value="tb_n_contact")
-    # print(res)
-    # res = input_database.db_query("bhutan_time_variants", is_filter="program", value="int_perc_firstline_dst")
-    # print(res.values)
