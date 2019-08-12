@@ -135,9 +135,9 @@ def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
     """
     current working tb model with some characteristics of mongolia applied at present
     """
-    times_ = numpy.linspace(start_time, 2020.0, 201).tolist()
+    _times = numpy.linspace(start_time, 2020.0, 201).tolist()
 
-    # set basic parameters, flows and times, except for latency flows and parameters, then functionally add latency
+    # set basic parameters, flows and times, then functionally add latency
     case_fatality_rate = 0.4
     untreated_disease_duration = 3.0
     parameters = \
@@ -153,10 +153,14 @@ def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
     flows = add_standard_latency_flows(flows)
     flows = add_standard_natural_history_flows(flows)
 
-    _tb_model = StratifiedModel(
-        times_, ["susceptible", "early_latent", "late_latent", "infectious", "recovered"], {"infectious": 1e-3},
-        parameters, flows, birth_approach="replace_deaths")
+    # compartments
+    compartments = ["susceptible", "early_latent", "late_latent", "infectious", "recovered"]
 
+    # define model
+    _tb_model = \
+        StratifiedModel(_times, compartments, {"infectious": 1e-3}, parameters, flows, birth_approach="replace_deaths")
+
+    # add case detection process to basic model
     _tb_model.add_transition_flow(
         {"type": "standard_flows", "parameter": "case_detection", "origin": "infectious", "to": "recovered"})
 
