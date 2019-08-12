@@ -12,14 +12,14 @@ class InputDB:
     methods for loading input xls files
     """
 
-    def __init__(self, database_name="../databases/Inputs.db", report=False):
+    def __init__(self, database_name="../databases/inputs.db", verbose=False):
         """
         initialise sqlite database
         """
         self.database_name = database_name
         self.engine = create_engine("sqlite:///" + database_name, echo=False)
-        self.report = report
-        self.available_sheets \
+        self.verbose = verbose
+        self.tabs_of_interest \
             = ["default_constants", "country_constants", "default_programs", "country_programs", "BCG",
                "rate_birth_2014", "rate_birth_2015", "life_expectancy_2014",
                "life_expectancy_2015", "notifications_2014", "notifications_2015", "notifications_2016",
@@ -27,7 +27,7 @@ class InputDB:
                "laboratories_2015", "laboratories_2016", "strategy_2014", "strategy_2015", "strategy_2016", "diabetes",
                "gtb_2015", "gtb_2016", "latent_2016", "tb_hiv_2016", "spending_inputs", "constants", "time_variants"]
 
-    def load_csv(self, input_path="../xls/*.csv"):
+    def update_csv_reads(self, input_path="../xls/*.csv"):
         """
         load csvs from input_path
         """
@@ -36,7 +36,7 @@ class InputDB:
             data_frame = pd.read_csv(filename)
             data_frame.to_sql(filename.split("\\")[1].split(".")[0], con=self.engine, if_exists="replace")
 
-    def load_xlsx(self, input_path="../xls/*.xlsx"):
+    def update_xl_reads(self, input_path="../xls/*.xlsx"):
         """
         load excel spreadsheet from input_path
         """
@@ -53,7 +53,7 @@ class InputDB:
                 n_sheets = 0
                 while n_sheets < len(xls.sheet_names):
                     sheet_name = xls.sheet_names[n_sheets]
-                    if sheet_name in self.available_sheets:
+                    if sheet_name in self.tabs_of_interest:
                         header_3_sheets = ["rate_birth_2015", "life_expectancy_2015"]
                         n_header = 3 if sheet_name in header_3_sheets else 0
                         df = pd.read_excel(filename, sheet_name=sheet_name, header=n_header)
@@ -71,7 +71,7 @@ class InputDB:
         """
         report progress to user if requested
         """
-        if self.report:
+        if self.verbose:
             print(comment)
 
     def db_query(self, table_name, is_filter="", value="", column="*"):
@@ -86,10 +86,12 @@ class InputDB:
 
 if __name__ == "__main__":
 
-    input_database = InputDB(report=True)
-    input_database.load_xlsx()
-    input_database.load_csv()
+    # standard code to update the database
+    input_database = InputDB(verbose=True)
+    input_database.update_xl_reads()
+    input_database.update_csv_reads()
 
+    # example of accessing once loaded
     res = input_database.db_query("gtb_2015", column="c_cdr", is_filter="country", value="Mongolia")
     cdr_mongolia = res["c_cdr"].values
     res = input_database.db_query("gtb_2015", column="year", is_filter="country", value="Mongolia")
@@ -99,13 +101,10 @@ if __name__ == "__main__":
     scaled_up_cdr = []
     for t in times:
         scaled_up_cdr.append(spl(t))
-    # print(scaled_up_cdr)
     plt.plot(cdr_mongolia_year, cdr_mongolia, "ro", times, scaled_up_cdr)
     plt.title("CDR from GTB 2015")
     plt.show()
 
-    # res = input_database.db_query("bcg_2015", is_filter="Cname", value="Bhutan")
-    # print(res)
     # res = input_database.db_query("notifications_2016", is_filter="Country", value="Bhutan")
     # print(res)
     # res = input_database.db_query("default_time_variants", is_filter="program", value="econ_cpi")

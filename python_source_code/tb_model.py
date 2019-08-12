@@ -167,7 +167,7 @@ def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
     # create_flowchart(_tb_model, name="unstratified")
 
     # loading time-variant case detection rate
-    input_database = InputDB(report=True)
+    input_database = InputDB()
     res = input_database.db_query("gtb_2015", column="c_cdr", is_filter="country", value="Mongolia")
 
     # add scaling case detection rate
