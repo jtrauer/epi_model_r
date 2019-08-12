@@ -8,7 +8,7 @@ setup(
     license='MIT',
     author='James Trauer',
     author_email='james.trauer@monash.edu',
-    install_requires=['scipy>=1.1.0',
+    install_requires=['scipy==1.1.0',
                       'graphviz>=0.4.10',
                       'SQLAlchemy>=1.1.18',
 	              #'pymc==2.3.6',	
