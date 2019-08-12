@@ -135,7 +135,7 @@ def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
     """
     current working tb model with some characteristics of mongolia applied at present
     """
-    _times = numpy.linspace(start_time, 2020.0, 201).tolist()
+    integration_times = numpy.linspace(start_time, 2020.0, 201).tolist()
 
     # set basic parameters, flows and times, then functionally add latency
     case_fatality_rate = 0.4
@@ -158,7 +158,7 @@ def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
 
     # define model
     _tb_model = \
-        StratifiedModel(_times, compartments, {"infectious": 1e-3}, parameters, flows, birth_approach="replace_deaths")
+        StratifiedModel(integration_times, compartments, {"infectious": 1e-3}, parameters, flows, birth_approach="replace_deaths")
 
     # add case detection process to basic model
     _tb_model.add_transition_flow(
