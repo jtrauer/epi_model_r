@@ -11,7 +11,7 @@ setup(
     install_requires=['scipy>=1.1.0',
                       'graphviz>=0.4.10',
                       'SQLAlchemy>=1.1.18',
-	              'pymc==2.3.7',	
+	              #'pymc==2.3.7',	
                       'pandas==0.24.2',],
     description='General structure for creating epidemiological models in R'
 )
