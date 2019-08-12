@@ -43,15 +43,20 @@ def get_adapted_age_parameters(
     return adapted_parameter_dict
 
 
-def add_standard_latency_flows(flows_):
+def add_standard_latency_flows(list_of_flows):
     """
     adds our standard latency flows to the list of flows to be implemented in the model
+
+    :param list_of_flows: list
+        existing flows for implementation in the model
+    :return: list_of_flows: list
+        list of flows updated to include the standard latency flows
     """
-    flows_ += [
+    list_of_flows += [
         {"type": "standard_flows", "parameter": "early_progression", "origin": "early_latent", "to": "infectious"},
         {"type": "standard_flows", "parameter": "stabilisation", "origin": "early_latent", "to": "late_latent"},
         {"type": "standard_flows", "parameter": "late_progression", "origin": "late_latent", "to": "infectious"}]
-    return flows_
+    return list_of_flows
 
 
 def convert_competing_proportion_to_rate(competing_flows):
