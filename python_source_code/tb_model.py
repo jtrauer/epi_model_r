@@ -43,22 +43,6 @@ def get_adapted_age_parameters(
     return adapted_parameter_dict
 
 
-def add_standard_latency_flows(list_of_flows):
-    """
-    adds our standard latency flows to the list of flows to be implemented in the model
-
-    :param list_of_flows: list
-        existing flows for implementation in the model
-    :return: list_of_flows: list
-        list of flows updated to include the standard latency flows
-    """
-    list_of_flows += [
-        {"type": "standard_flows", "parameter": "early_progression", "origin": "early_latent", "to": "infectious"},
-        {"type": "standard_flows", "parameter": "stabilisation", "origin": "early_latent", "to": "late_latent"},
-        {"type": "standard_flows", "parameter": "late_progression", "origin": "late_latent", "to": "infectious"}]
-    return list_of_flows
-
-
 def convert_competing_proportion_to_rate(competing_flows):
     """
     convert a proportion to a rate dependent on the other flows coming out of a compartment
@@ -91,6 +75,62 @@ def unpivot_outputs(model_object):
     return output_dataframe.drop(columns="variable")
 
 
+"""
+standardised flow functions
+"""
+
+
+def add_standard_latency_flows(list_of_flows):
+    """
+    adds our standard latency flows to the list of flows to be implemented in the model
+
+    :param list_of_flows: list
+        existing flows for implementation in the model
+    :return: list_of_flows: list
+        list of flows updated to include the standard latency flows
+    """
+    list_of_flows += [
+        {"type": "standard_flows", "parameter": "early_progression", "origin": "early_latent", "to": "infectious"},
+        {"type": "standard_flows", "parameter": "stabilisation", "origin": "early_latent", "to": "late_latent"},
+        {"type": "standard_flows", "parameter": "late_progression", "origin": "late_latent", "to": "infectious"}]
+    return list_of_flows
+
+
+def add_standard_natural_history_flows(list_of_flows):
+    """
+    adds our standard natural history to the list of flows to be implemented in the model
+
+    :param list_of_flows: list
+        existing flows for implementation in the model
+    :return: list_of_flows: list
+        list of flows updated to include the standard latency flows
+    """
+    list_of_flows += [
+        {"type": "standard_flows", "parameter": "recovery", "origin": "infectious", "to": "recovered"},
+        {"type": "compartment_death", "parameter": "infect_death", "origin": "infectious"}]
+    return list_of_flows
+
+
+def add_standard_infection_flows(list_of_flows):
+    """
+    adds our standard infection processes to the list of flows to be implemented in the model
+
+    :param list_of_flows: list
+        existing flows for implementation in the model
+    :return: list_of_flows: list
+        list of flows updated to include the standard infection processes
+    """
+    list_of_flows += [
+        {"type": "infection_frequency", "parameter": "beta", "origin": "susceptible", "to": "early_latent"},
+        {"type": "infection_frequency", "parameter": "beta", "origin": "recovered", "to": "early_latent"}]
+    return list_of_flows
+
+
+"""
+main model construction functions
+"""
+
+
 def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
     """
     current working tb model with some characteristics of mongolia applied at present
@@ -108,11 +148,10 @@ def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
          "case_detection": 0.0}
     parameters.update(change_parameter_unit(provide_aggregated_latency_parameters(), 365.251))
 
-    flows = [{"type": "infection_frequency", "parameter": "beta", "origin": "susceptible", "to": "early_latent"},
-             {"type": "infection_frequency", "parameter": "beta", "origin": "recovered", "to": "early_latent"},
-             {"type": "standard_flows", "parameter": "recovery", "origin": "infectious", "to": "recovered"},
-             {"type": "compartment_death", "parameter": "infect_death", "origin": "infectious"}]
+    # sequentially add groups of flows
+    flows = add_standard_infection_flows([])
     flows = add_standard_latency_flows(flows)
+    flows = add_standard_natural_history_flows(flows)
 
     _tb_model = StratifiedModel(
         times_, ["susceptible", "early_latent", "late_latent", "infectious", "recovered"], {"infectious": 1e-3},
@@ -215,11 +254,11 @@ if __name__ == "__main__":
     # store_database(pbi_outputs, table_name="pbi_outputs")
 
     # easy enough to output a flow diagram if needed:
-    # create_flowchart(tb_model)
+    create_flowchart(tb_model)
 
     # output some basic quantities if not bothered with the PowerBI bells and whistles
     # tb_model.plot_compartment_size(["early_latent", "late_latent"])
-    # tb_model.plot_compartment_size(["infectious"], 1e5)
+    tb_model.plot_compartment_size(["infectious"], 1e5)
 
     # store outputs into database
     # tb_model.store_database()
@@ -227,7 +266,7 @@ if __name__ == "__main__":
     # matplotlib.pyplot.plot(numpy.linspace(1800., 2020.0, 201).tolist(), infectious_population * 1e5)
     # matplotlib.pyplot.xlim((1980., 2020.))
     # matplotlib.pyplot.ylim((0.0, 1e3))
-    # matplotlib.pyplot.show()
+    matplotlib.pyplot.show()
     # matplotlib.pyplot.savefig("mongolia_cdr_output")
 
 
