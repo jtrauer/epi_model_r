@@ -1208,7 +1208,8 @@ class StratifiedModel(EpiModel):
         self.stratify_transition_flows(stratification_name, strata_names, adjustment_requests)
         self.stratify_entry_flows(stratification_name, strata_names, requested_proportions)
         if self.death_flows.shape[0] > 0:
-            self.stratify_death_flows(stratification_name, strata_names, adjustment_requests)
+            self.stratify_death_flows(
+                stratification_name, strata_names, adjustment_requests, compartment_types_to_stratify)
         self.stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests)
 
         # check submitted mixing matrix and combine with existing matrix, if any
@@ -1628,7 +1629,8 @@ class StratifiedModel(EpiModel):
         # normalise in case values now sum to more than one
         self.parameters.update(normalise_dict(entry_fractions))
 
-    def stratify_death_flows(self, _stratification_name, _strata_names, _adjustment_requests):
+    def stratify_death_flows(
+            self, _stratification_name, _strata_names, _adjustment_requests, _compartment_types_to_stratify):
         """
         add compartment-specific death flows to death_flows data frame attribute
 
@@ -1640,21 +1642,30 @@ class StratifiedModel(EpiModel):
             see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
         """
         for n_flow in self.find_death_indices_to_implement(go_back_one=1):
-            for stratum in _strata_names:
 
-                # get stratified parameter name if requested to stratify, otherwise use the unstratified one
-                parameter_name = self.add_adjusted_parameter(
-                    self.death_flows.parameter[n_flow], _stratification_name, stratum, _adjustment_requests)
-                if not parameter_name:
-                    parameter_name = self.death_flows.parameter[n_flow]
+            # if the compartment with an additional death flow is being stratified
+            if find_stem(self.death_flows.origin[n_flow]) in _compartment_types_to_stratify:
+                for stratum in _strata_names:
 
-                # add the stratified flow
-                self.death_flows = self.death_flows.append(
-                    {"type": self.death_flows.type[n_flow],
-                     "parameter": parameter_name,
-                     "origin": create_stratified_name(self.death_flows.origin[n_flow], _stratification_name, stratum),
-                     "implement": len(self.all_stratifications)},
-                    ignore_index=True)
+                    # get stratified parameter name if requested to stratify, otherwise use the unstratified one
+                    parameter_name = self.add_adjusted_parameter(
+                        self.death_flows.parameter[n_flow], _stratification_name, stratum, _adjustment_requests)
+                    if not parameter_name:
+                        parameter_name = self.death_flows.parameter[n_flow]
+
+                    # add the stratified flow to the death flows data frame
+                    self.death_flows = self.death_flows.append(
+                        {"type": self.death_flows.type[n_flow],
+                         "parameter": parameter_name,
+                         "origin": create_stratified_name(self.death_flows.origin[n_flow], _stratification_name, stratum),
+                         "implement": len(self.all_stratifications)},
+                        ignore_index=True)
+
+            # otherwise if not part of the stratification, accept the existing flow and increment the implement value
+            else:
+                new_flow = self.death_flows.loc[n_flow, :].to_dict()
+                new_flow["implement"] += 1
+                self.death_flows = self.death_flows.append(new_flow, ignore_index=True)
 
     def stratify_universal_death_rate(self, _stratification_name, _strata_names, _adjustment_requests):
         """
