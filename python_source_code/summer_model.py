@@ -1140,7 +1140,7 @@ class StratifiedModel(EpiModel):
         self.stratify_entry_flows(stratification_name, strata_names, requested_proportions)
         if self.death_flows.shape[0] > 0:
             self.stratify_death_flows(
-                stratification_name, strata_names, adjustment_requests, compartment_types_to_stratify)
+                stratification_name, strata_names, adjustment_requests)
         self.stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests)
 
         # check submitted mixing matrix and combine with existing matrix, if any
@@ -1465,8 +1465,7 @@ class StratifiedModel(EpiModel):
         # normalise in case values now sum to more than one
         self.parameters.update(normalise_dict(entry_fractions))
 
-    def stratify_death_flows(
-            self, _stratification_name, _strata_names, _adjustment_requests, _compartment_types_to_stratify):
+    def stratify_death_flows(self, _stratification_name, _strata_names, _adjustment_requests):
         """
         add compartment-specific death flows to death_flows data frame attribute
 
@@ -1480,7 +1479,7 @@ class StratifiedModel(EpiModel):
         for n_flow in self.find_death_indices_to_implement(go_back_one=1):
 
             # if the compartment with an additional death flow is being stratified
-            if find_stem(self.death_flows.origin[n_flow]) in _compartment_types_to_stratify:
+            if find_stem(self.death_flows.origin[n_flow]) in self.compartment_types_to_stratify:
                 for stratum in _strata_names:
 
                     # get stratified parameter name if requested to stratify, otherwise use the unstratified one
