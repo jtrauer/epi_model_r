@@ -117,13 +117,14 @@ if __name__ == "__main__":
     # plt.show()
 
     # extract data for BCG vaccination for a particular country
-    for country in get_all_iso3_from_bcg(input_database):
-        bcg_coverage = get_bcg_coverage(country)
-        if len(bcg_coverage) == 0:
-            print("no BCG vaccination data available for %s" % country)
-            continue
-        bcg_coverage_function = scale_up_function(bcg_coverage.keys(), bcg_coverage.values(), smoothness=0.2, method=5)
-        plt.plot(list(bcg_coverage.keys()), list(bcg_coverage.values()), "ro")
-        plt.plot(times, [bcg_coverage_function(time) for time in times])
-        plt.title(country)
-        # plt.show()
+    # for country in get_all_iso3_from_bcg(input_database):
+    #     bcg_coverage = get_bcg_coverage(country)
+    #     if len(bcg_coverage) == 0:
+    #         print("no BCG vaccination data available for %s" % country)
+    #         continue
+    #     print("plotting BCG vaccination data and fitted curve for %s" % country)
+    #     bcg_coverage_function = scale_up_function(bcg_coverage.keys(), bcg_coverage.values(), smoothness=0.2, method=5)
+    #     plt.plot(list(bcg_coverage.keys()), list(bcg_coverage.values()), "ro")
+    #     plt.plot(times, [bcg_coverage_function(time) for time in times])
+    #     plt.title(country)
+    #     plt.show()
