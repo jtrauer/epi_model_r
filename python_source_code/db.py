@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from python_source_code.curve import scale_up_function
 
 
-def get_bcg_coverage(country_iso_code):
+def get_bcg_coverage(database, country_iso_code):
     """
     extract bcg coverage from inputs database
 
@@ -16,7 +16,7 @@ def get_bcg_coverage(country_iso_code):
     :return: bcg_coverage
         pandas data frame with columns years and one row containing the values of BCG coverage in that year
     """
-    _bcg_coverage = input_database.db_query("BCG", is_filter="ISO_code", value=country_iso_code)
+    _bcg_coverage = database.db_query("BCG", is_filter="ISO_code", value=country_iso_code)
     _bcg_coverage = _bcg_coverage.filter(items=[column for column in _bcg_coverage.columns if column.isdigit()])
     return {int(key): value for key, value in zip(list(_bcg_coverage.columns), _bcg_coverage.loc[0, :])
             if value is not None}
@@ -110,7 +110,7 @@ if __name__ == "__main__":
     result = input_database.db_query("gtb_2015", column="year", is_filter="iso3", value="MNG")
     cdr_mongolia_year = result["year"].values
     spl = scale_up_function(cdr_mongolia_year, cdr_mongolia, smoothness=0.2, method=5)
-    times = list(np.linspace(1950, 2014, 1e3))
+    times = list(np.linspace(1950, 2020, 1e3))
     scaled_up_cdr = [spl(t) for t in times]
     # plt.plot(cdr_mongolia_year, cdr_mongolia, "ro", times, scaled_up_cdr)
     # plt.title("CDR from GTB 2015")
@@ -118,7 +118,7 @@ if __name__ == "__main__":
 
     # extract data for BCG vaccination for a particular country
     # for country in get_all_iso3_from_bcg(input_database):
-    #     bcg_coverage = get_bcg_coverage(country)
+    #     bcg_coverage = get_bcg_coverage(input_database, country)
     #     if len(bcg_coverage) == 0:
     #         print("no BCG vaccination data available for %s" % country)
     #         continue

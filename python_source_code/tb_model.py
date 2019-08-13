@@ -2,12 +2,11 @@
 from python_source_code.summer_model import *
 from python_source_code.db import InputDB
 import matplotlib.pyplot
-import os
 import numpy
-import scipy.integrate
 import copy
 from python_source_code.curve import scale_up_function
 import pandas as pd
+from python_source_code.db import get_bcg_coverage
 
 
 def provide_aggregated_latency_parameters():
@@ -135,6 +134,9 @@ def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
     """
     current working tb model with some characteristics of mongolia applied at present
     """
+    country_iso3 = "MNG"
+    input_database = InputDB(verbose=True)
+
     integration_times = numpy.linspace(start_time, 2020.0, 201).tolist()
 
     # set basic parameters, flows and times, then functionally add latency
@@ -157,14 +159,23 @@ def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
     compartments = ["susceptible", "early_latent", "late_latent", "infectious", "recovered"]
 
     # define model
-    _tb_model = \
-        StratifiedModel(integration_times, compartments, {"infectious": 1e-3}, parameters, flows, birth_approach="replace_deaths")
+    _tb_model = StratifiedModel(
+        integration_times, compartments, {"infectious": 1e-3}, parameters, flows, birth_approach="replace_deaths")
 
     # add case detection process to basic model
     _tb_model.add_transition_flow(
         {"type": "standard_flows", "parameter": "case_detection", "origin": "infectious", "to": "recovered"})
 
     # create_flowchart(_tb_model, name="unstratified")
+
+    # get bcg coverage function
+    bcg_coverage = get_bcg_coverage(input_database, country_iso3)
+    bcg_coverage_function = scale_up_function(bcg_coverage.keys(), bcg_coverage.values(), smoothness=0.2, method=5)
+
+    # stratify by vaccination status
+    _tb_model.stratify("vaccination", ["vaccinated", "unvaccinated"], ["susceptible"], requested_proportions={},
+                       verbose=False)
+    print(_tb_model.death_flows)
 
     # loading time-variant case detection rate
     input_database = InputDB()
@@ -188,16 +199,16 @@ def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
     # store_database(function_dataframe, table_name="functions")
 
     # test strain stratification
-    strain_only_model = copy.deepcopy(_tb_model)
-    strain_only_model.stratify("strain", ["ds", "mdr"], ["early_latent", "late_latent", "infectious"], {},
-                               verbose=False)
-    create_flowchart(strain_only_model, name="stratified_by_strain")
+    # strain_only_model = copy.deepcopy(_tb_model)
+    # strain_only_model.stratify("strain", ["ds", "mdr"], ["early_latent", "late_latent", "infectious"], {},
+    #                            verbose=False)
+    # create_flowchart(strain_only_model, name="stratified_by_strain")
 
     # test age stratification
     # age_only_model = copy.deepcopy(_tb_model)
-    age_breakpoints = [0, 6, 13, 15]
-    age_infectiousness = get_parameter_dict_from_function(logistic_scaling_function(15.0), age_breakpoints)
-    age_params = get_adapted_age_parameters(age_breakpoints)
+    # age_breakpoints = [0, 6, 13, 15]
+    # age_infectiousness = get_parameter_dict_from_function(logistic_scaling_function(15.0), age_breakpoints)
+    # age_params = get_adapted_age_parameters(age_breakpoints)
     # age_only_model.stratify("age", copy.deepcopy(age_breakpoints), [], {},
     #                         adjustment_requests=age_params,
     #                         infectiousness_adjustments=age_infectiousness,
@@ -224,11 +235,11 @@ def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
     #                    adjustment_requests=age_params,
     #                    infectiousness_adjustments=age_infectiousness,
     #                    verbose=False)
-    _tb_model.stratify("smear",
-                       ["smearpos", "smearneg", "extrapul"],
-                       ["infectious"],
-                       infectiousness_adjustments={"smearneg": 0.24, "extrapul": 0.0},
-                       verbose=False, requested_proportions={})
+    # _tb_model.stratify("smear",
+    #                    ["smearpos", "smearneg", "extrapul"],
+    #                    ["infectious"],
+    #                    infectiousness_adjustments={"smearneg": 0.24, "extrapul": 0.0},
+    #                    verbose=False, requested_proportions={})
     # _tb_model.stratify("risk",
     #                    ["urban", "urbanpoor", "ruralpoor"], [], requested_proportions={},
     #                    adjustment_requests=[], verbose=False)
@@ -270,7 +281,7 @@ if __name__ == "__main__":
     # matplotlib.pyplot.plot(numpy.linspace(1800., 2020.0, 201).tolist(), infectious_population * 1e5)
     # matplotlib.pyplot.xlim((1980., 2020.))
     # matplotlib.pyplot.ylim((0.0, 1e3))
-    matplotlib.pyplot.show()
+    # matplotlib.pyplot.show()
     # matplotlib.pyplot.savefig("mongolia_cdr_output")
 
 
