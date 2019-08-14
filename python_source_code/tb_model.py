@@ -173,12 +173,14 @@ def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
     bcg_coverage_function = scale_up_function(bcg_coverage.keys(), bcg_coverage.values(), smoothness=0.2, method=5)
 
     _tb_model.time_variants["bcg_coverage"] = bcg_coverage_function
+    _tb_model.time_variants["bcg_coverage_reciprocal"] = lambda value: 1.0 - bcg_coverage_function(value)
 
     # stratify by vaccination status
     _tb_model.stratify("bcg", ["vaccinated", "unvaccinated"], ["susceptible"],
                        requested_proportions={"vaccinated": 0.0},
-                       entry_proportions={"vaccinated": "bcg_coverage"},
-                       verbose=False)
+                       entry_proportions={"vaccinated": "bcg_coverage",
+                                          "unvaccinated": "bcg_coverage_reciprocal"},
+                       verbose=True)
 
     # loading time-variant case detection rate
     input_database = InputDB()
