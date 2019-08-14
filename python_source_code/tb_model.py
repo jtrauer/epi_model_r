@@ -156,12 +156,11 @@ main model construction functions
 """
 
 
-def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
+def build_working_tb_model(tb_n_contact, country_iso3, cdr_adjustment=0.6, start_time=1800.):
     """
     current working tb model with some characteristics of mongolia applied at present
     """
-    country_iso3 = "MNG"
-    input_database = InputDB(verbose=True)
+    input_database = InputDB()
 
     integration_times = numpy.linspace(start_time, 2020.0, 201).tolist()
 
@@ -202,7 +201,7 @@ def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
                        requested_proportions={"vaccinated": 0.0},
                        entry_proportions={"vaccinated": "bcg_coverage",
                                           "unvaccinated": "bcg_coverage_reciprocal"},
-                       verbose=True)
+                       verbose=False)
 
     # loading time-variant case detection rate
     input_database = InputDB()
@@ -275,12 +274,14 @@ def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
 
 if __name__ == "__main__":
 
-    tb_model = build_working_tb_model(40.0)
+    for country in ["MNG"]:
 
-    # create_flowchart(tb_model, name="mongolia_flowchart")
-    # tb_model.transition_flows.to_csv("transitions.csv")
+        tb_model = build_working_tb_model(40.0, country)
 
-    tb_model.run_model()
+        # create_flowchart(tb_model, name="mongolia_flowchart")
+        # tb_model.transition_flows.to_csv("transitions.csv")
+
+        tb_model.run_model()
 
     # get outputs
     # infectious_population = tb_model.get_total_compartment_size(["infectious"])
@@ -296,11 +297,11 @@ if __name__ == "__main__":
     # store_database(pbi_outputs, table_name="pbi_outputs")
 
     # easy enough to output a flow diagram if needed:
-    create_flowchart(tb_model)
+    # create_flowchart(tb_model)
 
     # output some basic quantities if not bothered with the PowerBI bells and whistles
     # tb_model.plot_compartment_size(["early_latent", "late_latent"])
-    tb_model.plot_compartment_size(["infectious"], 1e5)
+    # tb_model.plot_compartment_size(["infectious"], 1e5)
 
     # store outputs into database
     # tb_model.store_database()
