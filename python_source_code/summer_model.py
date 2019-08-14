@@ -1350,11 +1350,16 @@ class StratifiedModel(EpiModel):
             if stratum not in _requested_proportions:
                 starting_proportion = 1.0 / len(_strata_names)
                 _requested_proportions[stratum] = starting_proportion
-                self.output_to_user("no starting proportion requested for stratum %s " % stratum +
-                                    "so allocated %s of total" % round(starting_proportion, self.reporting_sigfigs))
+                self.output_to_user(
+                    "no starting proportion requested for %s stratum so provisionally allocated %s of total"
+                    % (stratum, round(starting_proportion, self.reporting_sigfigs)))
 
         # normalise the dictionary before return, in case adding the missing groups as equal proportions exceeds one
-        return normalise_dict(_requested_proportions)
+        _requested_proportions = normalise_dict(_requested_proportions)
+        for stratum in _requested_proportions:
+            self.output_to_user("final proportion of initial conditions allocated to %s stratum is %s"
+                                % (stratum, _requested_proportions[stratum]))
+        return _requested_proportions
 
     def stratify_compartments(self, _stratification_name, _strata_names, _requested_proportions):
         """
