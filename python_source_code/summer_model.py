@@ -1481,8 +1481,10 @@ class StratifiedModel(EpiModel):
                         "assuming equal proportion %s of births to be assigned to %s stratum, as no request submitted"
                         % (entry_fractions[entry_fraction_name], stratum))
 
-        # normalise in case values now sum to more than one
-        entry_fractions = normalise_dict(entry_fractions)
+        # normalise in case values now sum to more than one after some requests submitted and others may be estimated
+        if all(type(entry_fractions[stratum]) == float for stratum in entry_fractions):
+            self.output_to_user("normalising birth/recruitment values to sum to one")
+            entry_fractions = normalise_dict(entry_fractions)
         for stratum in entry_fractions:
             self.output_to_user("final proportion of birth/recruitment assigned to %s is %s"
                                 % (find_name_components(stratum)[-1], entry_fractions[stratum]))
