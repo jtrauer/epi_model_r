@@ -1468,12 +1468,14 @@ class StratifiedModel(EpiModel):
 
                 # if an incorrect string has been submitted by the user
                 elif stratum in _entry_proportions and type(_entry_proportions[stratum]) == str and \
-                        entry_fraction_name not in self.time_variants:
+                        _entry_proportions[stratum] not in self.time_variants:
                     raise ValueError("requested entry fraction function for %s stratum not available in time variants")
 
                 # otherwise it must already be a defined function that can be called during integration
                 elif stratum in _entry_proportions and type(_entry_proportions[stratum]) == str:
-                    self.output_to_user("function submitted for proportion of births assigned to %s" % stratum)
+                    self.time_variants[entry_fraction_name] = self.time_variants[_entry_proportions[stratum]]
+                    self.output_to_user("function %s submitted for proportion of births assigned to %s"
+                                        % (_entry_proportions[stratum], stratum))
                     continue
 
                 # otherwise if no request made
