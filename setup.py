@@ -2,8 +2,8 @@ from setuptools import setup, find_packages
 
 setup(
     name='summer',
-    version='1.0.2',
-    packages=find_packages(),
+    version='1.0.3',
+    packages=["summer"],
     url='https://github.com/jtrauer/summer',
     license='MIT',
     author='James Trauer',
