@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='summer',
-    version='1.0.3',
+    version='1.0.2',
     packages=["summer"],
     url='https://github.com/jtrauer/summer',
     license='MIT',
