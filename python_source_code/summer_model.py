@@ -1377,7 +1377,7 @@ class StratifiedModel(EpiModel):
         """
 
         # find the existing compartments that need stratification
-        self.output_to_user("\n")
+        self.output_to_user("\n-----\ndetermining which compartments to add and which to remove")
         for compartment in \
                 [comp for comp in self.compartment_names if find_stem(comp) in self.compartment_types_to_stratify]:
 
