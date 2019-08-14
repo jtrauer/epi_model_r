@@ -1400,14 +1400,14 @@ class StratifiedModel(EpiModel):
         :param _adjustment_requests:
             see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
         """
-        self.output_to_user("\n")
+        self.output_to_user("\n-----\nstratifying transition flows and calculating associated parameters")
         for n_flow in self.transition_flows[self.transition_flows.implement == len(self.all_stratifications) - 1].index:
             self.add_stratified_flows(
                 n_flow, _stratification_name, _strata_names,
                 find_stem(self.transition_flows.origin[n_flow]) in self.compartment_types_to_stratify,
                 find_stem(self.transition_flows.to[n_flow]) in self.compartment_types_to_stratify,
                 _adjustment_requests)
-        self.output_to_user("\nstratified transition flows matrix:\n%s" % self.transition_flows)
+        self.output_to_user("\n-----\nstratified transition flows matrix\n%s" % self.transition_flows)
 
     def find_transition_indices_to_implement(self):
         """
@@ -1767,7 +1767,7 @@ class StratifiedModel(EpiModel):
         """
         if stratify_from or stratify_to:
             self.output_to_user(
-                "\nfor flow from %s to %s in stratification %s"
+                "for flow from %s to %s in stratification %s"
                 % (self.transition_flows.origin[_n_flow], self.transition_flows.to[_n_flow], _stratification_name))
 
             # loop over each stratum in the requested stratification structure
