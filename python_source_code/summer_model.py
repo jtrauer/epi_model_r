@@ -1099,8 +1099,10 @@ class StratifiedModel(EpiModel):
     main master method for model stratification
     """
 
-    def stratify(self, stratification_name, strata_request, compartment_types_to_stratify, requested_proportions,
-                 adjustment_requests=(), infectiousness_adjustments={}, mixing_matrix=None, verbose=True):
+    def stratify(
+            self, stratification_name, strata_request, compartment_types_to_stratify, requested_proportions,
+            entry_proportions={}, adjustment_requests=(), infectiousness_adjustments={}, mixing_matrix=None,
+            verbose=True):
         """
         calls to initial preparation, checks and methods that stratify the various aspects of the model
 
@@ -1137,7 +1139,7 @@ class StratifiedModel(EpiModel):
 
         # stratify the flows
         self.stratify_transition_flows(stratification_name, strata_names, adjustment_requests)
-        self.stratify_entry_flows(stratification_name, strata_names, requested_proportions)
+        self.stratify_entry_flows(stratification_name, strata_names, entry_proportions, requested_proportions)
         if self.death_flows.shape[0] > 0:
             self.stratify_death_flows(
                 stratification_name, strata_names, adjustment_requests)
@@ -1429,7 +1431,7 @@ class StratifiedModel(EpiModel):
         """
         return self.death_flows[self.death_flows.implement == len(self.all_stratifications) - go_back_one].index
 
-    def stratify_entry_flows(self, _stratification_name, _strata_names, _requested_proportions):
+    def stratify_entry_flows(self, _stratification_name, _strata_names, _entry_proportions, _requested_proportions):
         """
         stratify entry/recruitment/birth flows according to requested entry proportion adjustments
         note this applies to initial conditions and to entry flows
@@ -1445,6 +1447,8 @@ class StratifiedModel(EpiModel):
         """
         entry_fractions = {}
         if self.entry_compartment in self.compartment_types_to_stratify:
+            self.output_to_user(
+                "\n-----\ncalculating proportions of births/recruitment to assign to each stratified entry compartment")
             for stratum in _strata_names:
                 entry_fraction_name = create_stratified_name("entry_fraction", _stratification_name, stratum)
 
@@ -1456,19 +1460,32 @@ class StratifiedModel(EpiModel):
                     entry_fractions[entry_fraction_name] = 0.0
                     continue
 
-                # where a request has been submitted
+                # where a request for splitting entry rates has been submitted
+                elif stratum in _entry_proportions:
+                    entry_fractions[entry_fraction_name] = _entry_proportions[stratum]
+                    self.output_to_user("assigning requested proportion %s of births/recruitment to %s stratum"
+                                        % (_entry_proportions[stratum], stratum))
+
+                # otherwise if a request has only been submitted for the initial conditions, accept that for births
                 elif stratum in _requested_proportions:
                     entry_fractions[entry_fraction_name] = _requested_proportions[stratum]
-                    self.output_to_user("assigning specified proportion of starting population to %s" % stratum)
+                    self.output_to_user(
+                        "assigning %s proportion requested for initial conditions to births/recruitment to %s"
+                        % (_requested_proportions[stratum], stratum) + ", as no entry request submitted")
 
                 # otherwise if no request made
                 else:
                     entry_fractions[entry_fraction_name] = 1.0 / len(_strata_names)
-                    self.output_to_user("assuming %s " % entry_fractions[entry_fraction_name] +
-                                        "of starting population to be assigned to %s stratum by default" % stratum)
+                    self.output_to_user(
+                        "assuming equal proportion %s of births to be assigned to %s stratum, as no request submitted"
+                        % (entry_fractions[entry_fraction_name], stratum))
 
         # normalise in case values now sum to more than one
-        self.parameters.update(normalise_dict(entry_fractions))
+        entry_fractions = normalise_dict(entry_fractions)
+        for stratum in entry_fractions:
+            self.output_to_user("final proportion of birth/recruitment assigned to %s is %s"
+                                % (find_name_components(stratum)[-1], entry_fractions[stratum]))
+        self.parameters.update(entry_fractions)
 
     def stratify_death_flows(self, _stratification_name, _strata_names, _adjustment_requests):
         """
