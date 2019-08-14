@@ -738,7 +738,7 @@ class EpiModel:
         """
         main function to integrate model odes, called externally in the master running script
         """
-        self.output_to_user("\nnow integrating")
+        self.output_to_user("\n-----\nnow integrating")
         self.prepare_stratified_parameter_calculations()
 
         # basic default integration method
@@ -1341,13 +1341,14 @@ class StratifiedModel(EpiModel):
         :return: dict
             revised dictionary of starting proportions after cleaning
         """
+        self.output_to_user(
+            "\n-----\ncalculating proportions of initial conditions to assign to each stratified starting compartment")
         if any(stratum not in _strata_names for stratum in _requested_proportions):
             raise ValueError("requested starting proportion for stratum that does not appear in requested strata")
         if any(_requested_proportions[stratum] > 1.0 for stratum in _requested_proportions):
             raise ValueError("requested a starting proportion value of greater than one")
 
         # assuming an equal proportion of the total for the compartment if not otherwise specified
-        self.output_to_user("\n")
         for stratum in _strata_names:
             if stratum not in _requested_proportions:
                 starting_proportion = 1.0 / len(_strata_names)
