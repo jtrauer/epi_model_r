@@ -140,7 +140,7 @@ def get_bcg_functions(_tb_model, _input_database, _country_iso3):
     """
 
     # get data
-    bcg_coverage = get_bcg_coverage(_input_database, _country_iso3)
+    bcg_coverage = {year: coverage / 1e2 for year, coverage in get_bcg_coverage(_input_database, _country_iso3).items()}
 
     # fit function
     bcg_coverage_function = scale_up_function(bcg_coverage.keys(), bcg_coverage.values(), smoothness=0.2, method=5)
