@@ -125,6 +125,32 @@ def add_standard_infection_flows(list_of_flows):
     return list_of_flows
 
 
+def get_bcg_functions(_tb_model, _input_database, _country_iso3):
+    """
+    function to obtain the bcg coverage from the input database and add the appropriate functions to the tb model
+
+    :param _tb_model: StratifiedModel class
+        SUMMER model object to be assigned bcg vaccination coverage functions
+    :param _input_database: sql database
+        database containing the TB data to extract the bcg coverage from
+    :param _country_iso3: string
+        iso3 code for country of interest
+    :return: StratifiedModel class
+        SUMMER model object with bcg vaccination functions added
+    """
+
+    # get data
+    bcg_coverage = get_bcg_coverage(_input_database, _country_iso3)
+
+    # fit function
+    bcg_coverage_function = scale_up_function(bcg_coverage.keys(), bcg_coverage.values(), smoothness=0.2, method=5)
+
+    # add to model object and return
+    _tb_model.time_variants["bcg_coverage"] = bcg_coverage_function
+    _tb_model.time_variants["bcg_coverage_reciprocal"] = lambda value: 1.0 - bcg_coverage_function(value)
+    return _tb_model
+
+
 """
 main model construction functions
 """
@@ -169,11 +195,7 @@ def build_working_tb_model(tb_n_contact, cdr_adjustment=0.6, start_time=1800.):
     # create_flowchart(_tb_model, name="unstratified")
 
     # get bcg coverage function
-    bcg_coverage = get_bcg_coverage(input_database, country_iso3)
-    bcg_coverage_function = scale_up_function(bcg_coverage.keys(), bcg_coverage.values(), smoothness=0.2, method=5)
-
-    _tb_model.time_variants["bcg_coverage"] = bcg_coverage_function
-    _tb_model.time_variants["bcg_coverage_reciprocal"] = lambda value: 1.0 - bcg_coverage_function(value)
+    _tb_model = get_bcg_functions(_tb_model, input_database, country_iso3)
 
     # stratify by vaccination status
     _tb_model.stratify("bcg", ["vaccinated", "unvaccinated"], ["susceptible"],
