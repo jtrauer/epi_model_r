@@ -1,2 +1,2 @@
 ## Tasks and thoughts to look into
-* seems to be a problem for infection deaths
+* Allowing for functions to be used for entry proportions
