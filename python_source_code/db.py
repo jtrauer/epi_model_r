@@ -38,7 +38,7 @@ class InputDB:
         self.database_name = database_name
         self.engine = create_engine("sqlite:///" + database_name, echo=False)
         self.verbose = verbose
-        self.tabs_of_interest = ["BCG", "Aggregated estimates"]
+        self.tabs_of_interest = ["BCG", "Aggregated estimates", "gtb_2015"]
 
     def update_csv_reads(self, input_path="../xls/*.csv"):
         """
