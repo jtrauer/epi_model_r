@@ -797,7 +797,7 @@ class EpiModel:
         _ode_equations = self.apply_transition_flows(_ode_equations, _compartment_values, _time)
         _ode_equations = self.apply_compartment_death_flows(_ode_equations, _compartment_values, _time)
         _ode_equations = self.apply_universal_death_flow(_ode_equations, _compartment_values, _time)
-        return self.apply_birth_rate(_ode_equations, _compartment_values)
+        return self.apply_birth_rate(_ode_equations, _compartment_values, _time)
 
     def apply_transition_flows(self, _ode_equations, _compartment_values, _time):
         """
@@ -907,7 +907,7 @@ class EpiModel:
                 self.tracked_quantities["total_deaths"] += net_flow
         return _ode_equations
 
-    def apply_birth_rate(self, _ode_equations, _compartment_values):
+    def apply_birth_rate(self, _ode_equations, _compartment_values, _time):
         """
         apply a birth rate to the entry compartments
 
@@ -1446,7 +1446,6 @@ class StratifiedModel(EpiModel):
         :return:
             normalised dictionary of the compartments that the new entry flows should come in to
         """
-        entry_fractions = {}
         if self.entry_compartment in self.compartment_types_to_stratify:
             self.output_to_user(
                 "\n-----\ncalculating proportions of births/recruitment to assign to each stratified entry compartment")
@@ -1455,40 +1454,31 @@ class StratifiedModel(EpiModel):
 
                 # specific behaviour for age stratification
                 if _stratification_name == "age" and str(stratum) == "0":
-                    entry_fractions[entry_fraction_name] = 1.0
+                    self.parameters[entry_fraction_name] = 1.0
                     continue
                 elif _stratification_name == "age":
-                    entry_fractions[entry_fraction_name] = 0.0
+                    self.parameters[entry_fraction_name] = 0.0
                     continue
 
                 # where a request for splitting entry rates has been submitted
-                elif stratum in _entry_proportions:
-                    entry_fractions[entry_fraction_name] = _entry_proportions[stratum]
+                elif stratum in _entry_proportions and type(_entry_proportions[stratum]) == float:
+                    self.parameters[entry_fraction_name] = _entry_proportions[stratum]
                     self.output_to_user("assigning requested proportion %s of births/recruitment to %s stratum"
                                         % (_entry_proportions[stratum], stratum))
 
-                # otherwise if a request has only been submitted for the initial conditions, accept that for births
-                elif stratum in _requested_proportions:
-                    entry_fractions[entry_fraction_name] = _requested_proportions[stratum]
-                    self.output_to_user(
-                        "assigning %s proportion requested for initial conditions to births/recruitment to %s"
-                        % (_requested_proportions[stratum], stratum) + ", as no entry request submitted")
+                # if an incorrect string has been submitted by the user
+                elif stratum in _entry_proportions and type(_entry_proportions[stratum]) == str and \
+                        entry_fraction_name not in self.time_variants:
+                    raise ValueError("requested entry fraction function for %s stratum not available in time variants")
+
+                # otherwise it must already be a defined function that can be called during integration
+                elif stratum in _entry_proportions and type(_entry_proportions[stratum]) == str:
+                    self.output_to_user("function submitted for proportion of births assigned to %s" % stratum)
+                    continue
 
                 # otherwise if no request made
                 else:
-                    entry_fractions[entry_fraction_name] = 1.0 / len(_strata_names)
-                    self.output_to_user(
-                        "assuming equal proportion %s of births to be assigned to %s stratum, as no request submitted"
-                        % (entry_fractions[entry_fraction_name], stratum))
-
-        # normalise in case values now sum to more than one after some requests submitted and others may be estimated
-        if all(type(entry_fractions[stratum]) == float for stratum in entry_fractions):
-            self.output_to_user("normalising birth/recruitment values to sum to one")
-            entry_fractions = normalise_dict(entry_fractions)
-        for stratum in entry_fractions:
-            self.output_to_user("final proportion of birth/recruitment assigned to %s is %s"
-                                % (find_name_components(stratum)[-1], entry_fractions[stratum]))
-        self.parameters.update(entry_fractions)
+                    self.parameters[entry_fraction_name] = 1.0 / len(_strata_names)
 
     def stratify_death_flows(self, _stratification_name, _strata_names, _adjustment_requests):
         """
@@ -1991,9 +1981,11 @@ class StratifiedModel(EpiModel):
                 self.mixing_matrix[int(self.transition_flows.force_index[n_flow]), :])) / \
                    sum(self.infectious_denominators)
 
-    def apply_birth_rate(self, _ode_equations, _compartment_values):
+    def apply_birth_rate(self, _ode_equations, _compartment_values, _time):
         """
         apply a population-wide death rate to all compartments
+        all the entry_fraction proportions should be present in either parameters or time_variants given how they are
+            created in the process of implementing stratification
 
         :parameters: all parameters have come directly from the apply_all_flow_types_to_odes method unchanged
         """
@@ -2004,15 +1996,12 @@ class StratifiedModel(EpiModel):
 
             # calculate adjustment to original stem entry rate
             entry_fraction = 1.0
-            x_positions = extract_x_positions(compartment)
-            if len(x_positions) > 1:
-                for x_instance in range(len(x_positions) - 1):
-                    entry_fraction *= \
-                        self.parameters["entry_fractionX%s"
-                                        % compartment[x_positions[x_instance] + 1: x_positions[x_instance + 1]]]
-            compartment_births = entry_fraction * total_births
+            for stratum in find_name_components(compartment)[1:]:
+                entry_fraction *= self.find_parameter_value("entry_fractionX%s" % stratum, _time)
+
+            # apply to that compartment
             _ode_equations = increment_list_by_index(
-                _ode_equations, self.compartment_names.index(compartment), compartment_births)
+                _ode_equations, self.compartment_names.index(compartment), total_births * entry_fraction)
         return _ode_equations
 
 
