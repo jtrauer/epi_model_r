@@ -198,8 +198,7 @@ def build_working_tb_model(tb_n_contact, country_iso3, cdr_adjustment=0.6, start
     age_breakpoints = [5, 15]
     age_infectiousness = get_parameter_dict_from_function(logistic_scaling_function(15.0), age_breakpoints)
     age_params = get_adapted_age_parameters(age_breakpoints)
-    # distinguish contact rate in under 5s parameter to allow for this to be modified later by vaccination
-    age_params["contact_rate"] = {"0": 1.0, "5": 1.0}
+    age_params.update(split_age_parameter(age_breakpoints, "contact_rate"))
 
     # test age stratification
     # age_only_model = copy.deepcopy(_tb_model)
@@ -208,6 +207,10 @@ def build_working_tb_model(tb_n_contact, country_iso3, cdr_adjustment=0.6, start
     #                         infectiousness_adjustments=age_infectiousness,
     #                         verbose=False)
     # create_flowchart(age_only_model, name="stratified_by_age")
+
+    # temporary function to hold place that we could use to define age-specific bcg efficacy function
+    age_bcg_efficacy_dict = get_parameter_dict_from_function(lambda value: 1.0, age_breakpoints)
+    bcg_efficacy = substratify_parameter("contact_rate", "vaccinated", age_bcg_efficacy_dict, age_breakpoints)
 
     # stratify the actual model by age
     _tb_model.stratify("age", age_breakpoints, [], {},
@@ -223,8 +226,7 @@ def build_working_tb_model(tb_n_contact, country_iso3, cdr_adjustment=0.6, start
                        requested_proportions={"vaccinated": 0.0},
                        entry_proportions={"vaccinated": "bcg_coverage",
                                           "unvaccinated": "bcg_coverage_complement"},
-                       adjustment_requests={"contact_rateXage_0": {"vaccinated": 0.3},
-                                            "contact_rateXage_5": {"vaccinated": 0.6}},
+                       adjustment_requests=bcg_efficacy,
                        verbose=False)
 
     create_flowchart(_tb_model, name="stratified_by_age_vaccination")

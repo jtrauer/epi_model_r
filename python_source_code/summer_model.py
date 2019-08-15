@@ -333,18 +333,61 @@ def get_average_value_of_function(input_function, start_value, end_value):
     return quad(input_function, start_value, end_value)[0] / (end_value - start_value)
 
 
+def add_zero_to_age_breakpoints(breakpoints):
+    return [0] + breakpoints if 0 not in breakpoints else breakpoints
+
+
 def get_parameter_dict_from_function(input_function, breakpoints, upper_value=100.0):
     """
     create a dictionary of parameter values from a continuous function, an arbitrary upper value and some breakpoints
     within which to evaluate the function
     """
-    breakpoints_with_upper = copy.copy(breakpoints)
-    breakpoints_with_upper.append(upper_value)
+    revised_breakpoints = copy.copy(add_zero_to_age_breakpoints(breakpoints))
+    revised_breakpoints.append(upper_value)
     param_values = []
-    for param_breakpoints in range(len(breakpoints)):
+    for n_breakpoint in range(len(revised_breakpoints) - 1):
         param_values.append(get_average_value_of_function(
-            input_function, breakpoints_with_upper[param_breakpoints], breakpoints_with_upper[param_breakpoints + 1]))
-    return {str(key): value for key, value in zip(breakpoints, param_values)}
+            input_function, revised_breakpoints[n_breakpoint], revised_breakpoints[n_breakpoint + 1]))
+    return {str(key): value for key, value in zip(revised_breakpoints, param_values)}
+
+
+def split_age_parameter(age_breakpoints, parameter):
+    """
+    creates a dictionary to request splitting of a parameter according to age breakpoints, but using values of 1 for
+        each age stratum
+    in order that later parameters that might be age-specific can be modified for some age strata
+
+    :param age_breakpoints: list
+        list of the age breakpoints to be requested, with breakpoints as string
+    :param parameter: str
+        name of parameter that will need to be split
+    :return: dict
+        dictionary with age groups as string as keys and ones for all the values
+    """
+    age_breakpoints = ["0"] + age_breakpoints if "0" not in age_breakpoints else age_breakpoints
+    return {parameter: {str(age_group): 1.0 for age_group in age_breakpoints}}
+
+
+def substratify_parameter(parameter_to_stratify, stratum_to_split, param_value_dict, breakpoints):
+    """
+    produce dictionary revise a stratum of a parameter that has been split at a higher level from dictionary of the
+        values for each stratum of the higher level of the split
+
+    :param parameter_to_stratify: str
+        name of the parameter that was split at the higher level
+    :param stratum_to_split: str
+        stratum whose values should be revised
+    :param param_value_dict: dict
+        dictionary with keys age breakpoints and values parameter values
+    :param breakpoints: list
+        list of age breakpoints submitted as integer
+    :return: dict
+        dictionary with keys being upstream stratified parameter to split and keys dictionaries with their keys the
+            current stratum of interest and values the parameter multiplier
+    """
+
+    return {parameter_to_stratify + "Xage_" + str(age_group): {stratum_to_split: param_value_dict[str(age_group)]} for
+            age_group in add_zero_to_age_breakpoints(breakpoints)}
 
 
 """
