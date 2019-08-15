@@ -120,8 +120,8 @@ def add_standard_infection_flows(list_of_flows):
         list of flows updated to include the standard infection processes
     """
     list_of_flows += [
-        {"type": "infection_frequency", "parameter": "beta", "origin": "susceptible", "to": "early_latent"},
-        {"type": "infection_frequency", "parameter": "beta", "origin": "recovered", "to": "early_latent"}]
+        {"type": "infection_frequency", "parameter": "contact_rate", "origin": "susceptible", "to": "early_latent"},
+        {"type": "infection_frequency", "parameter": "contact_rate", "origin": "recovered", "to": "early_latent"}]
     return list_of_flows
 
 
@@ -168,7 +168,7 @@ def build_working_tb_model(tb_n_contact, country_iso3, cdr_adjustment=0.6, start
     case_fatality_rate = 0.4
     untreated_disease_duration = 3.0
     parameters = \
-        {"beta": tb_n_contact,
+        {"contact_rate": tb_n_contact,
          "recovery": case_fatality_rate / untreated_disease_duration,
          "infect_death": (1.0 - case_fatality_rate) / untreated_disease_duration,
          "universal_death_rate": 1.0 / 50.0,
