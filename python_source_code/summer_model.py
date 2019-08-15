@@ -390,6 +390,34 @@ def substratify_parameter(parameter_to_stratify, stratum_to_split, param_value_d
             age_group in add_zero_to_age_breakpoints(breakpoints)}
 
 
+def create_sloping_step_function(start_x, start_y, end_x, end_y):
+    """
+    create sloping step function, returning start y-value for input values below starting x-value, ending y-value
+        for input values above ending x-value and connecting slope through the middle
+
+    :param start_x: float
+        starting x-value
+    :param start_y: float
+        starting y-value
+    :param end_x: float
+        ending x-value
+    :param end_y: float
+        ending y-value
+    :return: function
+        sloping function as described above
+    """
+    gradient = (end_y - start_y) / (end_x - start_x)
+
+    def step_function(age):
+        if age < start_x:
+            return start_y
+        elif start_x <= age < end_x:
+            return gradient * age + start_y - gradient * start_x
+        elif end_x <= age:
+            return end_y
+    return step_function
+
+
 """
 other specific functions for application to the model object
 """

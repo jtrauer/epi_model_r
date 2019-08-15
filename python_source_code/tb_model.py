@@ -208,8 +208,8 @@ def build_working_tb_model(tb_n_contact, country_iso3, cdr_adjustment=0.6, start
     #                         verbose=False)
     # create_flowchart(age_only_model, name="stratified_by_age")
 
-    # temporary function to hold place that we could use to define age-specific bcg efficacy function
-    age_bcg_efficacy_dict = get_parameter_dict_from_function(lambda value: 1.0, age_breakpoints)
+    bcg_wane = create_sloping_step_function(15.0, 0.7, 30.0, 0.0)
+    age_bcg_efficacy_dict = get_parameter_dict_from_function(lambda value: bcg_wane(value), age_breakpoints)
     bcg_efficacy = substratify_parameter("contact_rate", "vaccinated", age_bcg_efficacy_dict, age_breakpoints)
 
     # stratify the actual model by age
