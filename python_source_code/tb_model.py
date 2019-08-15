@@ -147,7 +147,7 @@ def get_bcg_functions(_tb_model, _input_database, _country_iso3):
 
     # add to model object and return
     _tb_model.time_variants["bcg_coverage"] = bcg_coverage_function
-    _tb_model.time_variants["bcg_coverage_reciprocal"] = lambda value: 1.0 - bcg_coverage_function(value)
+    _tb_model.time_variants["bcg_coverage_complement"] = lambda value: 1.0 - bcg_coverage_function(value)
     return _tb_model
 
 
@@ -199,7 +199,7 @@ def build_working_tb_model(tb_n_contact, country_iso3, cdr_adjustment=0.6, start
     age_infectiousness = get_parameter_dict_from_function(logistic_scaling_function(15.0), age_breakpoints)
     age_params = get_adapted_age_parameters(age_breakpoints)
     # distinguish contact rate in under 5s parameter to allow for this to be modified later by vaccination
-    age_params["contact_rate"] = {"0": 1.0}
+    age_params["contact_rate"] = {"0": 1.0, "5": 1.0}
 
     # test age stratification
     # age_only_model = copy.deepcopy(_tb_model)
@@ -222,8 +222,9 @@ def build_working_tb_model(tb_n_contact, country_iso3, cdr_adjustment=0.6, start
     _tb_model.stratify("bcg", ["vaccinated", "unvaccinated"], ["susceptible"],
                        requested_proportions={"vaccinated": 0.0},
                        entry_proportions={"vaccinated": "bcg_coverage",
-                                          "unvaccinated": "bcg_coverage_reciprocal"},
-                       adjustment_requests={"contact_rateXage_0": {"vaccinated": 0.3}},
+                                          "unvaccinated": "bcg_coverage_complement"},
+                       adjustment_requests={"contact_rateXage_0": {"vaccinated": 0.3},
+                                            "contact_rateXage_5": {"vaccinated": 0.6}},
                        verbose=False)
 
     create_flowchart(_tb_model, name="stratified_by_age_vaccination")
