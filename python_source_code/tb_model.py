@@ -194,6 +194,27 @@ def build_working_tb_model(tb_n_contact, country_iso3, cdr_adjustment=0.6, start
 
     # create_flowchart(_tb_model, name="unstratified")
 
+    # prepare age stratification
+    age_breakpoints = [5, 15]
+    age_infectiousness = get_parameter_dict_from_function(logistic_scaling_function(15.0), age_breakpoints)
+    age_params = get_adapted_age_parameters(age_breakpoints)
+    # distinguish contact rate in under 5s parameter to allow for this to be modified later by vaccination
+    age_params["contact_rate"] = {"0": 1.0}
+
+    # test age stratification
+    # age_only_model = copy.deepcopy(_tb_model)
+    # age_only_model.stratify("age", copy.deepcopy(age_breakpoints), [], {},
+    #                         adjustment_requests=age_params,
+    #                         infectiousness_adjustments=age_infectiousness,
+    #                         verbose=False)
+    # create_flowchart(age_only_model, name="stratified_by_age")
+
+    # stratify the actual model by age
+    _tb_model.stratify("age", age_breakpoints, [], {},
+                       adjustment_requests=age_params,
+                       infectiousness_adjustments=age_infectiousness,
+                       verbose=False)
+
     # get bcg coverage function
     _tb_model = get_bcg_functions(_tb_model, input_database, country_iso3)
 
@@ -202,7 +223,10 @@ def build_working_tb_model(tb_n_contact, country_iso3, cdr_adjustment=0.6, start
                        requested_proportions={"vaccinated": 0.0},
                        entry_proportions={"vaccinated": "bcg_coverage",
                                           "unvaccinated": "bcg_coverage_reciprocal"},
+                       adjustment_requests={"contact_rateXage_0": {"vaccinated": 0.3}},
                        verbose=False)
+
+    create_flowchart(_tb_model, name="stratified_by_age_vaccination")
 
     # loading time-variant case detection rate
     input_database = InputDB()
@@ -231,17 +255,6 @@ def build_working_tb_model(tb_n_contact, country_iso3, cdr_adjustment=0.6, start
     #                            verbose=False)
     # create_flowchart(strain_only_model, name="stratified_by_strain")
 
-    # test age stratification
-    # age_only_model = copy.deepcopy(_tb_model)
-    # age_breakpoints = [0, 6, 13, 15]
-    # age_infectiousness = get_parameter_dict_from_function(logistic_scaling_function(15.0), age_breakpoints)
-    # age_params = get_adapted_age_parameters(age_breakpoints)
-    # age_only_model.stratify("age", copy.deepcopy(age_breakpoints), [], {},
-    #                         adjustment_requests=age_params,
-    #                         infectiousness_adjustments=age_infectiousness,
-    #                         verbose=False)
-    # create_flowchart(age_only_model, name="stratified_by_age")
-
     # test organ stratification
     # organ_only_model = copy.deepcopy(_tb_model)
     # organ_only_model.stratify("smear",
@@ -257,10 +270,6 @@ def build_working_tb_model(tb_n_contact, country_iso3, cdr_adjustment=0.6, start
     # create_flowchart(risk_only_model, name="stratified_by_risk")
 
     # _tb_model.stratify("strain", ["ds", "mdr"], ["early_latent", "late_latent", "infectious"], {},
-    #                    verbose=False)
-    # _tb_model.stratify("age", age_breakpoints, [], {},
-    #                    adjustment_requests=age_params,
-    #                    infectiousness_adjustments=age_infectiousness,
     #                    verbose=False)
     # _tb_model.stratify("smear",
     #                    ["smearpos", "smearneg", "extrapul"],

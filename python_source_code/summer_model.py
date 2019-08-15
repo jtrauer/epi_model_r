@@ -1304,6 +1304,8 @@ class StratifiedModel(EpiModel):
 
                 # if the parameter ends in W, interpret as an overwrite parameter and added to this key
                 elif stratum[-1] == self.overwrite_character:
+                    if "overwrite" not in revised_adjustments[parameter]:
+                        revised_adjustments[parameter]["overwrite"] = []
                     revised_adjustments[parameter][stratum[: -1]] = _adjustment_requests[parameter][stratum]
                     revised_adjustments[parameter]["overwrite"].append(stratum[: -1])
 
