@@ -914,9 +914,9 @@ class EpiModel:
         :parameters and return: see previous method apply_all_flow_types_to_odes
         """
         return increment_list_by_index(_ode_equations, self.compartment_names.index(self.entry_compartment),
-                                       self.find_total_births(_compartment_values))
+                                       self.find_total_births(_compartment_values, _time))
 
-    def find_total_births(self, _compartment_values):
+    def find_total_births(self, _compartment_values, _time):
         """
         work out the total births to apply dependent on the approach requested
 
@@ -926,7 +926,7 @@ class EpiModel:
             total rate of births to be implemented in the model
         """
         if self.birth_approach == "add_crude_birth_rate":
-            return self.parameters["crude_birth_rate"] * sum(_compartment_values)
+            return self.find_parameter_value("crude_birth_rate", _time) * sum(_compartment_values)
         elif self.birth_approach == "replace_deaths":
             return self.tracked_quantities["total_deaths"]
         else:
@@ -1991,7 +1991,7 @@ class StratifiedModel(EpiModel):
 
         :parameters: all parameters have come directly from the apply_all_flow_types_to_odes method unchanged
         """
-        total_births = self.find_total_births(_compartment_values)
+        total_births = self.find_total_births(_compartment_values, _time)
 
         # split the total births across entry compartments
         for compartment in [comp for comp in self.compartment_names if find_stem(comp) == self.entry_compartment]:

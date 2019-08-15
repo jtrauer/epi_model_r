@@ -11,6 +11,8 @@ def get_bcg_coverage(database, country_iso_code):
     """
     extract bcg coverage from inputs database
 
+    :param database: sql database
+        the database containing the bcg data
     :param country_iso_code: string
         three letter ISO3 code for the country of interest
     :return: bcg_coverage
@@ -18,11 +20,20 @@ def get_bcg_coverage(database, country_iso_code):
     """
     _bcg_coverage = database.db_query("BCG", is_filter="ISO_code", value=country_iso_code)
     _bcg_coverage = _bcg_coverage.filter(items=[column for column in _bcg_coverage.columns if column.isdigit()])
-    return {int(key): value for key, value in zip(list(_bcg_coverage.columns), _bcg_coverage.loc[0, :])
+    return {int(key): value / 1e2 for key, value in zip(list(_bcg_coverage.columns), _bcg_coverage.loc[0, :])
             if value is not None}
 
 
 def get_all_iso3_from_bcg(database):
+    """
+    check which iso3 country codes are available from the bcg database
+
+    :param database: sql database
+        the database containing the bcg data
+    :return: list
+        all the iso3 strings available from the bcg database
+    """
+
     return database.db_query("bcg", column="ISO_code")["ISO_code"].tolist()
 
 

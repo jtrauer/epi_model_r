@@ -140,7 +140,7 @@ def get_bcg_functions(_tb_model, _input_database, _country_iso3):
     """
 
     # get data
-    bcg_coverage = {year: coverage / 1e2 for year, coverage in get_bcg_coverage(_input_database, _country_iso3).items()}
+    bcg_coverage = get_bcg_coverage(_input_database, _country_iso3)
 
     # fit function
     bcg_coverage_function = scale_up_function(bcg_coverage.keys(), bcg_coverage.values(), smoothness=0.2, method=5)
@@ -172,7 +172,8 @@ def build_working_tb_model(tb_n_contact, country_iso3, cdr_adjustment=0.6, start
          "recovery": case_fatality_rate / untreated_disease_duration,
          "infect_death": (1.0 - case_fatality_rate) / untreated_disease_duration,
          "universal_death_rate": 1.0 / 50.0,
-         "case_detection": 0.0}
+         "case_detection": 0.0,
+         "crude_birth_rate": 20.0 / 1e3}
     parameters.update(change_parameter_unit(provide_aggregated_latency_parameters(), 365.251))
 
     # sequentially add groups of flows
@@ -185,7 +186,7 @@ def build_working_tb_model(tb_n_contact, country_iso3, cdr_adjustment=0.6, start
 
     # define model
     _tb_model = StratifiedModel(
-        integration_times, compartments, {"infectious": 1e-3}, parameters, flows, birth_approach="replace_deaths")
+        integration_times, compartments, {"infectious": 1e-3}, parameters, flows, birth_approach="add_crude_birth_rate")
 
     # add case detection process to basic model
     _tb_model.add_transition_flow(
