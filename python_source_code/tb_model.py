@@ -125,7 +125,7 @@ def add_standard_infection_flows(list_of_flows):
     return list_of_flows
 
 
-def get_bcg_functions(_tb_model, _input_database, _country_iso3):
+def get_bcg_functions(_tb_model, _input_database, _country_iso3, start_year=1955):
     """
     function to obtain the bcg coverage from the input database and add the appropriate functions to the tb model
 
@@ -135,12 +135,15 @@ def get_bcg_functions(_tb_model, _input_database, _country_iso3):
         database containing the TB data to extract the bcg coverage from
     :param _country_iso3: string
         iso3 code for country of interest
+    :param start_year: int
+        year in which bcg vaccination was assumed to have started at a significant programmatic level for the country
     :return: StratifiedModel class
         SUMMER model object with bcg vaccination functions added
     """
 
-    # get data
+    # create dictionary of data
     bcg_coverage = get_bcg_coverage(_input_database, _country_iso3)
+    bcg_coverage[start_year] = 0.0
 
     # fit function
     bcg_coverage_function = scale_up_function(bcg_coverage.keys(), bcg_coverage.values(), smoothness=0.2, method=5)
