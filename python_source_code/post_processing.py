@@ -44,16 +44,19 @@ class PostProcessing:
 
     def interpret_requested_outputs(self):
         """
-        interpret the string variables provided in requested outputs to define the calculations to be made. This method
-        will populate self.operations_to_perform
+        Interpret the string variables provided in requested outputs to define the calculations to be made. This method
+        will populate self.operations_to_perform.
 
-        the requested output should be in the following format: 'prevXlatentXamongXage_0Xage_5Xbcg_vaccinated'
+        The requested output should be in the following format: 'prevXlatentXstrain_mdrXamongXage_0Xage_5Xbcg_vaccinated'
         - keywords are separated with the character 'X'
         - the first keyword indicates the type of measure (prev, inc, ...)
         - the keywords located after 'among' specify the population of interest for an output:
           A compartment will be considered relevant if its name contains at least one of the strata strings for each of
-          the stratification factors listed. With the above example, a compartment's name needs to contain
-          ('age_0' OR 'age_5') AND 'bcg_vaccinated'
+          the stratification factors listed. With the example above, a compartment's name needs to contain
+          ('age_0' OR 'age_5') AND 'bcg_vaccinated' to be considered.
+        - the keywords located before 'among' (excluding the first keyword) specify the infection states relevant to the
+          output of interest. With the example above, we are interested in individuals who have latent infection with a
+          MDR strain.
         """
         for output in self.requested_outputs:
             self.operations_to_perform[output] = {}
@@ -72,7 +75,7 @@ class PostProcessing:
 
                 # work out the conditions to be satisfied regarding the infection status
                 string_pre_among = output.split("among")[0]
-                infection_status = string_pre_among.split("X")[1]
+                infection_status = string_pre_among.split("X")[1:]
 
                 # list all relevant compartments that should be included into the numerator or the denominator
                 self.operations_to_perform[output]['numerator_indices'] = []
@@ -84,7 +87,7 @@ class PostProcessing:
                             is_relevant = False
                             break
                     if is_relevant:
-                        if infection_status in compartment:
+                        if all(category in compartment for category in infection_status):
                             self.operations_to_perform[output]['numerator_indices'].append(j)
                         else:
                             self.operations_to_perform[output]['denominator_extra_indices'].append(j)
@@ -94,7 +97,7 @@ class PostProcessing:
     def generate_outputs(self):
         """
         main method that generates all the requested outputs.
-        'self.generated_outputs' will populated during this process
+        'self.generated_outputs' will be populated during this process
         """
         for output in self.requested_outputs:
             if output in self.requested_times.keys():
@@ -109,7 +112,7 @@ class PostProcessing:
 
     def get_output_for_selected_times(self, output, time_indices):
         """
-        returns the requested output for a given time index
+        returns the requested output for a given list of time indices
 
         :param output: the name of the requested output
         :param time_indices: the time index
