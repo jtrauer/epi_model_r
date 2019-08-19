@@ -76,6 +76,7 @@ class InputDB:
              "../xls/gtb_2016.xlsx": "gtb_2016",
              "../xls/life_expectancy_2015.xlsx": "life_expectancy_2015",
              "../xls/rate_birth_2015.xlsx": "rate_birth_2015"}
+        self.map_df = None
 
     def update_csv_reads(self, input_path="../xls/*.csv"):
         """
@@ -121,24 +122,37 @@ class InputDB:
             query = query + " Where %s = \'%s\'" % (is_filter, value)
         return pd.read_sql_query(query, con=self.engine)
 
+    def add_iso_to_table(self, table_name):
+        """
+        add the mapped iso3 code to a table that only contains the un country code
+
+        :param table_name: str
+            name of the spreadsheet to perform this on
+        """
+        self.get_un_iso_map()
+        table_with_iso = pd.merge(
+            self.db_query(table_name=table_name), self.map_df, left_on='Country code', right_on='Location code')
+        table_with_iso = table_with_iso.drop(columns=["Index"])
+        table_with_iso.to_sql(table_name + "_mapped", con=self.engine, if_exists="replace")
+
+    def get_un_iso_map(self):
+        """
+        create dictionary structure to map from un three numeric digit codes to iso3 three alphabetical digit codes
+        """
+        self.map_df = self.db_query(table_name='un_iso3_map')[['Location code', 'ISO3 Alpha-code']].dropna()
+
 
 if __name__ == "__main__":
 
     # standard code to update the database
     input_database = InputDB()
-    input_database.update_xl_reads(["../xls/WPP2019_FERT_F03_CRUDE_BIRTH_RATE.xlsx"])
+    input_database.update_xl_reads()
     # input_database.update_csv_reads()
 
-    # loc_code_df = pd.read_excel('../xls/WPP2019_F01_LOCATIONS.XLSX', header=16, index_col=1)
-    # map_df = loc_code_df[['Location code', 'ISO3 Alpha-code']]
-    # map_df = map_df.dropna()
-    # birth_df_new = pd.merge(birth_df, map_df, left_on='Country code', right_on='Location code')
-    # birth_df_new = birth_df_new.drop(['Index'], axis=1)
-    # birth_df_new.to_sql('WPP2019_FERT_ISO', con=conn, if_exists="replace")
-    
-    # example of accessing once loaded
-    times = list(np.linspace(1950, 2020, 1e3))
+    input_database.add_iso_to_table("crude_birth_rate")
 
+    # example of accessing once loaded
+    # times = list(np.linspace(1950, 2020, 1e3))
     # extract data for BCG vaccination for a particular country
     # for country in get_all_iso3_from_bcg(input_database):
     #     bcg_coverage = get_bcg_coverage(input_database, country)
@@ -146,7 +160,8 @@ if __name__ == "__main__":
     #         print("no BCG vaccination data available for %s" % country)
     #         continue
     #     print("plotting BCG vaccination data and fitted curve for %s" % country)
-    #     bcg_coverage_function = scale_up_function(bcg_coverage.keys(), bcg_coverage.values(), smoothness=0.2, method=5)
+    #     bcg_coverage_function = scale_up_function(
+    #           bcg_coverage.keys(), bcg_coverage.values(), smoothness=0.2, method=5)
     #     plt.plot(list(bcg_coverage.keys()), list(bcg_coverage.values()), "ro")
     #     plt.plot(times, [bcg_coverage_function(time) for time in times])
     #     plt.title(country)
