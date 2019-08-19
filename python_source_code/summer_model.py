@@ -44,15 +44,31 @@ def create_stratum_name(stratification_name, stratum_name, joining_string="X"):
 def create_stratified_name(stem, stratification_name, stratum_name):
     """
     generate a standardised stratified compartment name
+
+    :param stem: str
+        the previous stem to the compartment or parameter name that needs to be extended
+    :param stratification_name: str
+        the rationale for implementing the full stratification
+    :param stratum_name: str
+        the name of the current stratum being implemented
+    :return: str
+        the composite name with the standardised stratification name added on to the old stem
     """
     return stem + create_stratum_name(stratification_name, stratum_name)
 
 
-def extract_x_positions(parameter):
+def extract_x_positions(parameter, joining_string="X"):
     """
     find the positions within a string which are X and return as list, including length of list
+
+    :param parameter: str
+        the string for interrogation
+    :param joining_string: str
+        the sring of interest whose positions need to be found
+    :return: list
+        list of all the indices for where the X character occurs in the string, along with the total length of the list
     """
-    result = [loc for loc in range(len(parameter)) if parameter[loc] == "X"]
+    result = [loc for loc in range(len(parameter)) if parameter[loc] == joining_string]
     result.append(len(parameter))
     return result
 
@@ -60,6 +76,8 @@ def extract_x_positions(parameter):
 def extract_reversed_x_positions(parameter):
     """
     find the positions within a string which are X and return as list reversed, including length of list
+
+    :params and return: see extract_x_positions
     """
     result = extract_x_positions(parameter)
     result.reverse()
@@ -69,6 +87,11 @@ def extract_reversed_x_positions(parameter):
 def find_stem(stratified_string):
     """
     find the stem of the compartment name as the text leading up to the first occurrence of "X"
+
+    :param stratified_string: str
+        the stratified string for the compartment or parameter name
+    :return: int
+        the point at which the first occurrence of the joining string occurs
     """
     return find_name_components(stratified_string)[0]
 
