@@ -24,26 +24,51 @@ string manipulation functions
 """
 
 
-def create_stratum_name(stratification_name, stratum_name, with_x=True):
+def create_stratum_name(stratification_name, stratum_name, joining_string="X"):
     """
     generate the name just for the particular stratification
+
+    :param stratification_name: str
+        name of the general reason for the stratification being implemented
+    :param stratum_name: str
+        name of the stratum within the stratification
+    :param joining_string: boolean
+        whether to add an X at the front to indicate that this string is the extension of the existing one
+    :return: str
+        the composite string for the stratification
     """
     stratum_name = "%s_%s" % (stratification_name, str(stratum_name))
-    return "X" + stratum_name if with_x else stratum_name
+    return joining_string + stratum_name if joining_string else stratum_name
 
 
 def create_stratified_name(stem, stratification_name, stratum_name):
     """
     generate a standardised stratified compartment name
+
+    :param stem: str
+        the previous stem to the compartment or parameter name that needs to be extended
+    :param stratification_name: str
+        the rationale for implementing the full stratification
+    :param stratum_name: str
+        the name of the current stratum being implemented
+    :return: str
+        the composite name with the standardised stratification name added on to the old stem
     """
     return stem + create_stratum_name(stratification_name, stratum_name)
 
 
-def extract_x_positions(parameter):
+def extract_x_positions(parameter, joining_string="X"):
     """
     find the positions within a string which are X and return as list, including length of list
+
+    :param parameter: str
+        the string for interrogation
+    :param joining_string: str
+        the sring of interest whose positions need to be found
+    :return: list
+        list of all the indices for where the X character occurs in the string, along with the total length of the list
     """
-    result = [loc for loc in range(len(parameter)) if parameter[loc] == "X"]
+    result = [loc for loc in range(len(parameter)) if parameter[loc] == joining_string]
     result.append(len(parameter))
     return result
 
@@ -51,6 +76,8 @@ def extract_x_positions(parameter):
 def extract_reversed_x_positions(parameter):
     """
     find the positions within a string which are X and return as list reversed, including length of list
+
+    :params and return: see extract_x_positions
     """
     result = extract_x_positions(parameter)
     result.reverse()
@@ -60,6 +87,11 @@ def extract_reversed_x_positions(parameter):
 def find_stem(stratified_string):
     """
     find the stem of the compartment name as the text leading up to the first occurrence of "X"
+
+    :param stratified_string: str
+        the stratified string for the compartment or parameter name
+    :return: int
+        the point at which the first occurrence of the joining string occurs
     """
     return find_name_components(stratified_string)[0]
 
@@ -1765,7 +1797,7 @@ class StratifiedModel(EpiModel):
             raise ValueError("infectiousness adjustment key not in strata being implemented")
         else:
             for stratum in _infectiousness_adjustments:
-                self.infectiousness_levels[create_stratum_name(_stratification_name, stratum, with_x=False)] = \
+                self.infectiousness_levels[create_stratum_name(_stratification_name, stratum, joining_string="")] = \
                     _infectiousness_adjustments[stratum]
         self.find_infectious_indices()
         for strain in self.infectious_indices:
