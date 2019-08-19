@@ -6,7 +6,7 @@ import numpy
 import copy
 from python_source_code.curve import scale_up_function
 import pandas as pd
-from python_source_code.db import get_bcg_coverage
+from python_source_code.db import get_bcg_coverage, get_crude_birth_rate
 
 
 def provide_aggregated_latency_parameters():
@@ -154,6 +154,25 @@ def get_bcg_functions(_tb_model, _input_database, _country_iso3, start_year=1955
     return _tb_model
 
 
+def get_birth_rate_functions(_tb_model, _input_database, _country_iso3):
+    """
+    add crude birth rate function to existing epidemiological model
+
+    :param _tb_model: EpiModel or StratifiedModel class
+        SUMMER model object to be assigned bcg vaccination coverage functions
+    :param _input_database: sql database
+        database containing the TB data to extract the bcg coverage from
+    :param _country_iso3: string
+        iso3 code for country of interest
+    :return: EpiModel or StratifiedModel class
+        SUMMER model object with birth rate function added
+    """
+    crude_birth_rate_data = get_crude_birth_rate(_input_database, _country_iso3)
+    _tb_model.time_variants["crude_birth_rate"] = \
+        scale_up_function(crude_birth_rate_data.keys(), crude_birth_rate_data.values(), smoothness=0.2, method=5)
+    return _tb_model
+
+
 """
 main model construction functions
 """
@@ -190,6 +209,9 @@ def build_working_tb_model(tb_n_contact, country_iso3, cdr_adjustment=0.6, start
     # define model
     _tb_model = StratifiedModel(
         integration_times, compartments, {"infectious": 1e-3}, parameters, flows, birth_approach="add_crude_birth_rate")
+
+    # add crude birth rate from un estimates
+    _tb_model = get_birth_rate_functions(_tb_model, input_database, country_iso3)
 
     # add case detection process to basic model
     _tb_model.add_transition_flow(
