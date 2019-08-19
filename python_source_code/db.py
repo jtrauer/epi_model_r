@@ -132,7 +132,8 @@ class InputDB:
         self.get_un_iso_map()
         table_with_iso = pd.merge(
             self.db_query(table_name=table_name), self.map_df, left_on='Country code', right_on='Location code')
-        table_with_iso = table_with_iso.drop(columns=["Index"])
+        if "Index" in table_with_iso.columns:
+            table_with_iso = table_with_iso.drop(columns=["Index"])
         table_with_iso.to_sql(table_name + "_mapped", con=self.engine, if_exists="replace")
 
     def get_un_iso_map(self):
@@ -146,10 +147,11 @@ if __name__ == "__main__":
 
     # standard code to update the database
     input_database = InputDB()
-    input_database.update_xl_reads()
+    # input_database.update_xl_reads()
     # input_database.update_csv_reads()
-
-    input_database.add_iso_to_table("crude_birth_rate")
+    # input_database.add_iso_to_table("crude_birth_rate")
+    # input_database.add_iso_to_table("absolute_deaths")
+    # input_database.add_iso_to_table("total_population")
 
     # example of accessing once loaded
     # times = list(np.linspace(1950, 2020, 1e3))
