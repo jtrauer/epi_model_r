@@ -116,6 +116,17 @@ class InputDB:
     def db_query(self, table_name, is_filter="", value="", column="*"):
         """
         method to query table_name
+
+        :param table_name: str
+            name of the database table to query from
+        :param is_filter: str
+            column to filter over, if any
+        :param value: str
+            value of interest with filter column
+        :param column:
+
+        :return: pandas dataframe
+            output for user
         """
         query = "Select %s from %s" % (column, table_name)
         if is_filter and value:
@@ -129,11 +140,20 @@ class InputDB:
         :param table_name: str
             name of the spreadsheet to perform this on
         """
+
+        # perform merge
         self.get_un_iso_map()
         table_with_iso = pd.merge(
             self.db_query(table_name=table_name), self.map_df, left_on='Country code', right_on='Location code')
+
+        # columns with spaces are difficult to read with sql queries
+        table_with_iso.rename(columns={"ISO3 Alpha-code": "iso3"}, inplace=True)
+
+        # remove index column to avoid creating duplicates
         if "Index" in table_with_iso.columns:
             table_with_iso = table_with_iso.drop(columns=["Index"])
+
+        # create new mapped database structure
         table_with_iso.to_sql(table_name + "_mapped", con=self.engine, if_exists="replace")
 
     def get_un_iso_map(self):
@@ -147,7 +167,7 @@ if __name__ == "__main__":
 
     # standard code to update the database
     input_database = InputDB()
-    # input_database.update_xl_reads()
+    # input_database.update_xl_reads(["../xls/WPP2019_FERT_F03_CRUDE_BIRTH_RATE.xlsx"])
     # input_database.update_csv_reads()
     # input_database.add_iso_to_table("crude_birth_rate")
     # input_database.add_iso_to_table("absolute_deaths")
@@ -168,3 +188,5 @@ if __name__ == "__main__":
     #     plt.plot(times, [bcg_coverage_function(time) for time in times])
     #     plt.title(country)
     #     plt.show()
+
+    birth_rates = input_database.db_query("crude_birth_rate_mapped", is_filter="iso3", value="MNG")
