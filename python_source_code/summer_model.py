@@ -24,12 +24,21 @@ string manipulation functions
 """
 
 
-def create_stratum_name(stratification_name, stratum_name, with_x=True):
+def create_stratum_name(stratification_name, stratum_name, joining_string="X"):
     """
     generate the name just for the particular stratification
+
+    :param stratification_name: str
+        name of the general reason for the stratification being implemented
+    :param stratum_name: str
+        name of the stratum within the stratification
+    :param joining_string: boolean
+        whether to add an X at the front to indicate that this string is the extension of the existing one
+    :return: str
+        the composite string for the stratification
     """
     stratum_name = "%s_%s" % (stratification_name, str(stratum_name))
-    return "X" + stratum_name if with_x else stratum_name
+    return joining_string + stratum_name if joining_string else stratum_name
 
 
 def create_stratified_name(stem, stratification_name, stratum_name):
@@ -1765,7 +1774,7 @@ class StratifiedModel(EpiModel):
             raise ValueError("infectiousness adjustment key not in strata being implemented")
         else:
             for stratum in _infectiousness_adjustments:
-                self.infectiousness_levels[create_stratum_name(_stratification_name, stratum, with_x=False)] = \
+                self.infectiousness_levels[create_stratum_name(_stratification_name, stratum, joining_string="")] = \
                     _infectiousness_adjustments[stratum]
         self.find_infectious_indices()
         for strain in self.infectious_indices:
