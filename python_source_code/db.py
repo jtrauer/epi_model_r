@@ -49,7 +49,33 @@ class InputDB:
         self.database_name = database_name
         self.engine = create_engine("sqlite:///" + database_name, echo=False)
         self.verbose = verbose
-        self.tabs_of_interest = ["BCG", "Aggregated estimates", "gtb_2015"]
+        self.headers_lookup = \
+            {"../xls/WPP2019_FERT_F03_CRUDE_BIRTH_RATE.xlsx": 16,
+             "../xls/WPP2019_F01_LOCATIONS.xlsx": 16,
+             "../xls/WPP2019_MORT_F04_1_DEATHS_BY_AGE_BOTH_SEXES.xlsx": 16,
+             "../xls/WPP2019_POP_F07_1_POPULATION_BY_AGE_BOTH_SEXES.xlsx": 16,
+             "../xls/life_expectancy_2015.xlsx": 3,
+             "../xls/rate_birth_2015.xlsx": 3}
+        self.tab_of_interest = \
+            {"../xls/WPP2019_FERT_F03_CRUDE_BIRTH_RATE.xlsx": "ESTIMATES",
+             "../xls/WPP2019_MORT_F04_1_DEATHS_BY_AGE_BOTH_SEXES.xlsx": "ESTIMATES",
+             "../xls/WPP2019_POP_F07_1_POPULATION_BY_AGE_BOTH_SEXES.xlsx": "ESTIMATES",
+             "../xls/WPP2019_F01_LOCATIONS.xlsx": "Location",
+             "../xls/coverage_estimates_series.xlsx": "BCG",
+             "../xls/gtb_2015.xlsx": "gtb_2015",
+             "../xls/gtb_2016.xlsx": "gtb_2016",
+             "../xls/life_expectancy_2015.xlsx": "life_expectancy_2015",
+             "../xls/rate_birth_2015.xlsx": "rate_birth_2015"}
+        self.output_name = \
+            {"../xls/WPP2019_FERT_F03_CRUDE_BIRTH_RATE.xlsx": "crude_birth_rate",
+             "../xls/WPP2019_MORT_F04_1_DEATHS_BY_AGE_BOTH_SEXES.xlsx": "absolute_deaths",
+             "../xls/WPP2019_POP_F07_1_POPULATION_BY_AGE_BOTH_SEXES.xlsx": "total_population",
+             "../xls/WPP2019_F01_LOCATIONS.xlsx": "un_iso3_map",
+             "../xls/coverage_estimates_series.xlsx": "bcg",
+             "../xls/gtb_2015.xlsx": "gtb_2015",
+             "../xls/gtb_2016.xlsx": "gtb_2016",
+             "../xls/life_expectancy_2015.xlsx": "life_expectancy_2015",
+             "../xls/rate_birth_2015.xlsx": "rate_birth_2015"}
 
     def update_csv_reads(self, input_path="../xls/*.csv"):
         """
@@ -63,37 +89,25 @@ class InputDB:
     def update_xl_reads(self, input_path="../xls/*.xlsx"):
         """
         load excel spreadsheet from input_path
+
+        :param input_path: str
+            path in which to find all the excel files
         """
-        excel_file_list = glob.glob(input_path)
-        for filename in excel_file_list:
-            xls = pd.ExcelFile(filename)
-
-            # for single tab in spreadsheet
-            if len(xls.sheet_names) == 1:
-                df_name = xls.sheet_names[0]
-                df = pd.read_excel(filename, sheet_name=df_name)
-                df.to_sql(df_name, con=self.engine, if_exists="replace")
-                self.output_to_user("now reading '%s' tab of '%s' file" % (df_name, filename))
-
-            # if multiple tabs
-            else:
-                for n_sheets, sheet in enumerate(xls.sheet_names):
-                    if sheet in self.tabs_of_interest:
-                        header_3_sheets = ["rate_birth_2015", "life_expectancy_2015"]
-                        n_header = 3 if sheet in header_3_sheets else 0
-                        df = pd.read_excel(filename, sheet_name=sheet, header=n_header)
-                        self.output_to_user("now reading '%s' tab of '%s' file" % (sheet, filename))
-
-                        # to read constants and time variants
-                        if sheet == "constants":
-                            sheet = filename.replace(".xlsx", "").split("_")[1] + "_constants"
-                        if sheet == "time_variants":
-                            sheet = filename.replace(".xlsx", "").split("_")[1] + "_time_variants"
-                        df.to_sql(sheet, con=self.engine, if_exists="replace")
+        for available_file in glob.glob(input_path):
+            filename = "../xls/" + available_file[7: -5] + ".xlsx"
+            header_row = self.headers_lookup[filename] if filename in self.headers_lookup else 0
+            data_title = self.output_name[filename] if filename in self.output_name else filename
+            current_data_frame = pd.read_excel(
+                pd.ExcelFile(filename), header=header_row, index_col=1, sheet_name=self.tab_of_interest[filename])
+            self.output_to_user("now reading '%s' tab of '%s' file" % (self.tab_of_interest[filename], filename))
+            current_data_frame.to_sql(data_title, con=self.engine, if_exists="replace")
 
     def output_to_user(self, comment):
         """
         report progress to user if requested
+
+        :param comment: str
+            string to be output to the user
         """
         if self.verbose:
             print(comment)
@@ -112,45 +126,42 @@ if __name__ == "__main__":
 
     # standard code to update the database
     input_database = InputDB(verbose=True)
-    # input_database.update_xl_reads()
+    input_database.update_xl_reads()
     # input_database.update_csv_reads()
 
-    
-     # merging two df
-    conn = create_engine("sqlite:///../databases/Inputs.db", echo=False)
-    birth_df = pd.read_excel('../xls/WPP2019_FERT_F03_CRUDE_BIRTH_RATE.XLSX', header=16, index_col=1)
-    print(birth_df.head())
-    print(birth_df.columns)
-    birth_df.to_sql('WPP2019_FERT', con=conn, if_exists="replace")
-
-    loc_code_df = pd.read_excel('../xls/WPP2019_F01_LOCATIONS.XLSX', header=16, index_col=1)
-    map_df = loc_code_df[['Location code', 'ISO3 Alpha-code']]
-    map_df = map_df.dropna()
-    birth_df_new = pd.merge(birth_df, map_df, left_on='Country code', right_on='Location code')
-    birth_df_new = birth_df_new.drop(['Index'], axis=1)
-    birth_df_new.to_sql('WPP2019_FERT_ISO', con=conn, if_exists="replace")
+    # merging two df
+    # conn = create_engine("sqlite:///../databases/Inputs.db", echo=False)
+    # birth_df = pd.read_excel('../xls/WPP2019_FERT_F03_CRUDE_BIRTH_RATE.XLSX', header=16, index_col=1)
+    # birth_df.to_sql('WPP2019_FERT', con=conn, if_exists="replace")
+    #
+    # loc_code_df = pd.read_excel('../xls/WPP2019_F01_LOCATIONS.XLSX', header=16, index_col=1)
+    # map_df = loc_code_df[['Location code', 'ISO3 Alpha-code']]
+    # map_df = map_df.dropna()
+    # birth_df_new = pd.merge(birth_df, map_df, left_on='Country code', right_on='Location code')
+    # birth_df_new = birth_df_new.drop(['Index'], axis=1)
+    # birth_df_new.to_sql('WPP2019_FERT_ISO', con=conn, if_exists="replace")
     
     # example of accessing once loaded
-    result = input_database.db_query("gtb_2015", column="c_cdr", is_filter="iso3", value="MNG")
-    cdr_mongolia = result["c_cdr"].values
-    result = input_database.db_query("gtb_2015", column="year", is_filter="iso3", value="MNG")
-    cdr_mongolia_year = result["year"].values
-    spl = scale_up_function(cdr_mongolia_year, cdr_mongolia, smoothness=0.2, method=5)
+    # result = input_database.db_query("gtb_2015", column="c_cdr", is_filter="iso3", value="MNG")
+    # cdr_mongolia = result["c_cdr"].values
+    # result = input_database.db_query("gtb_2015", column="year", is_filter="iso3", value="MNG")
+    # cdr_mongolia_year = result["year"].values
+    # spl = scale_up_function(cdr_mongolia_year, cdr_mongolia, smoothness=0.2, method=5)
     times = list(np.linspace(1950, 2020, 1e3))
-    scaled_up_cdr = [spl(t) for t in times]
+    # scaled_up_cdr = [spl(t) for t in times]
     # plt.plot(cdr_mongolia_year, cdr_mongolia, "ro", times, scaled_up_cdr)
     # plt.title("CDR from GTB 2015")
     # plt.show()
 
     # extract data for BCG vaccination for a particular country
-    # for country in get_all_iso3_from_bcg(input_database):
-    #     bcg_coverage = get_bcg_coverage(input_database, country)
-    #     if len(bcg_coverage) == 0:
-    #         print("no BCG vaccination data available for %s" % country)
-    #         continue
-    #     print("plotting BCG vaccination data and fitted curve for %s" % country)
-    #     bcg_coverage_function = scale_up_function(bcg_coverage.keys(), bcg_coverage.values(), smoothness=0.2, method=5)
-    #     plt.plot(list(bcg_coverage.keys()), list(bcg_coverage.values()), "ro")
-    #     plt.plot(times, [bcg_coverage_function(time) for time in times])
-    #     plt.title(country)
-    #     plt.show()
+    for country in get_all_iso3_from_bcg(input_database):
+        bcg_coverage = get_bcg_coverage(input_database, country)
+        if len(bcg_coverage) == 0:
+            print("no BCG vaccination data available for %s" % country)
+            continue
+        print("plotting BCG vaccination data and fitted curve for %s" % country)
+        bcg_coverage_function = scale_up_function(bcg_coverage.keys(), bcg_coverage.values(), smoothness=0.2, method=5)
+        plt.plot(list(bcg_coverage.keys()), list(bcg_coverage.values()), "ro")
+        plt.plot(times, [bcg_coverage_function(time) for time in times])
+        plt.title(country)
+        plt.show()
