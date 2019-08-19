@@ -108,9 +108,9 @@ class PostProcessing:
             else:
                 requested_time_indices = range(len(self.model.times))
 
-            self.generated_outputs[output] = self.get_output_for_selected_times(output, requested_time_indices)
+            self.generated_outputs[output] = self.calculate_output_for_selected_times(output, requested_time_indices)
 
-    def get_output_for_selected_times(self, output, time_indices):
+    def calculate_output_for_selected_times(self, output, time_indices):
         """
         returns the requested output for a given list of time indices
 
@@ -135,6 +135,28 @@ class PostProcessing:
 
             return out
 
+    def give_output_for_given_time(self, output, time):
+        """
+        quick method to return a specific output at a given time, once all requested outputs have been calculated.
+        :param output: string to specify the output to be returned
+        :param time
+        :return: the requested output at the requested time
+        """
+        if output not in self.requested_outputs:
+            raise ValueError("the output was not requested for calculation")
+
+        if output in self.requested_times.keys():
+            if time not in self.requested_times[output]:
+                raise ValueError("the time was not among the requested times for calculation")
+            index = self.requested_times[output].index(time)
+
+        else:
+            if time < self.model.times[0] or time > self.model.times[-1]:
+                raise ValueError("the requested time is not within the integration time range")
+            index = find_first_list_element_above(self.model.times, time)
+
+        return self.generated_outputs[output][index]
+
 
 if __name__ == "__main__":
     my_model = tbm.build_working_tb_model(40.0, 'MNG')
@@ -148,3 +170,6 @@ if __name__ == "__main__":
     pp = PostProcessing(my_model, req_outputs, req_times)
 
     print(pp.generated_outputs)
+
+    some_output = pp.give_output_for_given_time('prevXinfectiousXamong', 2016)
+    print(some_output)
