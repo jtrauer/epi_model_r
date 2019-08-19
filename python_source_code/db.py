@@ -117,13 +117,13 @@ if __name__ == "__main__":
 
     
      # merging two df
-    conn = create_engine("sqlite:///databases/Inputs.db", echo=False)
-    birth_df = pd.read_excel('xls/WPP2019_FERT_F03_CRUDE_BIRTH_RATE.XLSX', header=16, index_col=1)
+    conn = create_engine("sqlite:///../databases/Inputs.db", echo=False)
+    birth_df = pd.read_excel('../xls/WPP2019_FERT_F03_CRUDE_BIRTH_RATE.XLSX', header=16, index_col=1)
     print(birth_df.head())
     print(birth_df.columns)
     birth_df.to_sql('WPP2019_FERT', con=conn, if_exists="replace")
 
-    loc_code_df = pd.read_excel('xls/WPP2019_F01_LOCATIONS.XLSX', header=16, index_col=1)
+    loc_code_df = pd.read_excel('../xls/WPP2019_F01_LOCATIONS.XLSX', header=16, index_col=1)
     map_df = loc_code_df[['Location code', 'ISO3 Alpha-code']]
     map_df = map_df.dropna()
     birth_df_new = pd.merge(birth_df, map_df, left_on='Country code', right_on='Location code')
