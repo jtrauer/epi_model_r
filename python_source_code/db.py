@@ -12,10 +12,10 @@ def get_bcg_coverage(database, country_iso_code):
     extract bcg coverage from inputs database
 
     :param database: sql database
-        the database containing the bcg data
+        database containing the bcg data
     :param country_iso_code: string
         three letter ISO3 code for the country of interest
-    :return: bcg_coverage
+    :return: dict
         pandas data frame with columns years and one row containing the values of BCG coverage in that year
     """
     _bcg_coverage = database.db_query("BCG", is_filter="ISO_code", value=country_iso_code)
@@ -35,6 +35,26 @@ def get_all_iso3_from_bcg(database):
     """
 
     return database.db_query("bcg", column="ISO_code")["ISO_code"].tolist()
+
+
+def get_crude_birth_rate(database, country_iso_code):
+    """
+    get the crude birth rate as a rate estimated by the un for a particular country
+
+    :param database: sql database
+        database containing the crude birth rate data from un
+    :param country_iso_code: string
+        three letter ISO3 code for the country of interest
+    :return: dict
+        keys for mid-point of year of interest with floats for the crude birth rate (per capita, not per 1,000)
+    """
+
+    # extract birth rates
+    birth_rates = database.db_query("crude_birth_rate_mapped", is_filter="iso3", value=country_iso_code)
+
+    # find the keys with a - in them to indicate a time range and add 2.5 on to the starting value to get mid-point
+    return {float(key[: key.find("-")]) + 2.5: float(value) / 1e3 for
+            key, value in zip(list(birth_rates.columns), birth_rates.loc[0, :]) if "-" in key}
 
 
 class InputDB:
@@ -189,4 +209,10 @@ if __name__ == "__main__":
     #     plt.title(country)
     #     plt.show()
 
-    birth_rates = input_database.db_query("crude_birth_rate_mapped", is_filter="iso3", value="MNG")
+    # times = list(np.linspace(1950, 2020, 1e3))
+    # crude_birth_rate_data = get_crude_birth_rate(input_database, "MNG")
+    # birth_rate_function = scale_up_function(crude_birth_rate_data.keys(), crude_birth_rate_data.values(), smoothness=0.2, method=5)
+    # plt.plot(list(crude_birth_rate_data.keys()), list(crude_birth_rate_data.values()), "ro")
+    # plt.plot(times, [birth_rate_function(time) for time in times])
+    # plt.title("MNG")
+    # plt.show()
