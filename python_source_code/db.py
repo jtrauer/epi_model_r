@@ -57,6 +57,170 @@ def get_crude_birth_rate(database, country_iso_code):
             key, value in zip(list(birth_rates.columns), birth_rates.loc[0, :]) if "-" in key}
 
 
+def extract_demo_data(_input_database, data_type, country_iso_code):
+    """
+    get and format demographic data from the input databases originally derived from the un sources
+    note that the number of period that data are provided for differs for total population and absolute deaths
+
+    :param _input_database: sql database
+        the master inputs database
+    :param data_type: str
+        the database type of interest
+    :param country_iso_code: str
+        the three digit iso3 code for the country of interest
+    :return: pandas dataframe
+        cleaned pandas dataframe ready for use in demographic calculations
+    """
+
+    # get the appropriate data type from the un-derived databases
+    demo_data_frame = _input_database.db_query(data_type, is_filter="iso3", value=country_iso_code)
+
+    # rename columns, including adding a hyphen to the last age group to make it behave like the others age groups
+    demo_data_frame.rename(columns={"95+": "95-", "Reference date (as of 1 July)": "Period"}, inplace=True)
+
+    # retain only the relevant columns
+    columns_to_keep = [column for column in demo_data_frame.columns if "-" in column]
+    columns_to_keep.append("Period")
+    demo_data_frame = demo_data_frame.loc[:, columns_to_keep]
+
+    # rename the columns to make them integers
+    demo_data_frame.columns = \
+        [int(column[:column.find("-")]) if "-" in column else column for column in list(demo_data_frame.columns)]
+
+    # change the year data for the period to numeric type
+    demo_data_frame["Period"] = \
+        demo_data_frame["Period"].apply(lambda x: str(x)[: str(x).find("-")] if "-" in str(x) else str(x))
+
+    # return final version
+    return demo_data_frame
+
+
+def prepare_age_breakpoints(breakpoints):
+    """
+    temporary function - should merge in with functions from the summer module
+
+    :param breakpoints:
+    :return:
+    """
+    breakpoints.sort()
+    return breakpoints if 0 in breakpoints else [0] + breakpoints
+
+
+def find_death_rates(_input_database, country_iso_code):
+    """
+    find death rates by reported age bracket from database populated from un data
+
+    :param _input_database: sql database
+        the inputs database
+    :param country_iso_code: str
+        the three digit iso3 code for the country of interest
+    :return: pandas dataframe:
+        mortality rates by age bracket
+        mortality_years: list
+        values of the mid-points of the years for which mortality is estimated
+    """
+
+    # get necessary data from database
+    absolute_death_data = extract_demo_data(_input_database, "absolute_deaths_mapped", country_iso_code)
+    total_population_data = extract_demo_data(_input_database, "total_population_mapped", country_iso_code)
+
+    # cut off last row of population data because it goes out five years longer
+    total_population_data = total_population_data.loc[:absolute_death_data.shape[0] - 1, :]
+
+    # cut off last column of both data frames because they include the years, but retain the data as a list
+    mortality_years = [float(i) + 2.5 for i in list(total_population_data.loc[:, "Period"])]
+    total_population_data = total_population_data.iloc[:, :total_population_data.shape[1] - 1]
+    absolute_death_data = absolute_death_data.iloc[:, :absolute_death_data.shape[1] - 1]
+
+    # make sure all floats, as seem to have become str somewhere
+    absolute_death_data = absolute_death_data.astype(float)
+    total_population_data = total_population_data.astype(float)
+
+    # divide through and return
+    return absolute_death_data / total_population_data, mortality_years
+
+
+def find_age_weights(age_breakpoints, demo_data, arbitrary_upper_age=1e2, break_width=5.0):
+    """
+    find the weightings to assign to the various components of the data from the age breakpoints planned to be used
+    in the model
+
+    :param age_breakpoints: list
+        numeric values for the breakpoints of the age brackets
+    :param demo_data: pandas dataframe
+        the demographic data extracted from the database into pandas format
+    :param arbitrary_upper_age: float
+        arbitrary upper value to consider for the highest age bracket
+    :param break_width: float
+        difference between the lower and upper values of the age brackets in the data
+    :return: dict
+        keys age breakpoints, values list of the weightings to assign to the data age categories
+    """
+    weightings_dict = {}
+
+    # cycle through each age bracket/category
+    for n_breakpoint in range(len(age_breakpoints)):
+
+        lower_value = age_breakpoints[n_breakpoint]
+        upper_value = arbitrary_upper_age if n_breakpoint == len(age_breakpoints) - 1 else \
+            age_breakpoints[n_breakpoint + 1]
+
+        # initialise weights to one and then subtract parts of bracket that are excluded
+        weightings = [1.0] * len(demo_data.columns)
+
+        # cycle through the breakpoints of the data on inner loop
+        for n_data_break, data_breakpoints in enumerate(demo_data.columns):
+            data_lower = data_breakpoints
+            data_upper = data_breakpoints + break_width
+
+            # first consider the lower value of the age bracket and how much of the data it excludes
+            if data_upper <= lower_value:
+                weightings[n_data_break] -= 1.0
+            elif data_lower < lower_value < data_upper:
+                weightings[n_data_break] -= 1.0 - (data_upper - lower_value) / break_width
+
+            # then consider the upper value of the age bracket and how much of the data it excludes
+            if data_lower < upper_value < data_upper:
+                weightings[n_data_break] -= 1.0 - (upper_value - data_lower) / break_width
+            elif upper_value <= data_lower:
+                weightings[n_data_break] -= 1.0
+
+        # normalise the values
+        weightings = [weight / sum(weightings) for weight in weightings]
+        weightings_dict[age_breakpoints[n_breakpoint]] = weightings
+    return weightings_dict
+
+
+def find_age_specific_death_rates(age_breakpoints, country_iso_code):
+    """
+    find non-tb-related death rates from un data that are specific to the age groups requested for the model regardless
+    of the age brackets for which data are available
+
+    :param age_breakpoints: list
+        integers for the age breakpoints being used in the model
+    :param country_iso_code: str
+        the three digit iso3 code for the country of interest
+    :return: dict
+        keys the age breakpoints, values lists for the death rates with time
+    """
+    age_breakpoints = prepare_age_breakpoints(age_breakpoints)
+
+    # gather up the death rates with the brackets from the data
+    death_rates, years = find_death_rates(input_database, country_iso_code)
+
+    # find the weightings to each age group in the data from the requested brackets
+    age_weights = find_age_weights(age_breakpoints, death_rates)
+
+    # calculate the list of values for the weighted death rates for each modelled age category
+    age_death_rates = {}
+    for age_break in age_breakpoints:
+        age_death_rates[age_break] = [0.0] * death_rates.shape[0]
+        for year in death_rates.index:
+            age_death_rates[age_break][year] = \
+                sum([death_rate * weight for death_rate, weight in zip(death_rates.iloc[year], age_weights[age_break])])
+    return age_death_rates, years
+
+
 class InputDB:
     """
     methods for loading input xls files
@@ -187,11 +351,11 @@ if __name__ == "__main__":
 
     # standard code to update the database
     input_database = InputDB()
-    # input_database.update_xl_reads(["../xls/WPP2019_FERT_F03_CRUDE_BIRTH_RATE.xlsx"])
+    # input_database.update_xl_reads()
     # input_database.update_csv_reads()
-    # input_database.add_iso_to_table("crude_birth_rate")
-    # input_database.add_iso_to_table("absolute_deaths")
-    # input_database.add_iso_to_table("total_population")
+
+    age_breaks = [18, 3]
+    age_death_dict, data_years = find_age_specific_death_rates(age_breaks, "MNG")
 
     # example of accessing once loaded
     # times = list(np.linspace(1950, 2020, 1e3))
@@ -211,7 +375,8 @@ if __name__ == "__main__":
 
     # times = list(np.linspace(1950, 2020, 1e3))
     # crude_birth_rate_data = get_crude_birth_rate(input_database, "MNG")
-    # birth_rate_function = scale_up_function(crude_birth_rate_data.keys(), crude_birth_rate_data.values(), smoothness=0.2, method=5)
+    # birth_rate_function = \
+    #     scale_up_function(crude_birth_rate_data.keys(), crude_birth_rate_data.values(), smoothness=0.2, method=5)
     # plt.plot(list(crude_birth_rate_data.keys()), list(crude_birth_rate_data.values()), "ro")
     # plt.plot(times, [birth_rate_function(time) for time in times])
     # plt.title("MNG")
