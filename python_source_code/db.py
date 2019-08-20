@@ -57,6 +57,75 @@ def get_crude_birth_rate(database, country_iso_code):
             key, value in zip(list(birth_rates.columns), birth_rates.loc[0, :]) if "-" in key}
 
 
+def extract_demo_data(_input_database, data_type, country_iso_code):
+    """
+    get and format demographic data from the input databases originally derived from the un sources
+    note that the number of period that data are provided for differs for total population and absolute deaths
+
+    :param _input_database: sql database
+        the master inputs database
+    :param data_type: str
+        the database type of interest
+    :param country_iso_code: str
+        the three digit iso3 code for the country of interest
+    :return: pandas dataframe
+        cleaned pandas dataframe ready for use in demographic calculations
+    """
+
+    # get the appropriate data type from the un-derived databases
+    demo_data_frame = _input_database.db_query(data_type, is_filter="iso3", value=country_iso_code)
+
+    # rename columns, including adding a hyphen to the last age group to make it behave like the others age groups
+    demo_data_frame.rename(columns={"95+": "95-", "Reference date (as of 1 July)": "Period"}, inplace=True)
+
+    # retain only the relevant columns
+    columns_to_keep = [column for column in demo_data_frame.columns if "-" in column]
+    columns_to_keep.append("Period")
+    demo_data_frame = demo_data_frame.loc[:, columns_to_keep]
+
+    # rename the columns to make them integers
+    demo_data_frame.columns = \
+        [int(column[:column.find("-")]) if "-" in column else column for column in list(demo_data_frame.columns)]
+
+    # change the year data for the period to numeric type
+    demo_data_frame["Period"] = \
+        demo_data_frame["Period"].apply(lambda x: str(x)[: str(x).find("-")] if "-" in str(x) else str(x))
+
+    # return final version
+    return demo_data_frame
+
+
+def find_death_rates(_input_database, country_iso_code):
+    """
+    find death rates by reported age bracket from database populated from un data
+
+    :param _input_database: sql database
+        the inputs database
+    :param country_iso_code: str
+        the three digit iso3 code for the country of interest
+    :return: pandas dataframe
+        mortality rates by age bracket
+    """
+
+    # get necessary data from database
+    absolute_death_data = extract_demo_data(_input_database, "absolute_deaths_mapped", country_iso_code)
+    total_population_data = extract_demo_data(_input_database, "total_population_mapped", country_iso_code)
+
+    # cut off last row of population data because it goes out five years longer
+    total_population_data = total_population_data.loc[:absolute_death_data.shape[0] - 1, :]
+
+    # cut off last column of both data frames because they include the years
+    total_population_data = total_population_data.iloc[:, :total_population_data.shape[1] - 1]
+    absolute_death_data = absolute_death_data.iloc[:, :absolute_death_data.shape[1] - 1]
+
+    # make sure all floats, as seem to have become str somewhere
+    absolute_death_data = absolute_death_data.astype(float)
+    total_population_data = total_population_data.astype(float)
+
+    # divide through and return
+    return absolute_death_data / total_population_data
+
+
 class InputDB:
     """
     methods for loading input xls files
@@ -183,44 +252,6 @@ class InputDB:
         self.map_df = self.db_query(table_name='un_iso3_map')[['Location code', 'ISO3 Alpha-code']].dropna()
 
 
-def extract_demo_data(_input_database, data_type, country_iso_code):
-    """
-    get and format demographic data from the input databases originally derived from the un sources
-    note that the number of period that data are provided for differs for total population and absolute deaths
-
-    :param _input_database: sql database
-        the master inputs database
-    :param data_type: str
-        the database type of interest
-    :param country_iso_code: str
-        the three digit iso3 code for the country of interest
-    :return: pandas dataframe
-        cleaned pandas dataframe ready for use in demographic calculations
-    """
-
-    # get the appropriate data type from the un-derived databases
-    demo_data_frame = _input_database.db_query(data_type, is_filter="iso3", value=country_iso_code)
-
-    # rename columns, including adding a hyphen to the last age group to make it behave like the others age groups
-    demo_data_frame.rename(columns={"95+": "95-", "Reference date (as of 1 July)": "Period"}, inplace=True)
-
-    # retain only the relevant columns
-    columns_to_keep = [column for column in demo_data_frame.columns if "-" in column]
-    columns_to_keep.append("Period")
-    demo_data_frame = demo_data_frame.loc[:, columns_to_keep]
-
-    # rename the columns to make them integers
-    demo_data_frame.columns = \
-        [int(column[:column.find("-")]) if "-" in column else column for column in list(demo_data_frame.columns)]
-
-    # change the year data for the period to numeric type
-    demo_data_frame["Period"] = \
-        demo_data_frame["Period"].apply(lambda x: str(x)[: str(x).find("-")] if "-" in str(x) else str(x))
-
-    # return final version
-    return demo_data_frame
-
-
 if __name__ == "__main__":
 
     # standard code to update the database
@@ -231,13 +262,11 @@ if __name__ == "__main__":
     # input_database.add_iso_to_table("absolute_deaths")
     # input_database.add_iso_to_table("total_population")
 
-    absolute_deaths = input_database.db_query("absolute_deaths_mapped", is_filter="iso3", value="MNG")
-    total_population = input_database.db_query("total_population_mapped", is_filter="iso3", value="MNG")
-    # print(absolute_deaths)
-    # print(total_population)
+    print(find_death_rates(input_database, "MNG"))
 
-    for data_type in ["total_population_mapped", "absolute_deaths_mapped"]:
-        print(extract_demo_data(input_database, data_type, "MNG"))
+    # total_population_data[:, :-1] * absolute_death_data[:, :-1]
+
+
 
     # example of accessing once loaded
     # times = list(np.linspace(1950, 2020, 1e3))
