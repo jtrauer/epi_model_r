@@ -95,6 +95,17 @@ def extract_demo_data(_input_database, data_type, country_iso_code):
     return demo_data_frame
 
 
+def prepare_age_breakpoints(breakpoints):
+    """
+    temporary function - should merge in with functions from the summer module
+
+    :param breakpoints:
+    :return:
+    """
+    breakpoints.sort()
+    return breakpoints if 0 in breakpoints else [0] + breakpoints
+
+
 def find_death_rates(_input_database, country_iso_code):
     """
     find death rates by reported age bracket from database populated from un data
@@ -124,6 +135,55 @@ def find_death_rates(_input_database, country_iso_code):
 
     # divide through and return
     return absolute_death_data / total_population_data
+
+
+def find_age_weights(age_breakpoints, arbitrary_upper_age=1e2, break_width=5.0):
+    """
+    find the weightings to assign to the various components of the data from the age breakpoints planned to be used
+    in the model
+
+    :param age_breakpoints: list
+        numeric values for the breakpoints of the age brackets
+    :param arbitrary_upper_age: float
+        arbitrary upper value to consider for the highest age bracket
+    :param break_width: float
+        difference between the lower and upper values of the age brackets in the data
+    :return: dict
+        keys age breakpoints, values list of the weightings to assign to the data age categories
+    """
+    weightings_dict = {}
+
+    # cycle through each age bracket/category
+    for n_breakpoint in range(len(age_breakpoints)):
+
+        lower_value = age_breakpoints[n_breakpoint]
+        upper_value = arbitrary_upper_age if n_breakpoint == len(age_breakpoints) - 1 else \
+            age_breakpoints[n_breakpoint + 1]
+
+        # initialise weights to one and then subtract parts of bracket that are excluded
+        weightings = [1.0] * len(demo_data.columns)
+
+        # cycle through the breakpoints of the data on inner loop
+        for n_data_break, data_breakpoints in enumerate(demo_data.columns):
+            data_lower = data_breakpoints
+            data_upper = data_breakpoints + break_width
+
+            # first consider the lower value of the age bracket and how much of the data it excludes
+            if data_upper <= lower_value:
+                weightings[n_data_break] -= 1.0
+            elif data_lower < lower_value < data_upper:
+                weightings[n_data_break] -= 1.0 - (data_upper - lower_value) / break_width
+
+            # then consider the upper value of the age bracket and how much of the data it excludes
+            if data_lower < upper_value < data_upper:
+                weightings[n_data_break] -= 1.0 - (upper_value - data_lower) / break_width
+            elif upper_value <= data_lower:
+                weightings[n_data_break] -= 1.0
+
+        # normalise the values
+        weightings = [weight / sum(weightings) for weight in weightings]
+        weightings_dict[age_breakpoints[n_breakpoint]] = weightings
+    return weightings_dict
 
 
 class InputDB:
@@ -258,15 +318,10 @@ if __name__ == "__main__":
     input_database = InputDB()
     # input_database.update_xl_reads()
     # input_database.update_csv_reads()
-    # input_database.add_iso_to_table("crude_birth_rate")
-    # input_database.add_iso_to_table("absolute_deaths")
-    # input_database.add_iso_to_table("total_population")
 
-    print(find_death_rates(input_database, "MNG"))
-
-    # total_population_data[:, :-1] * absolute_death_data[:, :-1]
-
-
+    # age_breakpoints = [18, 3]
+    # age_breakpoints = prepare_age_breakpoints(age_breakpoints)
+    # demo_data = find_death_rates(input_database, "MNG")
 
     # example of accessing once loaded
     # times = list(np.linspace(1950, 2020, 1e3))
