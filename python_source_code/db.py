@@ -137,7 +137,7 @@ def find_death_rates(_input_database, country_iso_code):
     return absolute_death_data / total_population_data
 
 
-def find_age_weights(age_breakpoints, arbitrary_upper_age=1e2, break_width=5.0):
+def find_age_weights(age_breakpoints, demo_data, arbitrary_upper_age=1e2, break_width=5.0):
     """
     find the weightings to assign to the various components of the data from the age breakpoints planned to be used
     in the model
@@ -152,6 +152,7 @@ def find_age_weights(age_breakpoints, arbitrary_upper_age=1e2, break_width=5.0):
         keys age breakpoints, values list of the weightings to assign to the data age categories
     """
     weightings_dict = {}
+    age_breakpoints = prepare_age_breakpoints(age_breakpoints)
 
     # cycle through each age bracket/category
     for n_breakpoint in range(len(age_breakpoints)):
@@ -320,8 +321,7 @@ if __name__ == "__main__":
     # input_database.update_csv_reads()
 
     # age_breakpoints = [18, 3]
-    # age_breakpoints = prepare_age_breakpoints(age_breakpoints)
-    # demo_data = find_death_rates(input_database, "MNG")
+    # print(find_age_weights(age_breakpoints, find_death_rates(input_database, "MNG")))
 
     # example of accessing once loaded
     # times = list(np.linspace(1950, 2020, 1e3))
