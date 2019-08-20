@@ -191,7 +191,7 @@ def find_age_weights(age_breakpoints, demo_data, arbitrary_upper_age=1e2, break_
     return weightings_dict
 
 
-def find_age_specific_death_rates(age_breakpoints, country_iso_code):
+def find_age_specific_death_rates(input_database, age_breakpoints, country_iso_code):
     """
     find non-tb-related death rates from un data that are specific to the age groups requested for the model regardless
     of the age brackets for which data are available
@@ -221,7 +221,7 @@ def find_age_specific_death_rates(age_breakpoints, country_iso_code):
     return age_death_rates, years
 
 
-def get_pop_mortality_functions(age_breaks, country_iso_code):
+def get_pop_mortality_functions(input_database, age_breaks, country_iso_code):
     """
     use the mortality rate data that can be obtained from find_age_specific_death_rates to fit time-variant mortality
         functions for each age group being implemented in the model
@@ -233,7 +233,7 @@ def get_pop_mortality_functions(age_breaks, country_iso_code):
     :return: dict
         keys age breakpoints, values mortality functions
     """
-    age_death_dict, data_years = find_age_specific_death_rates(age_breaks, country_iso_code)
+    age_death_dict, data_years = find_age_specific_death_rates(input_database, age_breaks, country_iso_code)
     pop_mortality_functions = {}
     for age_group in age_death_dict:
         pop_mortality_functions[age_group] = \
@@ -375,7 +375,7 @@ if __name__ == "__main__":
     # input_database.update_csv_reads()
 
     # example_age_breakpoints = [10, 3]
-    # pop_morts = get_pop_mortality_functions(example_age_breakpoints, country_iso_code="MNG")
+    # pop_morts = get_pop_mortality_functions(input_database, example_age_breakpoints, country_iso_code="MNG")
 
     # example of accessing once loaded
     # times = list(np.linspace(1950, 2020, 1e3))
