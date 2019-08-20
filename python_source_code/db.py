@@ -114,8 +114,10 @@ def find_death_rates(_input_database, country_iso_code):
         the inputs database
     :param country_iso_code: str
         the three digit iso3 code for the country of interest
-    :return: pandas dataframe
+    :return: pandas dataframe:
         mortality rates by age bracket
+        mortality_years: list
+        values of the mid-points of the years for which mortality is estimated
     """
 
     # get necessary data from database
@@ -125,7 +127,8 @@ def find_death_rates(_input_database, country_iso_code):
     # cut off last row of population data because it goes out five years longer
     total_population_data = total_population_data.loc[:absolute_death_data.shape[0] - 1, :]
 
-    # cut off last column of both data frames because they include the years
+    # cut off last column of both data frames because they include the years, but retain the data as a list
+    mortality_years = [float(i) + 2.5 for i in list(total_population_data.loc[:, "Period"])]
     total_population_data = total_population_data.iloc[:, :total_population_data.shape[1] - 1]
     absolute_death_data = absolute_death_data.iloc[:, :absolute_death_data.shape[1] - 1]
 
@@ -134,7 +137,7 @@ def find_death_rates(_input_database, country_iso_code):
     total_population_data = total_population_data.astype(float)
 
     # divide through and return
-    return absolute_death_data / total_population_data
+    return absolute_death_data / total_population_data, mortality_years
 
 
 def find_age_weights(age_breakpoints, demo_data, arbitrary_upper_age=1e2, break_width=5.0):
@@ -144,6 +147,8 @@ def find_age_weights(age_breakpoints, demo_data, arbitrary_upper_age=1e2, break_
 
     :param age_breakpoints: list
         numeric values for the breakpoints of the age brackets
+    :param demo_data: pandas dataframe
+        the demographic data extracted from the database into pandas format
     :param arbitrary_upper_age: float
         arbitrary upper value to consider for the highest age bracket
     :param break_width: float
@@ -152,7 +157,6 @@ def find_age_weights(age_breakpoints, demo_data, arbitrary_upper_age=1e2, break_
         keys age breakpoints, values list of the weightings to assign to the data age categories
     """
     weightings_dict = {}
-    age_breakpoints = prepare_age_breakpoints(age_breakpoints)
 
     # cycle through each age bracket/category
     for n_breakpoint in range(len(age_breakpoints)):
@@ -185,6 +189,36 @@ def find_age_weights(age_breakpoints, demo_data, arbitrary_upper_age=1e2, break_
         weightings = [weight / sum(weightings) for weight in weightings]
         weightings_dict[age_breakpoints[n_breakpoint]] = weightings
     return weightings_dict
+
+
+def find_age_specific_death_rates(age_breakpoints, country_iso_code):
+    """
+    find non-tb-related death rates from un data that are specific to the age groups requested for the model regardless
+    of the age brackets for which data are available
+
+    :param age_breakpoints: list
+        integers for the age breakpoints being used in the model
+    :param country_iso_code: str
+        the three digit iso3 code for the country of interest
+    :return: dict
+        keys the age breakpoints, values lists for the death rates with time
+    """
+    age_breakpoints = prepare_age_breakpoints(age_breakpoints)
+
+    # gather up the death rates with the brackets from the data
+    death_rates, years = find_death_rates(input_database, country_iso_code)
+
+    # find the weightings to each age group in the data from the requested brackets
+    age_weights = find_age_weights(age_breakpoints, death_rates)
+
+    # calculate the list of values for the weighted death rates for each modelled age category
+    age_death_rates = {}
+    for age_break in age_breakpoints:
+        age_death_rates[age_break] = [0.0] * death_rates.shape[0]
+        for year in death_rates.index:
+            age_death_rates[age_break][year] = \
+                sum([death_rate * weight for death_rate, weight in zip(death_rates.iloc[year], age_weights[age_break])])
+    return age_death_rates, years
 
 
 class InputDB:
@@ -320,8 +354,8 @@ if __name__ == "__main__":
     # input_database.update_xl_reads()
     # input_database.update_csv_reads()
 
-    # age_breakpoints = [18, 3]
-    # print(find_age_weights(age_breakpoints, find_death_rates(input_database, "MNG")))
+    age_breaks = [18, 3]
+    age_death_dict, data_years = find_age_specific_death_rates(age_breaks, "MNG")
 
     # example of accessing once loaded
     # times = list(np.linspace(1950, 2020, 1e3))
@@ -341,7 +375,8 @@ if __name__ == "__main__":
 
     # times = list(np.linspace(1950, 2020, 1e3))
     # crude_birth_rate_data = get_crude_birth_rate(input_database, "MNG")
-    # birth_rate_function = scale_up_function(crude_birth_rate_data.keys(), crude_birth_rate_data.values(), smoothness=0.2, method=5)
+    # birth_rate_function = \
+    #     scale_up_function(crude_birth_rate_data.keys(), crude_birth_rate_data.values(), smoothness=0.2, method=5)
     # plt.plot(list(crude_birth_rate_data.keys()), list(crude_birth_rate_data.values()), "ro")
     # plt.plot(times, [birth_rate_function(time) for time in times])
     # plt.title("MNG")
