@@ -225,9 +225,6 @@ def build_working_tb_model(tb_n_contact, country_iso3, cdr_adjustment=0.6, start
     age_params = get_adapted_age_parameters(age_breakpoints)
     age_params.update(split_age_parameter(age_breakpoints, "contact_rate"))
 
-    # pop_morts = get_pop_mortality_functions(input_database, age_breakpoints, country_iso_code=country_iso3)
-    # print(pop_morts)
-
     # test age stratification
     # age_only_model = copy.deepcopy(_tb_model)
     # age_only_model.stratify("age", copy.deepcopy(age_breakpoints), [], {},
@@ -239,6 +236,11 @@ def build_working_tb_model(tb_n_contact, country_iso3, cdr_adjustment=0.6, start
     bcg_wane = create_sloping_step_function(15.0, 0.7, 30.0, 0.0)
     age_bcg_efficacy_dict = get_parameter_dict_from_function(lambda value: bcg_wane(value), age_breakpoints)
     bcg_efficacy = substratify_parameter("contact_rate", "vaccinated", age_bcg_efficacy_dict, age_breakpoints)
+
+    pop_morts = get_pop_mortality_functions(input_database, age_breakpoints, country_iso_code=country_iso3)
+    for age_break in age_breakpoints:
+        _tb_model.adaptation_functions["universal_death_rateXage_" + str(age_break)] = pop_morts[age_break]
+    age_params["universal_death_rate"] = {"5W": "universal_death_rateXage_5"}
 
     # stratify the actual model by age
     _tb_model.stratify("age", age_breakpoints, [], {},
@@ -257,7 +259,7 @@ def build_working_tb_model(tb_n_contact, country_iso3, cdr_adjustment=0.6, start
                        adjustment_requests=bcg_efficacy,
                        verbose=False)
 
-    create_flowchart(_tb_model, name="stratified_by_age_vaccination")
+    # create_flowchart(_tb_model, name="stratified_by_age_vaccination")
 
     # loading time-variant case detection rate
     input_database = InputDB()

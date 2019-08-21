@@ -310,9 +310,14 @@ def create_multiplicative_function(multiplier):
     :return: function
         function that can multiply by the multiplier parameter when called
     """
-    def multiplicative_function(value):
-        return multiplier * value
+    def multiplicative_function(input_value, time):
+        return multiplier * input_value
+    return multiplicative_function
 
+
+def create_time_variant_multiplicative_function(time_variant_function):
+    def multiplicative_function(input_value, time):
+        return time_variant_function(time) * input_value
     return multiplicative_function
 
 
@@ -344,10 +349,8 @@ def create_function_of_function(outer_function, inner_function):
         composite function that applies the inner and then the outer function, allowing the time parameter to be passed
             through if necessary
     """
-
     def function_to_return(time):
-        return outer_function(inner_function(time))
-
+        return outer_function(inner_function(time), time)
     return function_to_return
 
 
@@ -570,7 +573,7 @@ class EpiModel:
     most general methods
     """
 
-    def find_parameter_value(self, parameter_name, time):
+    def get_single_parameter_component(self, parameter_name, time):
         """
         find the value of a parameter with time-variant values trumping constant ones
 
@@ -659,6 +662,9 @@ class EpiModel:
         # find the compartments that are infectious
         self.infectious_indices = [self.infectious_compartment in comp for comp in self.compartment_names]
         self.infectious_indices_int = [n_bool for n_bool, boolean in enumerate(self.infectious_indices) if boolean]
+
+        # parameters that need to be calculated in addition to the ones relating to transitions
+        self.parameters_to_adjust = ["universal_death_rate"]
 
     def check_and_report_attributes(
             self, _times, _compartment_types, _initial_conditions, _parameters, _requested_flows,
@@ -935,7 +941,7 @@ class EpiModel:
     def find_transition_indices_to_implement(self):
         """
         for over-writing in stratified version, here just returns the indices of all the transition flows, as they all
-        need to be implemented
+            need to be implemented
 
         :return: list
             integers for all the rows of the transition matrix
@@ -945,7 +951,7 @@ class EpiModel:
     def find_death_indices_to_implement(self):
         """
         for over-writing in stratified version, here just returns the indices of all the transition flows, as they all
-        need to be implemented
+            need to be implemented
 
         :return: list
             integers for all the rows of the transition matrix
@@ -1000,10 +1006,9 @@ class EpiModel:
 
         :parameters and return: see previous method apply_all_flow_types_to_odes
         """
-        for compartment in self.compartment_names:
-            from_compartment = self.compartment_names.index(compartment)
-            net_flow = self.get_parameter_value("universal_death_rate", _time) * _compartment_values[from_compartment]
-            _ode_equations = increment_list_by_index(_ode_equations, from_compartment, -net_flow)
+        for n_comp, compartment in enumerate(self.compartment_names):
+            net_flow = self.get_parameter_value("universal_death_rate", _time) * _compartment_values[n_comp]
+            _ode_equations = increment_list_by_index(_ode_equations, n_comp, -net_flow)
 
             # track deaths in case births need to replace deaths
             if "total_deaths" in self.tracked_quantities:
@@ -1029,7 +1034,7 @@ class EpiModel:
             total rate of births to be implemented in the model
         """
         if self.birth_approach == "add_crude_birth_rate":
-            return self.find_parameter_value("crude_birth_rate", _time) * sum(_compartment_values)
+            return self.get_single_parameter_component("crude_birth_rate", _time) * sum(_compartment_values)
         elif self.birth_approach == "replace_deaths":
             return self.tracked_quantities["total_deaths"]
         else:
@@ -1077,7 +1082,7 @@ class EpiModel:
 
     def get_parameter_value(self, _parameter, _time):
         """
-        essentially place-holding, but need to split this out as a function in order to stratification later
+        essentially place-holding, but need to split this out as a function in order to stratify later
 
         :param _parameter: str
             parameter name
@@ -1086,7 +1091,7 @@ class EpiModel:
         :return: float
             parameter value
         """
-        return self.find_parameter_value(_parameter, _time)
+        return self.get_single_parameter_component(_parameter, _time)
 
     """
     simple output methods (most outputs will be managed outside of the python code)
@@ -1190,13 +1195,16 @@ class StratifiedModel(EpiModel):
         self.all_stratifications, self.removed_compartments, self.overwrite_parameters, \
             self.compartment_types_to_stratify, self.strata, self.infectious_populations, \
             self.infectious_denominators, self.strains, self.mixing_categories = [[] for _ in range(9)]
-        self.infectiousness_adjustments, self.parameter_components, self.parameter_functions, \
+        self.infectiousness_adjustments, self.parameter_components, self.final_parameter_functions, \
             self.adaptation_functions, self.mapped_adaptation_functions, self.mixing_numerator_indices, \
             self.mixing_denominator_indices, self.infectiousness_levels, self.infectious_indices, \
             self.infectious_compartments, self.infectiousness_multipliers = [{} for _ in range(11)]
         self.overwrite_character, self.overwrite_key = "W", "overwrite"
         self.heterogeneous_mixing = False
         self.mixing_matrix = None
+
+        # get rid of this soon
+        self.parameters_to_adjust = ["universal_death_rate"]
 
     """
     main master method for model stratification
@@ -1246,7 +1254,8 @@ class StratifiedModel(EpiModel):
         if self.death_flows.shape[0] > 0:
             self.stratify_death_flows(
                 stratification_name, strata_names, adjustment_requests)
-        self.stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests)
+        if "universal_death_rate" in adjustment_requests:
+            self.stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests)
 
         # check submitted mixing matrix and combine with existing matrix, if any
         self.prepare_mixing_matrix(mixing_matrix, stratification_name, strata_names)
@@ -1506,7 +1515,7 @@ class StratifiedModel(EpiModel):
             see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
         """
         self.output_to_user("\n-----\nstratifying transition flows and calculating associated parameters")
-        for n_flow in self.transition_flows[self.transition_flows.implement == len(self.all_stratifications) - 1].index:
+        for n_flow in self.find_transition_indices_to_implement(go_back_one=1):
             self.add_stratified_flows(
                 n_flow, _stratification_name, _strata_names,
                 find_stem(self.transition_flows.origin[n_flow]) in self.compartment_types_to_stratify,
@@ -1514,15 +1523,19 @@ class StratifiedModel(EpiModel):
                 _adjustment_requests)
         self.output_to_user("\n-----\nstratified transition flows matrix\n%s" % self.transition_flows)
 
-    def find_transition_indices_to_implement(self):
+    def find_transition_indices_to_implement(self, go_back_one=0):
         """
         find all the indices of the transition flows that need to be stratified
         separated out as very short method in order that it can over-ride the version in the unstratified EpiModel
 
+        :param go_back_one: int
+            number to subtract from self.all_stratification, which will be one if this method is being called after the
+                stratification has been added
         :return: list
             list of indices of the flows that need to be stratified
         """
-        return self.transition_flows[self.transition_flows.implement == len(self.all_stratifications)].index
+        return self.transition_flows[
+            self.transition_flows.implement == len(self.all_stratifications) - go_back_one].index
 
     def find_death_indices_to_implement(self, go_back_one=0):
         """
@@ -1627,7 +1640,8 @@ class StratifiedModel(EpiModel):
     def stratify_universal_death_rate(self, _stratification_name, _strata_names, _adjustment_requests):
         """
         stratify the approach to universal, population-wide deaths (which can be made to vary by stratum)
-        adjust each parameter that refers to the universal death rate according to user request
+        adjust every parameter that refers to the universal death rate, according to user request if submitted and
+            otherwise populated with a value of one by default
 
         :param _stratification_name:
             see prepare_and_check_stratification
@@ -1636,9 +1650,15 @@ class StratifiedModel(EpiModel):
         :param _adjustment_requests:
              see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
         """
-        for parameter in [param for param in self.parameters if find_stem(param) == "universal_death_rate"]:
-            for stratum in _strata_names:
-                self.add_adjusted_parameter(parameter, _stratification_name, stratum, _adjustment_requests)
+        for stratum in _strata_names:
+            parameter_adjustment_name = create_stratified_name("universal_death_rate", _stratification_name, stratum)
+            self.parameters[parameter_adjustment_name] = \
+                _adjustment_requests["universal_death_rate"][stratum] if \
+                stratum in _adjustment_requests["universal_death_rate"] else 1.0
+            if self.overwrite_key in _adjustment_requests["universal_death_rate"] and \
+                    stratum in _adjustment_requests["universal_death_rate"][self.overwrite_key]:
+                self.overwrite_parameters.append(parameter_adjustment_name)
+            self.parameters_to_adjust.append(parameter_adjustment_name)
 
     def add_adjusted_parameter(self, _unadjusted_parameter, _stratification_name, _stratum, _adjustment_requests):
         """
@@ -1661,24 +1681,12 @@ class StratifiedModel(EpiModel):
 
         # find the adjustment requests that are extensions of the base parameter type being considered
         for parameter_request in [req for req in _adjustment_requests if _unadjusted_parameter.startswith(req)]:
+            parameter_adjustment_name = \
+                create_stratified_name(_unadjusted_parameter, _stratification_name, _stratum) if \
+                _stratum in _adjustment_requests[parameter_request] else _unadjusted_parameter
+            self.output_to_user("\t parameter for %s stratum of %s stratification is called %s"
+                                % (_stratum, _stratification_name, parameter_adjustment_name))
             if _stratum in _adjustment_requests[parameter_request]:
-                parameter_adjustment_name = \
-                    create_stratified_name(_unadjusted_parameter, _stratification_name, _stratum)
-                self.output_to_user(
-                    "\tmodifying %s for %s stratum of %s with new parameter called %s"
-                    % (_unadjusted_parameter, _stratum, _stratification_name, parameter_adjustment_name))
-            else:
-                parameter_adjustment_name = _unadjusted_parameter
-                self.output_to_user(
-                    "\tretaining existing parameter value %s for %s stratum of %s"
-                    % (_unadjusted_parameter, _stratum, _stratification_name))
-
-            # implement request, otherwise parameter will be left out, essentially assumed to be one when integrating
-            if _stratum in _adjustment_requests[parameter_request] and \
-                    type(_adjustment_requests[parameter_request][_stratum]) == str:
-                self.mapped_adaptation_functions[parameter_adjustment_name] = \
-                    self.adaptation_functions[_adjustment_requests[parameter_request][_stratum]]
-            elif _stratum in _adjustment_requests[parameter_request]:
                 self.parameters[parameter_adjustment_name] = _adjustment_requests[parameter_request][_stratum]
 
             # keep track of which parameters are to be over-written
@@ -1876,17 +1884,18 @@ class StratifiedModel(EpiModel):
                 parameter_name = self.add_adjusted_parameter(
                     self.transition_flows.parameter[_n_flow], _stratification_name, stratum, _adjustment_requests)
                 if not parameter_name:
-                    parameter_name = self.sort_absent_parameter_request(
-                        _stratification_name, _strata_names, stratum, stratify_from, stratify_to, _n_flow)
+                    parameter_name = self.sort_absent_transition_parameter(
+                        _stratification_name, _strata_names, stratum, stratify_from, stratify_to,
+                        self.transition_flows.parameter[_n_flow])
                 self.output_to_user("\t\tadding parameter %s" % parameter_name)
 
                 # determine whether to and/or from compartments are stratified
                 from_compartment = \
                     create_stratified_name(self.transition_flows.origin[_n_flow], _stratification_name, stratum) if \
-                        stratify_from else self.transition_flows.origin[_n_flow]
+                    stratify_from else self.transition_flows.origin[_n_flow]
                 to_compartment = \
                     create_stratified_name(self.transition_flows.to[_n_flow], _stratification_name, stratum) if \
-                        stratify_to else self.transition_flows.to[_n_flow]
+                    stratify_to else self.transition_flows.to[_n_flow]
 
                 # add the new flow
                 self.transition_flows = self.transition_flows.append(
@@ -1903,10 +1912,10 @@ class StratifiedModel(EpiModel):
             new_flow["implement"] += 1
             self.transition_flows = self.transition_flows.append(new_flow, ignore_index=True)
 
-    def sort_absent_parameter_request(self, _stratification_name, _strata_names, _stratum, _stratify_from, _stratify_to,
-                                      _n_flow):
+    def sort_absent_transition_parameter(
+            self, _stratification_name, _strata_names, _stratum, _stratify_from, _stratify_to, unstratified_name):
         """
-        work out what to do if a specific parameter adjustment has not been requested
+        work out what to do if a specific transition parameter adjustment has not been requested
 
         :param _stratification_name:
             see prepare_and_check_stratification
@@ -1917,23 +1926,23 @@ class StratifiedModel(EpiModel):
             see add_stratified_flows
         :param _stratify_to:
             see add_stratified_flows
-        :param _n_flow: int
-            index of the flow being dealt with
+        :param unstratified_name: str
+
         :return: str
             parameter name for revised parameter than wasn't provided
         """
 
         # default behaviour if not specified is to split the parameter into equal parts if to compartment is split
         if not _stratify_from and _stratify_to:
-            self.output_to_user("\tsplitting existing parameter value %s into %s equal parts"
-                                % (self.transition_flows.parameter[_n_flow], len(_strata_names)))
-            parameter_name = \
-                create_stratified_name(self.transition_flows.parameter[_n_flow], _stratification_name, _stratum)
+            self.output_to_user("\t splitting existing parameter value %s into %s equal parts"
+                                % (unstratified_name, len(_strata_names)))
+            parameter_name = create_stratified_name(unstratified_name, _stratification_name, _stratum)
             self.parameters[parameter_name] = 1.0 / len(_strata_names)
+            self.adaptation_functions[parameter_name] = create_multiplicative_function(1.0 / len(_strata_names))
 
         # otherwise if no request, retain the existing parameter
         else:
-            parameter_name = self.transition_flows.parameter[_n_flow]
+            parameter_name = unstratified_name
             self.output_to_user("\tretaining existing parameter value %s" % parameter_name)
         return parameter_name
 
@@ -1943,65 +1952,61 @@ class StratifiedModel(EpiModel):
         """
 
         # create list of all the parameters that we need to find the set of adjustments for
-        parameters_to_adjust = []
         for n_flow in range(self.transition_flows.shape[0]):
             if self.transition_flows.implement[n_flow] == len(self.all_stratifications) and \
-                    self.transition_flows.parameter[n_flow] not in parameters_to_adjust:
-                parameters_to_adjust.append(self.transition_flows.parameter[n_flow])
+                    self.transition_flows.parameter[n_flow] not in self.parameters_to_adjust:
+                self.parameters_to_adjust.append(self.transition_flows.parameter[n_flow])
         for n_flow in range(self.death_flows.shape[0]):
             if self.death_flows.implement[n_flow] == len(self.all_stratifications) and \
-                    self.death_flows.parameter[n_flow] not in parameters_to_adjust:
-                parameters_to_adjust.append(self.death_flows.parameter[n_flow])
-        parameters_to_adjust.append("universal_death_rate")
+                    self.death_flows.parameter[n_flow] not in self.parameters_to_adjust:
+                self.parameters_to_adjust.append(self.death_flows.parameter[n_flow])
 
         # and adjust
-        for parameter in parameters_to_adjust:
+        for parameter in self.parameters_to_adjust:
             self.find_parameter_components(parameter)
 
     def find_parameter_components(self, _parameter):
         """
-        builds up parameter as a function, recursively creating an outer function that calls the inner function.
-        unsure why, but the approach wasn't working when I tried to calculate the first unadapted parameter function as
-        the first cycle of the loop
+        builds up each parameter to be implemented as a function, recursively creating an outer function that calls the
+            inner function
 
         :param _parameter: str
             full name of the parameter of interest
         """
 
-        # start from base value as a function, time variable currently a place-holder
-        def return_starting_parameter_value(time):
-            return self.parameters[find_stem(_parameter)]
-        self.parameter_functions[_parameter] = return_starting_parameter_value
+        # find the parameter component to cycle through for recursive function calls
+        all_sub_parameters = []
 
-        # find the parameter component to cycle through for recursive function calls, excluding the first one
-        parameters_of_interest = []
-        for x_instance in extract_reversed_x_positions(_parameter)[: -1]:
+        # work backwards for overwriting, then reverse
+        for x_instance in extract_reversed_x_positions(_parameter):
             component = _parameter[: x_instance]
-            parameters_of_interest.append(_parameter[: x_instance])
+            all_sub_parameters.append(component)
             if component in self.overwrite_parameters:
                 break
+        all_sub_parameters.reverse()
 
-        # cycle through applicable components and extend function recursively
-        for component in parameters_of_interest:
-            if component in self.parameters:
-                self.parameter_functions[_parameter] = create_function_of_function(
-                    self.find_parameter_adaptation(component), self.parameter_functions[_parameter])
+        # start from base value as a function
+        if type(self.parameters[all_sub_parameters[0]]) == float or type(self.parameters[all_sub_parameters[0]]) == int:
+            self.final_parameter_functions[_parameter] = lambda time: self.parameters[all_sub_parameters[0]]
+        elif type(self.parameters[all_sub_parameters[0]]) == str:
+            self.final_parameter_functions[_parameter] = self.adaptation_functions[all_sub_parameters[0]]
 
-    def find_parameter_adaptation(self, _component):
-        """
-        finds the parameter function using its string in the case that it is a function or creates a multiplicative
+        # then cycle through applicable components and extend function recursively, only if component available
+        for component in all_sub_parameters[1:]:
 
-        function as the default if a numeric value is provided as the default behaviour for this user request format
-        :param _component: str
-            name of the parameter component
-        :return: function
-            a function that can act within the recursive approach to function creation described in the previous method
-        """
-        parameter_value = self.parameters[_component]
-        if type(parameter_value) == str:
-            return self.mapped_adaptation_functions[_component]
-        elif type(parameter_value) == int or type(parameter_value) == float:
-            return create_multiplicative_function(parameter_value)
+            # get the new function to act on the less stratified function (closer to the "tree-trunk")
+            if component not in self.parameters and "universal_death_rate" not in component:
+                raise ValueError("parameter component %s not found in parameters attribute" % component)
+            elif type(self.parameters[component]) == float:
+                update_function = create_multiplicative_function(self.parameters[component])
+            elif type(self.parameters[component]) == str:
+                update_function = create_time_variant_multiplicative_function(self.adaptation_functions[component])
+            else:
+                raise ValueError("parameter component %s not appropriate format" % component)
+
+            # create the composite function
+            self.final_parameter_functions[_parameter] = create_function_of_function(
+                update_function, self.final_parameter_functions[_parameter])
 
     """
     methods to be called during the process of model running
@@ -2019,7 +2024,7 @@ class StratifiedModel(EpiModel):
         :return: float
             the parameter value needed
         """
-        return self.parameter_functions[_parameter](_time)
+        return self.final_parameter_functions[_parameter](_time)
 
     def find_infectious_population(self, _compartment_values):
         """
@@ -2104,7 +2109,7 @@ class StratifiedModel(EpiModel):
             # calculate adjustment to original stem entry rate
             entry_fraction = 1.0
             for stratum in find_name_components(compartment)[1:]:
-                entry_fraction *= self.find_parameter_value("entry_fractionX%s" % stratum, _time)
+                entry_fraction *= self.get_single_parameter_component("entry_fractionX%s" % stratum, _time)
 
             # apply to that compartment
             _ode_equations = increment_list_by_index(
@@ -2142,8 +2147,8 @@ if __name__ == "__main__":
 
     age_mixing = None
     sir_model.stratify("age", [1, 10, 3], [], {}, {"recovery": {"1": 0.5, "10": 0.8}},
-                        infectiousness_adjustments={"1": 0.8},
-                        mixing_matrix=age_mixing, verbose=False)
+                       infectiousness_adjustments={"1": 0.8},
+                       mixing_matrix=age_mixing, verbose=False)
 
     sir_model.run_model()
 
