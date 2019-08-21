@@ -1938,6 +1938,7 @@ class StratifiedModel(EpiModel):
                                 % (unstratified_name, len(_strata_names)))
             parameter_name = create_stratified_name(unstratified_name, _stratification_name, _stratum)
             self.parameters[parameter_name] = 1.0 / len(_strata_names)
+            self.adaptation_functions[parameter_name] = create_multiplicative_function(1.0 / len(_strata_names))
 
         # otherwise if no request, retain the existing parameter
         else:
@@ -1985,7 +1986,7 @@ class StratifiedModel(EpiModel):
         all_sub_parameters.reverse()
 
         # start from base value as a function
-        if type(self.parameters[all_sub_parameters[0]]) == float:
+        if type(self.parameters[all_sub_parameters[0]]) == float or type(self.parameters[all_sub_parameters[0]]) == int:
             self.final_parameter_functions[_parameter] = lambda time: self.parameters[all_sub_parameters[0]]
         elif type(self.parameters[all_sub_parameters[0]]) == str:
             self.final_parameter_functions[_parameter] = self.adaptation_functions[all_sub_parameters[0]]
@@ -2146,8 +2147,8 @@ if __name__ == "__main__":
 
     age_mixing = None
     sir_model.stratify("age", [1, 10, 3], [], {}, {"recovery": {"1": 0.5, "10": 0.8}},
-                        infectiousness_adjustments={"1": 0.8},
-                        mixing_matrix=age_mixing, verbose=False)
+                       infectiousness_adjustments={"1": 0.8},
+                       mixing_matrix=age_mixing, verbose=False)
 
     sir_model.run_model()
 
