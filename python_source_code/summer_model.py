@@ -570,7 +570,7 @@ class EpiModel:
     most general methods
     """
 
-    def find_parameter_value(self, parameter_name, time):
+    def get_single_parameter_component(self, parameter_name, time):
         """
         find the value of a parameter with time-variant values trumping constant ones
 
@@ -938,7 +938,7 @@ class EpiModel:
     def find_transition_indices_to_implement(self):
         """
         for over-writing in stratified version, here just returns the indices of all the transition flows, as they all
-        need to be implemented
+            need to be implemented
 
         :return: list
             integers for all the rows of the transition matrix
@@ -948,7 +948,7 @@ class EpiModel:
     def find_death_indices_to_implement(self):
         """
         for over-writing in stratified version, here just returns the indices of all the transition flows, as they all
-        need to be implemented
+            need to be implemented
 
         :return: list
             integers for all the rows of the transition matrix
@@ -1003,10 +1003,9 @@ class EpiModel:
 
         :parameters and return: see previous method apply_all_flow_types_to_odes
         """
-        for compartment in self.compartment_names:
-            from_compartment = self.compartment_names.index(compartment)
-            net_flow = self.get_parameter_value("universal_death_rate", _time) * _compartment_values[from_compartment]
-            _ode_equations = increment_list_by_index(_ode_equations, from_compartment, -net_flow)
+        for n_comp, compartment in enumerate(self.compartment_names):
+            net_flow = self.get_parameter_value("universal_death_rate", _time) * _compartment_values[n_comp]
+            _ode_equations = increment_list_by_index(_ode_equations, n_comp, -net_flow)
 
             # track deaths in case births need to replace deaths
             if "total_deaths" in self.tracked_quantities:
@@ -1032,7 +1031,7 @@ class EpiModel:
             total rate of births to be implemented in the model
         """
         if self.birth_approach == "add_crude_birth_rate":
-            return self.find_parameter_value("crude_birth_rate", _time) * sum(_compartment_values)
+            return self.get_single_parameter_component("crude_birth_rate", _time) * sum(_compartment_values)
         elif self.birth_approach == "replace_deaths":
             return self.tracked_quantities["total_deaths"]
         else:
@@ -1089,7 +1088,7 @@ class EpiModel:
         :return: float
             parameter value
         """
-        return self.find_parameter_value(_parameter, _time)
+        return self.get_single_parameter_component(_parameter, _time)
 
     """
     simple output methods (most outputs will be managed outside of the python code)
@@ -1511,7 +1510,7 @@ class StratifiedModel(EpiModel):
             see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
         """
         self.output_to_user("\n-----\nstratifying transition flows and calculating associated parameters")
-        for n_flow in self.transition_flows[self.transition_flows.implement == len(self.all_stratifications) - 1].index:
+        for n_flow in self.find_transition_indices_to_implement(go_back_one=1):
             self.add_stratified_flows(
                 n_flow, _stratification_name, _strata_names,
                 find_stem(self.transition_flows.origin[n_flow]) in self.compartment_types_to_stratify,
@@ -1519,15 +1518,19 @@ class StratifiedModel(EpiModel):
                 _adjustment_requests)
         self.output_to_user("\n-----\nstratified transition flows matrix\n%s" % self.transition_flows)
 
-    def find_transition_indices_to_implement(self):
+    def find_transition_indices_to_implement(self, go_back_one=0):
         """
         find all the indices of the transition flows that need to be stratified
         separated out as very short method in order that it can over-ride the version in the unstratified EpiModel
 
+        :param go_back_one: int
+            number to subtract from self.all_stratification, which will be one if this method is being called after the
+                stratification has been added
         :return: list
             list of indices of the flows that need to be stratified
         """
-        return self.transition_flows[self.transition_flows.implement == len(self.all_stratifications)].index
+        return self.transition_flows[
+            self.transition_flows.implement == len(self.all_stratifications) - go_back_one].index
 
     def find_death_indices_to_implement(self, go_back_one=0):
         """
@@ -1641,6 +1644,8 @@ class StratifiedModel(EpiModel):
         :param _adjustment_requests:
              see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
         """
+
+
         for parameter in [param for param in self.parameters if find_stem(param) == "universal_death_rate"]:
             for stratum in _strata_names:
                 universal_death_parameter = \
@@ -1681,7 +1686,7 @@ class StratifiedModel(EpiModel):
                     "\tretaining existing parameter value %s for %s stratum of %s"
                     % (_unadjusted_parameter, _stratum, _stratification_name))
 
-            # implement request, otherwise parameter will be left out, essentially assumed to be one when integrating
+            # implement request, otherwise parameter will be left out and assumed to be one during integration
             if _stratum in _adjustment_requests[parameter_request] and \
                     type(_adjustment_requests[parameter_request][_stratum]) == str:
                 self.mapped_adaptation_functions[parameter_adjustment_name] = \
@@ -1891,10 +1896,10 @@ class StratifiedModel(EpiModel):
                 # determine whether to and/or from compartments are stratified
                 from_compartment = \
                     create_stratified_name(self.transition_flows.origin[_n_flow], _stratification_name, stratum) if \
-                        stratify_from else self.transition_flows.origin[_n_flow]
+                    stratify_from else self.transition_flows.origin[_n_flow]
                 to_compartment = \
                     create_stratified_name(self.transition_flows.to[_n_flow], _stratification_name, stratum) if \
-                        stratify_to else self.transition_flows.to[_n_flow]
+                    stratify_to else self.transition_flows.to[_n_flow]
 
                 # add the new flow
                 self.transition_flows = self.transition_flows.append(
@@ -2110,7 +2115,7 @@ class StratifiedModel(EpiModel):
             # calculate adjustment to original stem entry rate
             entry_fraction = 1.0
             for stratum in find_name_components(compartment)[1:]:
-                entry_fraction *= self.find_parameter_value("entry_fractionX%s" % stratum, _time)
+                entry_fraction *= self.get_single_parameter_component("entry_fractionX%s" % stratum, _time)
 
             # apply to that compartment
             _ode_equations = increment_list_by_index(
