@@ -1884,7 +1884,7 @@ class StratifiedModel(EpiModel):
                 parameter_name = self.add_adjusted_parameter(
                     self.transition_flows.parameter[_n_flow], _stratification_name, stratum, _adjustment_requests)
                 if not parameter_name:
-                    parameter_name = self.sort_absent_parameter_request(
+                    parameter_name = self.sort_absent_transition_parameter(
                         _stratification_name, _strata_names, stratum, stratify_from, stratify_to,
                         self.transition_flows.parameter[_n_flow])
                 self.output_to_user("\t\tadding parameter %s" % parameter_name)
@@ -1912,10 +1912,10 @@ class StratifiedModel(EpiModel):
             new_flow["implement"] += 1
             self.transition_flows = self.transition_flows.append(new_flow, ignore_index=True)
 
-    def sort_absent_parameter_request(self, _stratification_name, _strata_names, _stratum, _stratify_from, _stratify_to,
-                                      unstratified_name):
+    def sort_absent_transition_parameter(
+            self, _stratification_name, _strata_names, _stratum, _stratify_from, _stratify_to, unstratified_name):
         """
-        work out what to do if a specific parameter adjustment has not been requested
+        work out what to do if a specific transition parameter adjustment has not been requested
 
         :param _stratification_name:
             see prepare_and_check_stratification
@@ -1934,7 +1934,7 @@ class StratifiedModel(EpiModel):
 
         # default behaviour if not specified is to split the parameter into equal parts if to compartment is split
         if not _stratify_from and _stratify_to:
-            self.output_to_user("\tsplitting existing parameter value %s into %s equal parts"
+            self.output_to_user("\t splitting existing parameter value %s into %s equal parts"
                                 % (unstratified_name, len(_strata_names)))
             parameter_name = create_stratified_name(unstratified_name, _stratification_name, _stratum)
             self.parameters[parameter_name] = 1.0 / len(_strata_names)
