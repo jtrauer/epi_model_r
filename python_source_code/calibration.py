@@ -29,10 +29,10 @@ class Calibration:
         self.targeted_outputs = targeted_outputs  # a list of dictionaries. Each dictionary describes a target
         self.data_as_array = None  # will contain all targeted data points in a single array
 
-        self.sigma = 0.01  # provisional. sigma of the normal distribution used in the likelihood
         self.loglike = None  # will store theano object
 
         self.format_data_as_array()
+        self.workout_unspecified_sds()
         self.create_loglike_object()
 
         self.mcmc_trace = None  # will store the results of the MCMC model calibration
@@ -95,7 +95,7 @@ class Calibration:
             print(data)
             print(model_output)
 
-            ll += -(0.5/self.sigma**2)*np.sum((data - model_output)**2)
+            ll += -(0.5/target['sd']**2)*np.sum((data - model_output)**2)
 
         return ll
 
@@ -109,6 +109,17 @@ class Calibration:
 
         data = list(chain(*data))  # create a simple list from a list of lists
         self.data_as_array = np.asarray(data)
+
+    def workout_unspecified_sds(self):
+        """
+        If the sd parameter of the targeted output is not specified, it will automatically be calculated such that the
+        95% CI of the associated normal distribution covers 50% of the mean value of the target.
+        :return:
+        """
+        for i, target in enumerate(self.targeted_outputs):
+            if 'sd' not in target.keys():
+                self.targeted_outputs[i]['sd'] = 0.5 / 4. * np.mean(target['values'])
+                print(self.targeted_outputs[i]['sd'])
 
     def create_loglike_object(self):
         """
@@ -197,13 +208,14 @@ if __name__ == "__main__":
     par_priors = [{'param_name': 'contact_rate', 'distribution': 'uniform', 'distri_params': [2., 100.]},
                    {'param_name': 'late_progression', 'distribution': 'uniform', 'distri_params': [.001, 0.003]}
                    ]
-    target_outputs = [{'output_key': 'prevXinfectiousXamongXage_15', 'years': [2015, 2016], 'values': [0.005, 0.004]},
-                              {'output_key': 'prevXlatentXamongXage_5', 'years': [2014], 'values': [0.096]}
-                              ]
+    target_outputs = [{'output_key': 'prevXinfectiousXamongXage_15', 'years': [2015, 2016], 'values': [0.005, 0.004],
+                       'sd': 0.0005},
+                      {'output_key': 'prevXlatentXamongXage_5', 'years': [2014], 'values': [0.096], 'sd': 0.012}
+                     ]
     calib = Calibration(my_model, par_priors, target_outputs)
 
-    calib.run_fitting_algorithm(run_mode='mle')  # for maximum-likelihood estimation
-
-    calib.run_fitting_algorithm(run_mode='mcmc', mcmc_method='DEMetropolis', n_iterations=100, n_burned=10,
-                                n_chains=4, parallel=True)  # for mcmc
+    # calib.run_fitting_algorithm(run_mode='mle')  # for maximum-likelihood estimation
+    #
+    # calib.run_fitting_algorithm(run_mode='mcmc', mcmc_method='DEMetropolis', n_iterations=100, n_burned=10,
+    #                             n_chains=4, parallel=True)  # for mcmc
 
