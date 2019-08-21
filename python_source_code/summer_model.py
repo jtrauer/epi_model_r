@@ -280,7 +280,6 @@ def sinusoidal_scaling_function(start_time, baseline_value, end_time, final_valu
                    (0.5 - 0.5 * numpy.cos((time - start_time) * numpy.pi / (end_time - start_time)))
         else:
             return final_value
-
     return sinusoidal_function
 
 
@@ -295,10 +294,7 @@ def logistic_scaling_function(parameter):
     :return: function
         the logistic function
     """
-    def sigmoidal_function(x):
-        return 1.0 - 1.0 / (1.0 + numpy.exp(-(parameter - x)))
-
-    return sigmoidal_function
+    return lambda x: 1.0 - 1.0 / (1.0 + numpy.exp(-(parameter - x)))
 
 
 def create_multiplicative_function(multiplier):
@@ -310,31 +306,34 @@ def create_multiplicative_function(multiplier):
     :return: function
         function that can multiply by the multiplier parameter when called
     """
-    def multiplicative_function(input_value, time):
-        return multiplier * input_value
-    return multiplicative_function
+    return lambda input_value, time: multiplier * input_value
 
 
 def create_time_variant_multiplicative_function(time_variant_function):
-    def multiplicative_function(input_value, time):
-        return time_variant_function(time) * input_value
-    return multiplicative_function
+    """
+    similar to create_multiplicative_function, except that the value to multiply by can be a function of time, rather
+        than a single value
+
+    :param time_variant_function: function
+        a function with the independent variable of time that returns the value that the input should be multiplied by
+    :return: function
+        function that will multiply the input value by the output value of the time_variant_function
+    """
+
+    return lambda input_value, time: time_variant_function(time) * input_value
 
 
 def create_additive_function(increment):
     """
     return the addition of a fixed value as a function itself
+    currently only included for testing
 
     :param increment: float
         value that the returned function increments by
     :return: function
         function that can increment by the value parameter when called
     """
-
-    def increment_function(value):
-        return value + increment
-
-    return increment_function
+    return lambda value: value + increment
 
 
 def create_function_of_function(outer_function, inner_function):
@@ -349,9 +348,7 @@ def create_function_of_function(outer_function, inner_function):
         composite function that applies the inner and then the outer function, allowing the time parameter to be passed
             through if necessary
     """
-    def function_to_return(time):
-        return outer_function(inner_function(time), time)
-    return function_to_return
+    return lambda time: outer_function(inner_function(time), time)
 
 
 def get_average_value_of_function(input_function, start_value, end_value):
@@ -369,6 +366,14 @@ def get_average_value_of_function(input_function, start_value, end_value):
 
 
 def add_zero_to_age_breakpoints(breakpoints):
+    """
+    append a zero on to a list if there isn't one already present, for the purposes of age stratification
+
+    :param breakpoints: list
+        integers for the age breakpoints requested
+    :return: list
+        age breakpoints with the zero value included
+    """
     return [0] + breakpoints if 0 not in breakpoints else breakpoints
 
 
@@ -543,7 +548,7 @@ class EpiModel:
         keys are compartment types, values are starting population values for each compartment
         note that not all compartment_types must be included as keys here
     :attribute parameters: dict
-        constant parameter values
+        string keys for each parameter, with values either string to refer to a time-variant function or float
     :attribute requested_flows: list of dicts in standard format
         list with each element being a model flow, with fixed key names according to the type of flow implemented
     :attribute initial_conditions_to_total: bool
@@ -663,9 +668,6 @@ class EpiModel:
         self.infectious_indices = [self.infectious_compartment in comp for comp in self.compartment_names]
         self.infectious_indices_int = [n_bool for n_bool, boolean in enumerate(self.infectious_indices) if boolean]
 
-        # parameters that need to be calculated in addition to the ones relating to transitions
-        self.parameters_to_adjust = ["universal_death_rate"]
-
     def check_and_report_attributes(
             self, _times, _compartment_types, _initial_conditions, _parameters, _requested_flows,
             _initial_conditions_to_total, _infectious_compartment, _birth_approach, _verbose, _reporting_sigfigs,
@@ -778,7 +780,6 @@ class EpiModel:
         :param _requested_flows: dict
             unchanged from argument to __init__
         """
-
         for flow in _requested_flows:
 
             # check flow requested correctly
@@ -1662,7 +1663,8 @@ class StratifiedModel(EpiModel):
 
     def add_adjusted_parameter(self, _unadjusted_parameter, _stratification_name, _stratum, _adjustment_requests):
         """
-        find the adjustment request that is relevant to a particular unadjusted parameter and stratum
+        find the adjustment request that is relevant to a particular unadjusted parameter and stratum and add the
+            parameter value (str for function or float) to the parameters dictionary attribute
         otherwise allow return of None
 
         :param _unadjusted_parameter:
