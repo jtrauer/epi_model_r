@@ -259,7 +259,7 @@ def build_working_tb_model(tb_n_contact, country_iso3, cdr_adjustment=0.6, start
                        adjustment_requests=bcg_efficacy,
                        verbose=False)
 
-    create_flowchart(_tb_model, name="stratified_by_age_vaccination")
+    # create_flowchart(_tb_model, name="stratified_by_age_vaccination")
 
     # loading time-variant case detection rate
     input_database = InputDB()

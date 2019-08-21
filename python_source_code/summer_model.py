@@ -1655,7 +1655,8 @@ class StratifiedModel(EpiModel):
             self.parameters[parameter_adjustment_name] = \
                 _adjustment_requests["universal_death_rate"][stratum] if \
                 stratum in _adjustment_requests["universal_death_rate"] else 1.0
-            if stratum in _adjustment_requests["universal_death_rate"][self.overwrite_key]:
+            if self.overwrite_key in _adjustment_requests["universal_death_rate"] and \
+                    stratum in _adjustment_requests["universal_death_rate"][self.overwrite_key]:
                 self.overwrite_parameters.append(parameter_adjustment_name)
             self.parameters_to_adjust.append(parameter_adjustment_name)
 
@@ -1683,7 +1684,7 @@ class StratifiedModel(EpiModel):
             parameter_adjustment_name = \
                 create_stratified_name(_unadjusted_parameter, _stratification_name, _stratum) if \
                 _stratum in _adjustment_requests[parameter_request] else _unadjusted_parameter
-            self.output_to_user("\tparameter for %s stratum of %s is %s"
+            self.output_to_user("\t parameter for %s stratum of %s stratification is called %s"
                                 % (_stratum, _stratification_name, parameter_adjustment_name))
             if _stratum in _adjustment_requests[parameter_request]:
                 self.parameters[parameter_adjustment_name] = _adjustment_requests[parameter_request][_stratum]
