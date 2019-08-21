@@ -310,8 +310,14 @@ def create_multiplicative_function(multiplier):
     :return: function
         function that can multiply by the multiplier parameter when called
     """
-    def multiplicative_function(value, time):
-        return multiplier * value
+    def multiplicative_function(input_value, time):
+        return multiplier * input_value
+    return multiplicative_function
+
+
+def create_time_variant_multiplicative_function(time_variant_function):
+    def multiplicative_function(input_value, time):
+        return time_variant_function(time) * input_value
     return multiplicative_function
 
 
@@ -1998,14 +2004,17 @@ class StratifiedModel(EpiModel):
 
     def find_parameter_components(self, _parameter):
         """
-        builds up parameter as a function, recursively creating an outer function that calls the inner function.
+        builds up each parameter to be implemented as a function, recursively creating an outer function that calls the
+            inner function
 
         :param _parameter: str
             full name of the parameter of interest
         """
 
-        # find the parameter component to cycle through for recursive function calls, work backwards for overwriting
+        # find the parameter component to cycle through for recursive function calls
         all_sub_parameters = []
+
+        # work backwards for overwriting, then reverse
         for x_instance in extract_reversed_x_positions(_parameter):
             component = _parameter[: x_instance]
             all_sub_parameters.append(component)
@@ -2015,37 +2024,18 @@ class StratifiedModel(EpiModel):
 
         # start from base value as a function
         if type(self.parameters[all_sub_parameters[0]]) == float:
-            def starting_function(time):
-                return self.parameters[all_sub_parameters[0]]
+            self.final_parameter_functions[_parameter] = lambda time: self.parameters[all_sub_parameters[0]]
         elif type(self.parameters[all_sub_parameters[0]]) == str:
-            starting_function = self.adaptation_functions[all_sub_parameters[0]]
-        self.final_parameter_functions[_parameter] = starting_function
+            self.final_parameter_functions[_parameter] = self.adaptation_functions[all_sub_parameters[0]]
 
-        # then cycle through applicable components and extend function recursively if component available
+        # then cycle through applicable components and extend function recursively, only if component available
         for component in [comp for comp in all_sub_parameters[1:] if comp in self.parameters]:
             if type(self.parameters[component]) == float:
-                udpate_function = create_multiplicative_function(self.parameters[component])
+                update_function = create_multiplicative_function(self.parameters[component])
             elif type(self.parameters[component]) == str:
-                udpate_function = self.adaptation_functions[component]
-
+                update_function = create_time_variant_multiplicative_function(self.adaptation_functions[component])
             self.final_parameter_functions[_parameter] = create_function_of_function(
-                udpate_function, self.final_parameter_functions[_parameter])
-
-    def find_parameter_adaptation(self, _component):
-        """
-        finds the parameter function using its string in the case that it is a function or creates a multiplicative
-            function as the default if a numeric value is provided as the default behaviour for this user request format
-
-        :param _component: str
-            name of the parameter component
-        :return: function
-            a function that can act within the recursive approach to function creation described in the previous method
-        """
-        parameter_value = self.parameters[_component]
-        if type(parameter_value) == str:
-            return self.mapped_adaptation_functions[_component]
-        elif type(parameter_value) == int or type(parameter_value) == float:
-            return create_multiplicative_function(parameter_value)
+                update_function, self.final_parameter_functions[_parameter])
 
     """
     methods to be called during the process of model running
