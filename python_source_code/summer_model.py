@@ -2030,10 +2030,14 @@ class StratifiedModel(EpiModel):
 
         # then cycle through applicable components and extend function recursively, only if component available
         for component in [comp for comp in all_sub_parameters[1:] if comp in self.parameters]:
+
+            # get the new function to act on the less stratified function (closer to the "tree-trunk")
             if type(self.parameters[component]) == float:
                 update_function = create_multiplicative_function(self.parameters[component])
             elif type(self.parameters[component]) == str:
                 update_function = create_time_variant_multiplicative_function(self.adaptation_functions[component])
+
+            # create the composite function
             self.final_parameter_functions[_parameter] = create_function_of_function(
                 update_function, self.final_parameter_functions[_parameter])
 
