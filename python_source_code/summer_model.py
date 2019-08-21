@@ -1254,7 +1254,8 @@ class StratifiedModel(EpiModel):
         if self.death_flows.shape[0] > 0:
             self.stratify_death_flows(
                 stratification_name, strata_names, adjustment_requests)
-        self.stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests)
+        if "universal_death_rate" in adjustment_requests:
+            self.stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests)
 
         # check submitted mixing matrix and combine with existing matrix, if any
         self.prepare_mixing_matrix(mixing_matrix, stratification_name, strata_names)
@@ -1639,7 +1640,8 @@ class StratifiedModel(EpiModel):
     def stratify_universal_death_rate(self, _stratification_name, _strata_names, _adjustment_requests):
         """
         stratify the approach to universal, population-wide deaths (which can be made to vary by stratum)
-        adjust each parameter that refers to the universal death rate according to user request
+        adjust every parameter that refers to the universal death rate, according to user request if submitted and
+            otherwise populated with a value of one by default
 
         :param _stratification_name:
             see prepare_and_check_stratification
@@ -1648,44 +1650,14 @@ class StratifiedModel(EpiModel):
         :param _adjustment_requests:
              see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
         """
-        if "universal_death_rate" in _adjustment_requests:
-            for stratum in _strata_names:
-                parameter_adjustment_name = create_stratified_name("universal_death_rate", _stratification_name, stratum)
-                if stratum in _adjustment_requests["universal_death_rate"] and \
-                        type(_adjustment_requests["universal_death_rate"][stratum]) == str:
-                    self.parameters[parameter_adjustment_name] = parameter_adjustment_name
-                    self.mapped_adaptation_functions[parameter_adjustment_name] = \
-                        self.adaptation_functions[_adjustment_requests["universal_death_rate"][stratum]]
-                elif stratum in _adjustment_requests["universal_death_rate"]:
-                    self.parameters[parameter_adjustment_name] = _adjustment_requests["universal_death_rate"][stratum]
-                if self.overwrite_key in _adjustment_requests["universal_death_rate"] and \
-                        stratum in _adjustment_requests["universal_death_rate"][self.overwrite_key]:
-                    self.overwrite_parameters.append(parameter_adjustment_name)
-                self.parameters_to_adjust.append(parameter_adjustment_name)
-
-        print(self.parameters)
-        # print(self.mapped_adaptation_functions)
-        #
-        # print(self.overwrite_parameters)
-        #
-        # for parameter in [param for param in self.parameters if find_stem(param) == "universal_death_rate"]:
-        #     for stratum in _strata_names:
-        #         print("_______")
-        #         universal_death_parameter = \
-        #             self.add_adjusted_parameter(parameter, _stratification_name, stratum, _adjustment_requests)
-        #         print(universal_death_parameter)
-        #         print(stratum)
-        #         if not universal_death_parameter:
-        #             print("hello")
-        #         # if not parameter_name:
-        #         #     parameter_name = self.sort_absent_parameter_request(
-        #         #         _stratification_name, _strata_names, stratum, stratify_from, stratify_to, _n_flow)
-        #
-        #         # if not universal_death_parameter:
-        #         #     print("hello")
-        #
-        #         if universal_death_parameter and universal_death_parameter not in self.parameters_to_adjust:
-        #             self.parameters_to_adjust.append(universal_death_parameter)
+        for stratum in _strata_names:
+            parameter_adjustment_name = create_stratified_name("universal_death_rate", _stratification_name, stratum)
+            self.parameters[parameter_adjustment_name] = \
+                _adjustment_requests["universal_death_rate"][stratum] if \
+                stratum in _adjustment_requests["universal_death_rate"] else 1.0
+            if stratum in _adjustment_requests["universal_death_rate"][self.overwrite_key]:
+                self.overwrite_parameters.append(parameter_adjustment_name)
+            self.parameters_to_adjust.append(parameter_adjustment_name)
 
     def add_adjusted_parameter(self, _unadjusted_parameter, _stratification_name, _stratum, _adjustment_requests):
         """
@@ -1708,23 +1680,12 @@ class StratifiedModel(EpiModel):
 
         # find the adjustment requests that are extensions of the base parameter type being considered
         for parameter_request in [req for req in _adjustment_requests if _unadjusted_parameter.startswith(req)]:
+            parameter_adjustment_name = \
+                create_stratified_name(_unadjusted_parameter, _stratification_name, _stratum) if \
+                _stratum in _adjustment_requests[parameter_request] else _unadjusted_parameter
+            self.output_to_user("\tparameter for %s stratum of %s is %s"
+                                % (_stratum, _stratification_name, parameter_adjustment_name))
             if _stratum in _adjustment_requests[parameter_request]:
-                parameter_adjustment_name = \
-                    create_stratified_name(_unadjusted_parameter, _stratification_name, _stratum)
-                self.output_to_user(
-                    "\tmodifying %s for %s stratum of %s with new parameter called %s"
-                    % (_unadjusted_parameter, _stratum, _stratification_name, parameter_adjustment_name))
-            else:
-                parameter_adjustment_name = _unadjusted_parameter
-                self.output_to_user("\tretaining existing parameter value %s for %s stratum of %s"
-                                    % (_unadjusted_parameter, _stratum, _stratification_name))
-
-            # implement request, otherwise parameter will be left out and assumed to be one during integration
-            if _stratum in _adjustment_requests[parameter_request] and \
-                    type(_adjustment_requests[parameter_request][_stratum]) == str:
-                self.mapped_adaptation_functions[parameter_adjustment_name] = \
-                    self.adaptation_functions[_adjustment_requests[parameter_request][_stratum]]
-            elif _stratum in _adjustment_requests[parameter_request]:
                 self.parameters[parameter_adjustment_name] = _adjustment_requests[parameter_request][_stratum]
 
             # keep track of which parameters are to be over-written
@@ -2029,13 +1990,17 @@ class StratifiedModel(EpiModel):
             self.final_parameter_functions[_parameter] = self.adaptation_functions[all_sub_parameters[0]]
 
         # then cycle through applicable components and extend function recursively, only if component available
-        for component in [comp for comp in all_sub_parameters[1:] if comp in self.parameters]:
+        for component in all_sub_parameters[1:]:
 
             # get the new function to act on the less stratified function (closer to the "tree-trunk")
-            if type(self.parameters[component]) == float:
+            if component not in self.parameters and "universal_death_rate" not in component:
+                raise ValueError("parameter component %s not found in parameters attribute" % component)
+            elif type(self.parameters[component]) == float:
                 update_function = create_multiplicative_function(self.parameters[component])
             elif type(self.parameters[component]) == str:
                 update_function = create_time_variant_multiplicative_function(self.adaptation_functions[component])
+            else:
+                raise ValueError("parameter component %s not appropriate format" % component)
 
             # create the composite function
             self.final_parameter_functions[_parameter] = create_function_of_function(
