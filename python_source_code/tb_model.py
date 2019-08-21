@@ -6,7 +6,7 @@ import numpy
 import copy
 from python_source_code.curve import scale_up_function
 import pandas as pd
-from python_source_code.db import get_bcg_coverage, get_crude_birth_rate
+from python_source_code.db import get_bcg_coverage, get_crude_birth_rate, get_pop_mortality_functions
 
 
 def provide_aggregated_latency_parameters():
@@ -224,6 +224,9 @@ def build_working_tb_model(tb_n_contact, country_iso3, cdr_adjustment=0.6, start
     age_infectiousness = get_parameter_dict_from_function(logistic_scaling_function(15.0), age_breakpoints)
     age_params = get_adapted_age_parameters(age_breakpoints)
     age_params.update(split_age_parameter(age_breakpoints, "contact_rate"))
+
+    # pop_morts = get_pop_mortality_functions(input_database, age_breakpoints, country_iso_code=country_iso3)
+    # print(pop_morts)
 
     # test age stratification
     # age_only_model = copy.deepcopy(_tb_model)

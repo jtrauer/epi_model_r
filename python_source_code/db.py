@@ -191,7 +191,7 @@ def find_age_weights(age_breakpoints, demo_data, arbitrary_upper_age=1e2, break_
     return weightings_dict
 
 
-def find_age_specific_death_rates(age_breakpoints, country_iso_code):
+def find_age_specific_death_rates(input_database, age_breakpoints, country_iso_code):
     """
     find non-tb-related death rates from un data that are specific to the age groups requested for the model regardless
     of the age brackets for which data are available
@@ -219,6 +219,26 @@ def find_age_specific_death_rates(age_breakpoints, country_iso_code):
             age_death_rates[age_break][year] = \
                 sum([death_rate * weight for death_rate, weight in zip(death_rates.iloc[year], age_weights[age_break])])
     return age_death_rates, years
+
+
+def get_pop_mortality_functions(input_database, age_breaks, country_iso_code):
+    """
+    use the mortality rate data that can be obtained from find_age_specific_death_rates to fit time-variant mortality
+        functions for each age group being implemented in the model
+
+    :param age_breaks: list
+        starting ages for each of the age groups
+    :param country_iso_code: str
+        the three digit iso3 code for the country of interest
+    :return: dict
+        keys age breakpoints, values mortality functions
+    """
+    age_death_dict, data_years = find_age_specific_death_rates(input_database, age_breaks, country_iso_code)
+    pop_mortality_functions = {}
+    for age_group in age_death_dict:
+        pop_mortality_functions[age_group] = \
+            scale_up_function(data_years, age_death_dict[age_group], smoothness=0.2, method=5)
+    return pop_mortality_functions
 
 
 class InputDB:
@@ -354,8 +374,8 @@ if __name__ == "__main__":
     # input_database.update_xl_reads()
     # input_database.update_csv_reads()
 
-    age_breaks = [18, 3]
-    age_death_dict, data_years = find_age_specific_death_rates(age_breaks, "MNG")
+    # example_age_breakpoints = [10, 3]
+    # pop_morts = get_pop_mortality_functions(input_database, example_age_breakpoints, country_iso_code="MNG")
 
     # example of accessing once loaded
     # times = list(np.linspace(1950, 2020, 1e3))
