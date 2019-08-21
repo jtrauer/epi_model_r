@@ -660,6 +660,9 @@ class EpiModel:
         self.infectious_indices = [self.infectious_compartment in comp for comp in self.compartment_names]
         self.infectious_indices_int = [n_bool for n_bool, boolean in enumerate(self.infectious_indices) if boolean]
 
+        # parameters that need to be calculated in addition to the ones relating to transitions
+        self.parameters_to_adjust = ["universal_death_rate"]
+
     def check_and_report_attributes(
             self, _times, _compartment_types, _initial_conditions, _parameters, _requested_flows,
             _initial_conditions_to_total, _infectious_compartment, _birth_approach, _verbose, _reporting_sigfigs,
@@ -1077,7 +1080,7 @@ class EpiModel:
 
     def get_parameter_value(self, _parameter, _time):
         """
-        essentially place-holding, but need to split this out as a function in order to stratification later
+        essentially place-holding, but need to split this out as a function in order to stratify later
 
         :param _parameter: str
             parameter name
@@ -1197,6 +1200,8 @@ class StratifiedModel(EpiModel):
         self.overwrite_character, self.overwrite_key = "W", "overwrite"
         self.heterogeneous_mixing = False
         self.mixing_matrix = None
+
+        self.parameters_to_adjust = ["universal_death_rate"]
 
     """
     main master method for model stratification
@@ -1638,7 +1643,10 @@ class StratifiedModel(EpiModel):
         """
         for parameter in [param for param in self.parameters if find_stem(param) == "universal_death_rate"]:
             for stratum in _strata_names:
-                self.add_adjusted_parameter(parameter, _stratification_name, stratum, _adjustment_requests)
+                universal_death_parameter = \
+                    self.add_adjusted_parameter(parameter, _stratification_name, stratum, _adjustment_requests)
+                if universal_death_parameter and universal_death_parameter not in self.parameters_to_adjust:
+                    self.parameters_to_adjust.append(universal_death_parameter)
 
     def add_adjusted_parameter(self, _unadjusted_parameter, _stratification_name, _stratum, _adjustment_requests):
         """
@@ -1943,19 +1951,17 @@ class StratifiedModel(EpiModel):
         """
 
         # create list of all the parameters that we need to find the set of adjustments for
-        parameters_to_adjust = []
         for n_flow in range(self.transition_flows.shape[0]):
             if self.transition_flows.implement[n_flow] == len(self.all_stratifications) and \
-                    self.transition_flows.parameter[n_flow] not in parameters_to_adjust:
-                parameters_to_adjust.append(self.transition_flows.parameter[n_flow])
+                    self.transition_flows.parameter[n_flow] not in self.parameters_to_adjust:
+                self.parameters_to_adjust.append(self.transition_flows.parameter[n_flow])
         for n_flow in range(self.death_flows.shape[0]):
             if self.death_flows.implement[n_flow] == len(self.all_stratifications) and \
-                    self.death_flows.parameter[n_flow] not in parameters_to_adjust:
-                parameters_to_adjust.append(self.death_flows.parameter[n_flow])
-        parameters_to_adjust.append("universal_death_rate")
+                    self.death_flows.parameter[n_flow] not in self.parameters_to_adjust:
+                self.parameters_to_adjust.append(self.death_flows.parameter[n_flow])
 
         # and adjust
-        for parameter in parameters_to_adjust:
+        for parameter in self.parameters_to_adjust:
             self.find_parameter_components(parameter)
 
     def find_parameter_components(self, _parameter):
