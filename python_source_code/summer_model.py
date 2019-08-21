@@ -310,9 +310,8 @@ def create_multiplicative_function(multiplier):
     :return: function
         function that can multiply by the multiplier parameter when called
     """
-    def multiplicative_function(value):
+    def multiplicative_function(value, time):
         return multiplier * value
-
     return multiplicative_function
 
 
@@ -344,10 +343,8 @@ def create_function_of_function(outer_function, inner_function):
         composite function that applies the inner and then the outer function, allowing the time parameter to be passed
             through if necessary
     """
-
     def function_to_return(time):
-        return outer_function(inner_function(time))
-
+        return outer_function(inner_function(time), time)
     return function_to_return
 
 
@@ -2017,14 +2014,22 @@ class StratifiedModel(EpiModel):
         all_sub_parameters.reverse()
 
         # start from base value as a function
-        def return_starting_parameter_value(time):
-            return self.find_parameter_adaptation(all_sub_parameters[0])(time)
-        self.final_parameter_functions[_parameter] = return_starting_parameter_value
+        if type(self.parameters[all_sub_parameters[0]]) == float:
+            def starting_function(time):
+                return self.parameters[all_sub_parameters[0]]
+        elif type(self.parameters[all_sub_parameters[0]]) == str:
+            starting_function = self.adaptation_functions[all_sub_parameters[0]]
+        self.final_parameter_functions[_parameter] = starting_function
 
         # then cycle through applicable components and extend function recursively if component available
         for component in [comp for comp in all_sub_parameters[1:] if comp in self.parameters]:
+            if type(self.parameters[component]) == float:
+                udpate_function = create_multiplicative_function(self.parameters[component])
+            elif type(self.parameters[component]) == str:
+                udpate_function = self.adaptation_functions[component]
+
             self.final_parameter_functions[_parameter] = create_function_of_function(
-                self.find_parameter_adaptation(component), self.final_parameter_functions[_parameter])
+                udpate_function, self.final_parameter_functions[_parameter])
 
     def find_parameter_adaptation(self, _component):
         """
