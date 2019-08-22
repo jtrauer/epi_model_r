@@ -239,7 +239,7 @@ def build_working_tb_model(tb_n_contact, country_iso3, cdr_adjustment=0.6, start
 
     pop_morts = get_pop_mortality_functions(input_database, age_breakpoints, country_iso_code=country_iso3)
     for age_break in age_breakpoints:
-        _tb_model.adaptation_functions["universal_death_rateXage_" + str(age_break)] = pop_morts[age_break]
+        _tb_model.time_variants["universal_death_rateXage_" + str(age_break)] = pop_morts[age_break]
     age_params["universal_death_rate"] = {"5W": "universal_death_rateXage_5"}
 
     # stratify the actual model by age
