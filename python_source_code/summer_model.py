@@ -165,7 +165,7 @@ def increment_list_by_index(list_to_increment, index_to_increment, increment_val
 
 def normalise_dict(value_dict):
     """
-    simple function to normalise the values from a list
+    simple function to normalise the values from a list to the total of their values
 
     :param value_dict: dict
         dictionary whose values will be adjusted
@@ -192,7 +192,7 @@ def change_parameter_unit(parameter_dict, multiplier):
 
 def element_list_multiplication(list_1, list_2):
     """
-    multiply elements of two lists to return another list with the same dimensions
+    multiply elements of two lists to return another list with the same length
 
     :param list_1: list
         first list of numeric values to be multiplied
@@ -228,7 +228,7 @@ considering moving to different file
 def create_step_function_from_dict(input_dict):
     """
     create a step function out of dictionary with numeric keys and values, where the keys determine the values of the
-    independent variable at which the steps between the output values occur
+        independent variable at which the steps between the output values occur
 
     :param input_dict: dict
         dictionary in standard format as described above
@@ -246,15 +246,14 @@ def create_step_function_from_dict(input_dict):
             for key in range(len(dict_keys)):
                 if input_value < dict_keys[key + 1]:
                     return dict_values[key]
-
     return step_function
 
 
 def sinusoidal_scaling_function(start_time, baseline_value, end_time, final_value):
     """
     in order to implement scale-up functions over time, use the cosine function to produce smooth scale-up functions
-    from one point to another, returning the starting value before the starting point and the final value after the
-    end point
+        from one point to another, returning the starting value before the starting point and the final value after the
+        end point
 
     :param start_time: float
         starting value of the independent variable
@@ -286,8 +285,8 @@ def sinusoidal_scaling_function(start_time, baseline_value, end_time, final_valu
 def logistic_scaling_function(parameter):
     """
     a specific sigmoidal form of function that scales up from zero to one around the point of parameter
-    won't be useful in all situations and is specifically for age-specific infectiousness - should be the same as in
-    Romain's BMC Medicine manuscript
+    won't be useful in all situations and is specifically for age-specific infectiousness - the same as in Romain's BMC
+        Medicine manuscript
 
     :param parameter: float
         the single parameter to the function
@@ -299,7 +298,7 @@ def logistic_scaling_function(parameter):
 
 def create_multiplicative_function(multiplier):
     """
-    return multiplication by a fixed value as a function
+    return multiplication by a fixed value as a function, takes time as an argument but ignores it at this point
 
     :param multiplier: float
         value that the returned function multiplies by
@@ -312,14 +311,13 @@ def create_multiplicative_function(multiplier):
 def create_time_variant_multiplicative_function(time_variant_function):
     """
     similar to create_multiplicative_function, except that the value to multiply by can be a function of time, rather
-        than a single value
+        than a fixed value
 
     :param time_variant_function: function
         a function with the independent variable of time that returns the value that the input should be multiplied by
     :return: function
         function that will multiply the input value by the output value of the time_variant_function
     """
-
     return lambda input_value, time: time_variant_function(time) * input_value
 
 
@@ -338,7 +336,7 @@ def create_additive_function(increment):
 
 def create_function_of_function(outer_function, inner_function):
     """
-    function that can itself return a function that sequentially apply two functions
+    function that can itself return a function that sequentially applies two functions
 
     :param outer_function: function
         last function to be called
@@ -380,7 +378,16 @@ def add_zero_to_age_breakpoints(breakpoints):
 def get_parameter_dict_from_function(input_function, breakpoints, upper_value=100.0):
     """
     create a dictionary of parameter values from a continuous function, an arbitrary upper value and some breakpoints
-    within which to evaluate the function
+        within which to evaluate the function
+
+    :param input_function: function
+        the function of a parameter that varies with age
+    :param breakpoints: list
+        the requested age breakpoints
+    :param upper_value: float
+        arbitrary upper value for the highest age value
+    :return: dict
+        parameter value for each age breakpoint
     """
     revised_breakpoints = copy.copy(add_zero_to_age_breakpoints(breakpoints))
     revised_breakpoints.append(upper_value)
@@ -393,9 +400,9 @@ def get_parameter_dict_from_function(input_function, breakpoints, upper_value=10
 
 def split_age_parameter(age_breakpoints, parameter):
     """
-    creates a dictionary to request splitting of a parameter according to age breakpoints, but using values of 1 for
-        each age stratum
-    in order that later parameters that might be age-specific can be modified for some age strata
+    creates a dictionary to split of a parameter according to age breakpoints, but using values of one for each age
+        stratum
+    purpose is so that later parameters that might be age-specific can be modified for some age strata
 
     :param age_breakpoints: list
         list of the age breakpoints to be requested, with breakpoints as string
@@ -425,7 +432,6 @@ def substratify_parameter(parameter_to_stratify, stratum_to_split, param_value_d
         dictionary with keys being upstream stratified parameter to split and keys dictionaries with their keys the
             current stratum of interest and values the parameter multiplier
     """
-
     return {parameter_to_stratify + "Xage_" + str(age_group): {stratum_to_split: param_value_dict[str(age_group)]} for
             age_group in add_zero_to_age_breakpoints(breakpoints)}
 
@@ -466,6 +472,11 @@ other specific functions for application to the model object
 def store_database(outputs, table_name="outputs"):
     """
     store outputs from the model in sql database for use in producing outputs later
+
+    :param outputs: pandas dataframe
+        parameter values outputted from model
+    :param table_name: str
+        name of the database to generate
     """
     engine = create_engine("sqlite:///../databases/outputs.db", echo=True)
     if table_name == "functions":
@@ -477,8 +488,14 @@ def store_database(outputs, table_name="outputs"):
 def create_flowchart(model_object, strata=None, stratify=True, name="flow_chart"):
     """
     use graphviz module to create flow diagram of compartments and intercompartmental flows.
-    """
 
+    :param model_object: summer instance
+        entire model object to be interrogated
+    :param strata: str or None
+        whether to plot for a particular model stratification
+    :param stratify:
+    :param name:
+    """
     if strata is None:
         strata = len(model_object.all_stratifications)
 
@@ -538,40 +555,54 @@ def create_flowchart(model_object, strata=None, stratify=True, name="flow_chart"
 class EpiModel:
     """
     general epidemiological model for constructing compartment-based models, typically of infectious disease
-    transmission. See README.md for full description of purpose and approach of this model.
+        transmission
+    see README.md for full description of purpose and approach of this model
 
     :attribute times: list
         time steps at which outputs are to be evaluated
     :attribute compartment_types: list
-        strings representing the compartments of the model
+        strings representing the compartments of the model (in unstratified form, this is the same as the compartment
+            names)
     :attribute initial_conditions: dict
         keys are compartment types, values are starting population values for each compartment
-        note that not all compartment_types must be included as keys here
+        note that not all compartment_types have to be included as keys here
     :attribute parameters: dict
-        string keys for each parameter, with values either string to refer to a time-variant function or float
+        keys are strings for each parameter
+        values either string to refer to a time-variant function or floats for the parameter values
     :attribute requested_flows: list of dicts in standard format
-        list with each element being a model flow, with fixed key names according to the type of flow implemented
+        list with each element being a model flow dict
+        key names for these dict elements fo the list are fixed according to the type of flow implemented
     :attribute initial_conditions_to_total: bool
-        whether to add the initial conditions up to a certain total if this value hasn't yet been reached through
-        the initial_conditions argument
+        whether to add the initial conditions up to a certain total if this value hasn't yet been reached through the
+            initial_conditions argument
     :attribute infectious_compartment: str
-        name of the infectious compartment for calculation of intercompartmental infection flows
+        name of the infectious compartment for calculation of inter-compartmental infection flows
     :attribute birth_approach: str
-        approach to allowing entry flows into the model, must be add_crude_birth_rate, replace_deaths or no_births
+        approach to allowing entry flows into the model
+        currently must be one of - add_crude_birth_rate, replace_deaths or no_births
     :attribute verbose: bool
         whether to output progress in model construction as this process proceeds
     :attribute reporting_sigfigs: int
-        number of significant figures to output to when reporting progress
+        number of significant figures to output to if reporting progress with verbose
     :attribute entry_compartment: str
-        name of the compartment that births come in to
+        name of the compartment that births/recruitment come in through
     :attribute starting_population: numeric
         value for the total starting population to be supplemented to if initial_conditions_to_total requested
     :attribute starting_compartment: str
-        optional name of the compartment to add population recruitment to
+        optional name of the compartment to supplement initial conditions remainder into
     :attribute equilibrium_stopping_tolerance: float
         value at which relative changes in compartment size trigger stopping when equilibrium reached
     :attribute integration_type: str
         integration approach for numeric solution to odes, must be odeint or solveivp currently
+    :attribute flow_diagram: None
+        spare attribute for use later in flow diagram creation
+    :attribute output_connections: dict
+        keys outputs of interest
+        values corresponding compartments that are connected for this output
+    :attribute infectious_populations:
+
+    :attribute infectious_denominators:
+
     """
 
     """
@@ -580,8 +611,8 @@ class EpiModel:
 
     def output_to_user(self, comment):
         """
-        short function to save the if statement in every call to output some information, may be adapted later and was
-        more important to the R version of the repository
+        short function to save using an if statement in every call to output some information and to allow adaptation
+            later
 
         :param: comment: string for the comment to be displayed to the user
         """
@@ -596,10 +627,10 @@ class EpiModel:
                  initial_conditions_to_total=True, infectious_compartment="infectious", birth_approach="no_birth",
                  verbose=False, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1,
                  starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint",
-                 output_connections={}):
+                 output_connections=()):
         """
         construction method to create a basic (and at this stage unstratified) compartmental model, including checking
-        that the arguments have been provided correctly (in a separate method called here)
+            that the arguments have been provided correctly (in a separate method called here)
 
         :params: all arguments essentially become object attributes and are described in the first main docstring to
             this object class
@@ -1221,7 +1252,7 @@ class StratifiedModel(EpiModel):
                  initial_conditions_to_total=True, infectious_compartment="infectious", birth_approach="no_birth",
                  verbose=False, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1,
                  starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint",
-                 output_connections={}):
+                 output_connections=()):
         """
         constructor mostly inherits from parent class, with a few additional attributes that are required for the
         stratified version
