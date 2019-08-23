@@ -11,8 +11,8 @@ setup(
     author_email='james.trauer@monash.edu',
     install_requires=['scipy==1.1.0',
                       'graphviz>=0.4.10',
-                      'SQLAlchemy>=1.1.18',
-	              'pymc3==3.7',	
-                      'pandas==0.24.2',],
+                      'SQLAlchemy>=1.1.18',],
+	             #'pymc3==3.7',
+                     # 'pandas==0.24.2',],
     description='General structure for creating epidemiological models in R'
 )
