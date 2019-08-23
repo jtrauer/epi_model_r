@@ -289,8 +289,8 @@ class LogLike(tt.Op):
 
         outputs[0][0] = np.array(logl)  # output the log-likelihood
 
+
 if __name__ == "__main__":
-    mod = build_model_for_calibration()
 
     par_priors = [{'param_name': 'contact_rate', 'distribution': 'uniform', 'distri_params': [2., 100.]},
                   {'param_name': 'late_progression', 'distribution': 'uniform', 'distri_params': [.001, 0.003]},
