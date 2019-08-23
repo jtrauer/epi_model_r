@@ -26,14 +26,14 @@ string manipulation functions
 
 def create_stratum_name(stratification_name, stratum_name, joining_string="X"):
     """
-    generate the name just for the particular stratification
+    generate the name just for the particular stratum within a requested stratification
 
     :param stratification_name: str
-        name of the general reason for the stratification being implemented
+        the rationale for implementing the stratification of interest
     :param stratum_name: str
         name of the stratum within the stratification
-    :param joining_string: boolean
-        whether to add an X at the front to indicate that this string is the extension of the existing one
+    :param joining_string: str
+        whether to add a character (X) to the front to indicate that this string is the extension of the existing one
     :return: str
         the composite string for the stratification
     """
@@ -48,7 +48,7 @@ def create_stratified_name(stem, stratification_name, stratum_name):
     :param stem: str
         the previous stem to the compartment or parameter name that needs to be extended
     :param stratification_name: str
-        the rationale for implementing the full stratification
+        the rationale for implementing the stratification of interest
     :param stratum_name: str
         the name of the current stratum being implemented
     :return: str
@@ -64,7 +64,7 @@ def extract_x_positions(parameter, joining_string="X"):
     :param parameter: str
         the string for interrogation
     :param joining_string: str
-        the sring of interest whose positions need to be found
+        the string of interest whose positions need to be found
     :return: list
         list of all the indices for where the X character occurs in the string, along with the total length of the list
     """
