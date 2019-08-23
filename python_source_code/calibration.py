@@ -16,16 +16,99 @@ _logger.setLevel(logging.DEBUG)
 theano.config.optimizer = 'None'
 
 
+def build_model_for_calibration(start_time=1800.):
+    input_database = InputDB()
+
+    integration_times = numpy.linspace(start_time, 2020.0, 201).tolist()
+
+    # set basic parameters, flows and times, then functionally add latency
+    case_fatality_rate = 0.4
+    untreated_disease_duration = 3.0
+    parameters = \
+        {"contact_rate": 20.,
+         "recovery": case_fatality_rate / untreated_disease_duration,
+         "infect_death": (1.0 - case_fatality_rate) / untreated_disease_duration,
+         "universal_death_rate": 1.0 / 50.0,
+         "case_detection": 0.0,
+         "crude_birth_rate": 20.0 / 1e3}
+    parameters.update(change_parameter_unit(provide_aggregated_latency_parameters(), 365.251))
+
+    # sequentially add groups of flows
+    flows = add_standard_infection_flows([])
+    flows = add_standard_latency_flows(flows)
+    flows = add_standard_natural_history_flows(flows)
+
+    # compartments
+    compartments = ["susceptible", "early_latent", "late_latent", "infectious", "recovered"]
+
+    # define model
+    _tb_model = StratifiedModel(
+        integration_times, compartments, {"infectious": 1e-3}, parameters, flows, birth_approach="replace_deaths")
+
+     # add case detection process to basic model
+    _tb_model.add_transition_flow(
+        {"type": "standard_flows", "parameter": "case_detection", "origin": "infectious", "to": "recovered"})
+
+    # age stratification
+    age_breakpoints = [5, 15]
+    age_infectiousness = get_parameter_dict_from_function(logistic_scaling_function(15.0), age_breakpoints)
+    age_params = get_adapted_age_parameters(age_breakpoints)
+    age_params.update(split_age_parameter(age_breakpoints, "contact_rate"))
+
+    _tb_model.stratify("age", copy.deepcopy(age_breakpoints), [], {}, adjustment_requests=age_params,
+                       infectiousness_adjustments=age_infectiousness, verbose=False)
+
+
+     # get bcg coverage function
+    _tb_model = get_bcg_functions(_tb_model, input_database, 'MNG')
+
+    # stratify by vaccination status
+    bcg_wane = create_sloping_step_function(15.0, 0.7, 30.0, 0.0)
+    age_bcg_efficacy_dict = get_parameter_dict_from_function(lambda value: bcg_wane(value), age_breakpoints)
+    bcg_efficacy = substratify_parameter("contact_rate", "vaccinated", age_bcg_efficacy_dict, age_breakpoints)
+    _tb_model.stratify("bcg", ["vaccinated", "unvaccinated"], ["susceptible"],
+                       requested_proportions={"vaccinated": 0.0},
+                       entry_proportions={"vaccinated": "bcg_coverage",
+                                          "unvaccinated": "bcg_coverage_complement"},
+                       adjustment_requests=bcg_efficacy,
+                       verbose=False)
+
+    # loading time-variant case detection rate
+    input_database = InputDB()
+    res = input_database.db_query("gtb_2015", column="c_cdr", is_filter="country", value="Mongolia")
+
+    # add scaling case detection rate
+    cdr_adjustment_factor = 1.
+    cdr_mongolia = res["c_cdr"].values / 1e2 * cdr_adjustment_factor
+    cdr_mongolia = numpy.concatenate(([0.0], cdr_mongolia))
+    res = input_database.db_query("gtb_2015", column="year", is_filter="country", value="Mongolia")
+    cdr_mongolia_year = res["year"].values
+    cdr_mongolia_year = numpy.concatenate(([1950.], cdr_mongolia_year))
+    cdr_scaleup = scale_up_function(cdr_mongolia_year, cdr_mongolia, smoothness=0.2, method=5)
+    prop_to_rate = convert_competing_proportion_to_rate(1.0 / untreated_disease_duration)
+    detect_rate = return_function_of_function(cdr_scaleup, prop_to_rate)
+    _tb_model.time_variants["case_detection"] = detect_rate
+
+    _tb_model.stratify("strain", ["ds", "mdr"], ["early_latent", "late_latent", "infectious"], {}, verbose=False)
+
+    # _tb_model.stratify("smear", ["smearpos", "smearneg", "extrapul"], ["infectious"],
+    #                    adjustment_requests={}, verbose=False, requested_proportions={})
+
+    return _tb_model
+
+
 class Calibration:
     """
     this class handles model calibration using an MCMC algorithm if sampling from the posterior distribution is
     required, or using maximum likelihood estimation if only one calibrated parameter set is required.
     """
-    def __init__(self, base_model, priors, targeted_outputs):
-        self.base_model = base_model  # a built model that has not been run
+    def __init__(self, model_builder, priors, targeted_outputs):
+        self.model_builder = model_builder  # a function that builds a new model without running it
+        self.base_model = model_builder()  # a built model that has not been run
         self.running_model = None  # a model that will be run during calibration
         self.post_processing = None  # a PostProcessing object containing the required outputs of a model that has been run
         self.priors = priors  # a list of dictionaries. Each dictionary describes the prior distribution for a parameter
+        self.param_list = [self.priors[i]['param_name'] for i in range(len(self.priors))]
         self.targeted_outputs = targeted_outputs  # a list of dictionaries. Each dictionary describes a target
         self.data_as_array = None  # will contain all targeted data points in a single array
 
@@ -62,13 +145,18 @@ class Calibration:
         run the model with a set of params.
         :param params: a dictionary containing the parameters to be updated
         """
-        self.running_model = copy.deepcopy(self.base_model)  # reset running model
+        if 'start_time' in self.param_list:  # we need to re-build a model
+            this_param_index = self.param_list.index('start_time')
+            self.running_model = self.model_builder(start_time=params[this_param_index])
+        else:  # we cjust need to copy the existing base_model
+            self.running_model = copy.deepcopy(self.base_model)  # reset running model
 
         # update parameter values
         for i in range(len(params)):
             param_name = self.priors[i]['param_name']
-            value = params[i]
-            self.running_model.parameters[param_name] = value
+            if param_name != 'start_time':
+                value = params[i]
+                self.running_model.parameters[param_name] = value
 
         # run the model
         self.running_model.run_model()
@@ -201,20 +289,18 @@ class LogLike(tt.Op):
 
         outputs[0][0] = np.array(logl)  # output the log-likelihood
 
-
 if __name__ == "__main__":
-    my_model = build_working_tb_model(40., 'MNG')
-
-    par_priors = [{'param_name': 'contact_rate', 'distribution': 'uniform', 'distri_params': [2., 100.]},
-                   {'param_name': 'late_progression', 'distribution': 'uniform', 'distri_params': [.001, 0.003]}
-                   ]
+    par_priors = [#{'param_name': 'contact_rate', 'distribution': 'uniform', 'distri_params': [2., 100.]},
+                  {'param_name': 'late_progression', 'distribution': 'uniform', 'distri_params': [.001, 0.003]},
+                  {'param_name': 'start_time', 'distribution': 'uniform', 'distri_params': [1800., 1850.]}
+                  ]
     target_outputs = [{'output_key': 'prevXinfectiousXamongXage_15', 'years': [2015, 2016], 'values': [0.005, 0.004],
                        'sd': 0.0005},
                       {'output_key': 'prevXlatentXamongXage_5', 'years': [2014], 'values': [0.096], 'sd': 0.012}
                      ]
-    calib = Calibration(my_model, par_priors, target_outputs)
+    calib = Calibration(build_model_for_calibration, par_priors, target_outputs)
 
-    # calib.run_fitting_algorithm(run_mode='mle')  # for maximum-likelihood estimation
+    calib.run_fitting_algorithm(run_mode='mle')  # for maximum-likelihood estimation
     #
     # calib.run_fitting_algorithm(run_mode='mcmc', mcmc_method='DEMetropolis', n_iterations=100, n_burned=10,
     #                             n_chains=4, parallel=True)  # for mcmc
