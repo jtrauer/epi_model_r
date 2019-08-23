@@ -66,12 +66,12 @@ def build_model_for_calibration(start_time=1800.):
     bcg_wane = create_sloping_step_function(15.0, 0.7, 30.0, 0.0)
     age_bcg_efficacy_dict = get_parameter_dict_from_function(lambda value: bcg_wane(value), age_breakpoints)
     bcg_efficacy = substratify_parameter("contact_rate", "vaccinated", age_bcg_efficacy_dict, age_breakpoints)
-    _tb_model.stratify("bcg", ["vaccinated", "unvaccinated"], ["susceptible"],
-                       requested_proportions={"vaccinated": 0.0},
-                       entry_proportions={"vaccinated": "bcg_coverage",
-                                          "unvaccinated": "bcg_coverage_complement"},
-                       adjustment_requests=bcg_efficacy,
-                       verbose=False)
+    # _tb_model.stratify("bcg", ["vaccinated", "unvaccinated"], ["susceptible"],
+    #                    requested_proportions={"vaccinated": 0.0},
+    #                    entry_proportions={"vaccinated": "bcg_coverage",
+    #                                       "unvaccinated": "bcg_coverage_complement"},
+    #                    adjustment_requests=bcg_efficacy,
+    #                    verbose=False)
 
     # loading time-variant case detection rate
     input_database = InputDB()
@@ -91,8 +91,8 @@ def build_model_for_calibration(start_time=1800.):
 
     _tb_model.stratify("strain", ["ds", "mdr"], ["early_latent", "late_latent", "infectious"], {}, verbose=False)
 
-    # _tb_model.stratify("smear", ["smearpos", "smearneg", "extrapul"], ["infectious"],
-    #                    adjustment_requests={}, verbose=False, requested_proportions={})
+    _tb_model.stratify("smear", ["smearpos", "smearneg", "extrapul"], ["infectious"],
+                       adjustment_requests={}, verbose=False, requested_proportions={})
 
     return _tb_model
 
@@ -290,7 +290,9 @@ class LogLike(tt.Op):
         outputs[0][0] = np.array(logl)  # output the log-likelihood
 
 if __name__ == "__main__":
-    par_priors = [#{'param_name': 'contact_rate', 'distribution': 'uniform', 'distri_params': [2., 100.]},
+    mod = build_model_for_calibration()
+
+    par_priors = [{'param_name': 'contact_rate', 'distribution': 'uniform', 'distri_params': [2., 100.]},
                   {'param_name': 'late_progression', 'distribution': 'uniform', 'distri_params': [.001, 0.003]},
                   {'param_name': 'start_time', 'distribution': 'uniform', 'distri_params': [1800., 1850.]}
                   ]
@@ -301,6 +303,8 @@ if __name__ == "__main__":
     calib = Calibration(build_model_for_calibration, par_priors, target_outputs)
 
     calib.run_fitting_algorithm(run_mode='mle')  # for maximum-likelihood estimation
+
+    print(calib.mle_estimates)
     #
     # calib.run_fitting_algorithm(run_mode='mcmc', mcmc_method='DEMetropolis', n_iterations=100, n_burned=10,
     #                             n_chains=4, parallel=True)  # for mcmc
