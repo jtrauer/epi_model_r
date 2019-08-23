@@ -627,7 +627,7 @@ class EpiModel:
                  initial_conditions_to_total=True, infectious_compartment="infectious", birth_approach="no_birth",
                  verbose=False, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1,
                  starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint",
-                 output_connections={}):
+                 output_connections=()):
         """
         construction method to create a basic (and at this stage unstratified) compartmental model, including checking
             that the arguments have been provided correctly (in a separate method called here)
@@ -1252,7 +1252,7 @@ class StratifiedModel(EpiModel):
                  initial_conditions_to_total=True, infectious_compartment="infectious", birth_approach="no_birth",
                  verbose=False, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1,
                  starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint",
-                 output_connections={}):
+                 output_connections=()):
         """
         constructor mostly inherits from parent class, with a few additional attributes that are required for the
         stratified version
