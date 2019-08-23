@@ -99,9 +99,9 @@ def find_stem(stratified_string):
 def find_stratum_index_from_string(compartment, stratification, remove_stratification_name=True):
     """
     finds the stratum which the compartment (or parameter) name falls in when provided with the compartment name and the
-    name of the stratification of interest
+        name of the stratification of interest
     for example, if the compartment name was infectiousXhiv_positiveXdiabetes_none and the stratification of interest
-    provided through the stratification argument was hiv, then
+        provided through the stratification argument was hiv, then
 
     :param compartment: str
         name of the compartment or parameter to be interrogated
@@ -134,8 +134,8 @@ def find_name_components(compartment):
 
     :param compartment: str
         name of the compartment or parameter to be interrogated
-    :return:
-        list of the extracted compartment components
+    :return: list
+        the extracted compartment components
     """
     x_positions = [-1] + extract_x_positions(compartment)
     return [compartment[x_positions[n_x] + 1: x_positions[n_x + 1]] for n_x in range(len(x_positions) - 1)]
@@ -148,7 +148,7 @@ basic data manipulation functions
 
 def increment_list_by_index(list_to_increment, index_to_increment, increment_value):
     """
-    general method to increment the odes by a value specified as an argument
+    very simple but general method to increment the odes by a specified value
 
     :param list_to_increment: list
         the list to be incremented
@@ -177,8 +177,8 @@ def normalise_dict(value_dict):
 
 def change_parameter_unit(parameter_dict, multiplier):
     """
-    adapt the latency parameters from the earlier functions according to whether they are needed as by year rather than
-    by day
+    used to adapt the latency parameters from the earlier functions according to whether they are needed as by year
+        rather than by day
 
     :param parameter_dict: dict
         dictionary whose values need to be adjusted
