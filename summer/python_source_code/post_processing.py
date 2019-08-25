@@ -1,5 +1,18 @@
-import python_source_code.tb_model as tbm
-from python_source_code.tool_kit import find_first_list_element_above
+import summer.python_source_code.summer_model as sm
+from numpy import linspace
+
+
+def find_first_list_element_above(a_list, value):
+    """
+    Simple method to return the index of the first element of a list that is greater than a specified value.
+
+    Args:
+        a_list: List of floats
+        value: The value that the element must be greater than
+    """
+    if max(a_list) <= value:
+        ValueError('The requested value is greater than max(a_list)')
+    return next(x[0] for x in enumerate(a_list) if x[1] > value)
 
 
 class PostProcessing:
@@ -159,17 +172,33 @@ class PostProcessing:
 
 
 if __name__ == "__main__":
-    my_model = tbm.build_working_tb_model(40.0, 'MNG')
-    my_model.run_model()
+    sir_model = sm.StratifiedModel(
+        linspace(0, 60 / 365, 61).tolist(),
+        ["susceptible", "infectious", "recovered"],
+        {"infectious": 0.001},
+        {"beta": 400, "recovery": 365 / 13, "infect_death": 1},
+        [{"type": "standard_flows", "parameter": "recovery", "origin": "infectious", "to": "recovered"},
+         {"type": "infection_frequency", "parameter": "beta", "origin": "susceptible", "to": "infectious"},
+         {"type": "compartment_death", "parameter": "infect_death", "origin": "infectious"}],
+        output_connections={"incidence": {"origin": "susceptible", "to": "infectious"}},
+        verbose=False, integration_type="solve_ivp")
 
-    req_outputs = ['prevXlatentXamongXage_0Xage_5Xbcg_vaccinated',
-                   'prevXinfectiousXamongXage_15Xbcg_vaccinated',
+    sir_model.stratify("strain", ["sensitive", "resistant"], ["infectious"], requested_proportions={}, verbose=False)
+
+    age_mixing = None
+    sir_model.stratify("age", [1, 10, 3], [], {}, {"recovery": {"1": 0.5, "10": 0.8}},
+                       infectiousness_adjustments={"1": 0.8},
+                       mixing_matrix=age_mixing, verbose=False)
+
+    sir_model.run_model()
+
+    req_outputs = ['prevXinfectiousXamongXage_10Xstrain_sensitive',
                    'prevXinfectiousXamong'
                    ]
-    req_times = {'prevXinfectiousXamongXage_15Xbcg_vaccinated': [2014, 2015, 2016]}
-    pp = PostProcessing(my_model, req_outputs, req_times)
+    req_times = {'prevXinfectiousXamongXage_10Xstrain_sensitive': [0., 30./365]}
+    pp = PostProcessing(sir_model, req_outputs, req_times)
 
     print(pp.generated_outputs)
 
-    some_output = pp.give_output_for_given_time('prevXinfectiousXamong', 2016)
+    some_output = pp.give_output_for_given_time('prevXinfectiousXamong', 35./365)
     print(some_output)
