@@ -31,7 +31,7 @@ class PostProcessing:
     the values.
     :attribute generated_outputs: dictionary storing the newly generated outputs.
     """
-    def __init__(self, model, requested_outputs, requested_times={}, multipliers=()):
+    def __init__(self, model, requested_outputs, requested_times={}, multipliers={}):
         self.model = model
         self.requested_outputs = requested_outputs
         self.requested_times = requested_times
@@ -227,8 +227,8 @@ if __name__ == "__main__":
                    ]
     req_times = {'prevXinfectiousXamongXage_10Xstrain_sensitive': [0., 30./365]}
 
-    req_multipliers = {'prevXinfectiousXamongXage_10Xstrain_sensitive': 1.e5,
-                   'prevXinfectiousXamong': 1.e5}
+    req_multipliers = {'prevXinfectiousXamongXage_10Xstrain_sensitive': 1.e5, 'prevXinfectiousXamong': 1.e5}
+
     pp = PostProcessing(sir_model, req_outputs, req_times, req_multipliers)
 
     print(pp.generated_outputs)
