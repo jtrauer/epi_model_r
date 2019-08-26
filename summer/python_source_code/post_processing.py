@@ -104,6 +104,21 @@ class PostProcessing:
                             self.operations_to_perform[output]['numerator_indices'].append(j)
                         else:
                             self.operations_to_perform[output]['denominator_extra_indices'].append(j)
+            elif output[0:22] == "distribution_of_strata":
+                self.operations_to_perform[output]['operation'] = 'sum_across_compartments'
+                self.operations_to_perform[output]['compartment_indices'] = {}  # dictionary keyed with the stratum names
+
+                stratification_of_interest = output.split("X")[1]
+                if stratification_of_interest not in self.model.all_stratifications.keys():
+                    ValueError("Requested stratification" + stratification_of_interest +
+                               " is not among the model stratifications")
+                for stratum_name in self.model.all_stratifications[stratification_of_interest]:
+                    self.operations_to_perform[output]['compartment_indices'][stratum_name] = []
+                    keyword = stratification_of_interest + '_' + stratum_name
+                    for j, compartment_name in enumerate(self.model.compartment_names):
+                        name_components = sm.find_name_components(compartment_name)
+                        if keyword in name_components:
+                            self.operations_to_perform[output]['compartment_indices'][stratum_name].append(j)
             else:
                 raise ValueError("only prevalence outputs are supported for the moment")
 
@@ -131,8 +146,6 @@ class PostProcessing:
         :param time_indices: the time index
         :return: the calculated value of the requested output at the requested time index
         """
-        if output[0:4] != 'prev':
-            raise ValueError("only prevalence outputs are supported for the moment")
 
         if self.operations_to_perform[output]['operation'] == 'division':
             out = []
@@ -147,6 +160,18 @@ class PostProcessing:
                 out.append(q)
 
             return out
+
+        elif self.operations_to_perform[output]['operation'] == 'sum_across_compartments':
+            out = {}
+            for stratum in self.operations_to_perform[output]['compartment_indices'].keys():
+                out[stratum] = []
+                for i in time_indices:
+                    out[stratum].append(
+                        self.model.outputs[i, self.operations_to_perform[output]['compartment_indices'][stratum]].sum()
+                    )
+            return out
+        else:
+            ValueError("Operation" + self.operations_to_perform[output]['operation'] + " is not supported")
 
     def give_output_for_given_time(self, output, time):
         """
@@ -172,6 +197,7 @@ class PostProcessing:
 
 
 if __name__ == "__main__":
+    # build and run an example model
     sir_model = sm.StratifiedModel(
         linspace(0, 60 / 365, 61).tolist(),
         ["susceptible", "infectious", "recovered"],
@@ -192,8 +218,10 @@ if __name__ == "__main__":
 
     sir_model.run_model()
 
+    # request some outputs
     req_outputs = ['prevXinfectiousXamongXage_10Xstrain_sensitive',
-                   'prevXinfectiousXamong'
+                   'prevXinfectiousXamong',
+                   'distribution_of_strataXstrain'
                    ]
     req_times = {'prevXinfectiousXamongXage_10Xstrain_sensitive': [0., 30./365]}
     pp = PostProcessing(sir_model, req_outputs, req_times)
