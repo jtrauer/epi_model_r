@@ -31,10 +31,11 @@ class PostProcessing:
     the values.
     :attribute generated_outputs: dictionary storing the newly generated outputs.
     """
-    def __init__(self, model, requested_outputs, requested_times):
+    def __init__(self, model, requested_outputs, requested_times={}, multipliers=()):
         self.model = model
         self.requested_outputs = requested_outputs
         self.requested_times = requested_times
+        self.multipliers = multipliers
 
         self.operations_to_perform = {}
         self.generated_outputs = {}
@@ -157,9 +158,9 @@ class PostProcessing:
                     q = 0
                 else:
                     q = numerator / (numerator + extra_for_denominator)
+                if output in self.multipliers.keys():
+                    q *= self.multipliers[output]
                 out.append(q)
-
-            return out
 
         elif self.operations_to_perform[output]['operation'] == 'sum_across_compartments':
             out = {}
@@ -169,9 +170,10 @@ class PostProcessing:
                     out[stratum].append(
                         self.model.outputs[i, self.operations_to_perform[output]['compartment_indices'][stratum]].sum()
                     )
-            return out
         else:
             ValueError("Operation" + self.operations_to_perform[output]['operation'] + " is not supported")
+
+        return out
 
     def give_output_for_given_time(self, output, time):
         """
@@ -224,7 +226,10 @@ if __name__ == "__main__":
                    'distribution_of_strataXstrain'
                    ]
     req_times = {'prevXinfectiousXamongXage_10Xstrain_sensitive': [0., 30./365]}
-    pp = PostProcessing(sir_model, req_outputs, req_times)
+
+    req_multipliers = {'prevXinfectiousXamongXage_10Xstrain_sensitive': 1.e5,
+                   'prevXinfectiousXamong': 1.e5}
+    pp = PostProcessing(sir_model, req_outputs, req_times, req_multipliers)
 
     print(pp.generated_outputs)
 
