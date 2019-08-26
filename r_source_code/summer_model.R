@@ -14,6 +14,8 @@ library(R6)
 # library(DiagrammeRsvg)
 library(rsvg)
 library(stringr)
+
+
 # library(RSQLite)
 # this file contains the main model builder function, that is intended to be agnostic
 # to the type and complexity of model that the user wants to build
@@ -26,12 +28,192 @@ library(stringr)
 # global parameter for checking recursion depth
 depth=0
 
-# static functions
 
-# find the stem of the compartment name as the text leading up to the first occurrence of "X"
-find_stem = function(stratified_string) {
-  strsplit(stratified_string, "X")[[1]][1]
+# ------------------------------
+# string manipulation functions
+# -------------------------------
+
+create_stratum_name = function(stratification_name, stratum_name, with_x = TRUE) {
+  # generate the name just for the particular stratification
+  startum_name = paste(stratification_name, "_", str(stratum_name), sep="")
+  ifelse(with_x, paste("X", stratification_name, "_", stratum_name, sep = ""), startum_name)
+  
 }
+
+
+create_stratified_name = function(stem, stratification_name, stratum_name) {
+  # generate a standardised stratified compartment name
+  paste(stem, create_stratum_name(stratification_name, stratum_name), sep = "")
+}
+
+
+
+extract_x_positions = function(parameter) {
+  # extract the positions of the capital Xs from a string and join on to a number for the total length of the string
+  result = c()
+  param = strsplit(parameter, "")[[1]]
+  for (loc in seq(nchar(parameter))){
+    if (as.character(param[loc]) == as.character("X"))
+       result = c(result, loc)}
+  result = c(result, length(param))
+  result
+}
+
+
+extract_reversed_x_positions = function(parameter) {
+  # find the positions within a string which are X and return as list reversed, including length of list
+   rev(extract_x_positions(parameter))
+}
+
+
+
+find_stem = function(stratified_string) {
+  # find the stem of the compartment name as the text leading up to the first occurrence of "X"
+  find_name_components(stratified_string)[1]
+}
+
+find_stratum_index_from_string = function(compartment, stratification, remove_stratification_name=TRUE){
+  # finds the stratum which the compartment (or parameter) name falls in when provided with the compartment name and the
+  # name of the stratification of interest
+  # for example, if the compartment name was infectiousXhiv_positiveXdiabetes_none and the stratification of interest
+  # provided through the stratification argument was hiv, then
+  # :param compartment: str
+  # name of the compartment or parameter to be interrogated
+  # :param stratification: str
+  # the stratification of interest
+  # :param remove_stratification_name: bool
+  # whether to remove the stratification name and its trailing _ from the string to return
+  # :return: str
+  # the name of the stratum within which the compartment falls
+  stratum_name <- c()
+   for (name in unlist(find_name_components(compartment))){
+     if (grepl(stratification, name)){
+       stratum_name <- c(stratum_name, name)
+     }
+   }
+  
+  stratum <- ifelse(remove_stratification_name, unlist(strsplit(as.character(stratum_name[1]),"_"))[2], stratum_name[1]) 
+  stratum
+  }
+
+add_w_to_param_names = function(parameter_dict){
+  # add a "W" string to the end of the parameter name to indicate that we should over-write up the chain 
+  # :param parameter_dict: dict
+  # the dictionary before the adjustments
+  # :return: dict
+  # same dictionary but with the "W" string added to each of the keys
+  
+}
+
+find_name_components = function(compartment_or_parameter){
+  # extract all the components of a stratified compartment or parameter name
+  # :param compartment: str
+  # name of the compartment or parameter to be interrogated
+  # :return:
+  #  list of the extracted compartment components
+  
+  component_list = unlist(strsplit(compartment_or_parameter, "X"))
+  component_list 
+}
+
+# ----------------------------------
+# basic data manipulation functions
+# ----------------------------------
+
+increment_list_by_index = function(list_to_increment, index_to_increment, increment_value){
+  # general method to increment the odes by a value specified as an argument
+  
+  # :param list_to_increment: list
+  # the list to be incremented
+  # :param index_to_increment: int
+  # the index of the list that needs to be incremented
+  # :param increment_value:
+  #  the value to increment the list by
+  # :return: list
+  # the list after it has been incremented
+ 
+  #if(index_to_increment != NA){
+    if(nchar(as.character(increment_value))!= 0){
+    
+    list_to_increment[index_to_increment] = list_to_increment[index_to_increment] + increment_value
+  }
+  
+  
+  list_to_increment
+}
+
+
+normalise_list = function(value_list) {
+  # simple function to normalise the values from a list
+  
+  # :param value_dict: dict
+  # dictionary whose values will be adjusted
+  # :return: dict
+  # same dictionary after values have been normalised to the total of the original values
+  
+  total <- sum(as.numeric(value_list))
+  if (total != 1) {
+    value_list <- lapply(value_list, function(value) value / total)
+  }
+  value_list
+}
+
+change_parameter_unit = function(parameter_dict, multiplier){
+  # adapt the latency parameters from the earlier functions according to whether they are needed as by year rather than
+  # by day
+  
+  # :param parameter_dict: dict
+  # dictionary whose values need to be adjusted
+  # :param multiplier: float
+  # multiplier 
+  # :return: dict
+  # dictionary with values multiplied by the multiplier argument
+}
+
+
+element_list_multiplication = function(list_1, list_2){
+  # multiply elements of two lists to return another list with the same dimensions
+  
+  # :param list_1: list
+  # first list of numeric values to be multiplied
+  # :param list_2: list
+  # first list of numeric values to be multiplied
+  # :return: list
+  # list populated with multiplied values
+  list = list_1 * list_2
+  list
+}
+
+element_list_division = function(list_1, list_2){
+  # divide elements of two lists to return another list with the same dimensions
+  
+  # :param list_1: list
+  # first list of numeric values for numerators of division
+  # :param list_2: list
+  # first list of numeric values for denominators of division
+  # :return: list
+  # list populated with divided values
+  list = list_1/list_2
+  list
+}
+
+# ----------------------------------------
+# functions for use as inputs to the model
+
+# considering moving to different file
+# ----------------------------------------
+
+create_step_function_from_dict = function(input_dict){
+  # create a step function out of dictionary with numeric keys and values, where the keys determine the values of the
+  # independent variable at which the steps between the output values occur
+  
+  # :param input_dict: dict
+  # dictionary in standard format as described above
+  # :return: function
+  # the function constructed from input data
+  
+}
+
 
 # find the trailing text for the stratum of the compartment
 find_stratum = function(stratified_string) {
@@ -49,15 +231,9 @@ remove_last_stratification = function(stratified_string) {
   substr(stratified_string, 1, x_positions[length(x_positions)] - 1)
 }
 
-# function to generate a standardised stratified compartment name
-create_stratified_name = function(stem, stratification_name, stratum_name) {
-  paste(stem, create_stratum_name(stratification_name, stratum_name), sep = "")
-}
 
-# generate the name just for the particular stratification
-create_stratum_name = function(stratification_name, stratum_name) {
-  paste("X", stratification_name, "_", stratum_name, sep = "")
-}
+
+
 
 # string is cleaned up for presentation
 capitalise_compartment_name = function(compartment) {
@@ -65,34 +241,15 @@ capitalise_compartment_name = function(compartment) {
     str_replace_all('_', ' ') %>% str_to_title()
 }
 
-# simple function to normalise the values from a list
-normalise_list = function(value_list) {
-  total <- sum(as.numeric(value_list))
-  if (total != 1) {
-    value_list <- lapply(value_list, function(value) value / total)
-  }
-  value_list
-}
-
-# extract the positions of the capital Xs from a string and join on to a number for the total length of the string
-extract_x_positions = function(input_string) {
-  x_positions <- c(unlist(gregexpr("X", input_string)), nchar(input_string) + 1)
-}
 
 
-extract_reversed_x_positions = function(input_string) {
-  x_positions <- unlist(gregexpr("X", input_string))
-  if (x_positions[1] == -1) {
-    x_positions <- c()
-  }
-  rev(c(x_positions, nchar(input_string) + 1))
-}
 
 # general method to increment the odes by a value specified as an argument
 increment_compartment = function(ode_equations, compartment_number, increment) {
   ode_equations[compartment_number] <- ode_equations[compartment_number] + increment
   ode_equations
 }
+
 
 
 create_multiplicative_function = function(multiplier) {
@@ -184,9 +341,13 @@ EpiModel <- R6Class(
     death_flows = data.frame(),
     time_variants = list(),
     outputs = NULL,
+    mixing_categories = list(),
     infectiousness_adjustments = c(),
     derived_outputs = list(),
     flows_to_track = c(),
+    infectious_indices = c(),
+    infectiousness_multipliers = c(),
+    infectious_compartments = c(),
 
     # __________
     # most general methods
@@ -255,7 +416,14 @@ EpiModel <- R6Class(
 
       # add any missing quantities that will be needed
       self$add_default_quantities()
+      
+      # find the compartments that are infectious
+      self$infectious_indices <- as.logical(grepl(self$infectious_compartment , self$compartment_names))
+      #self$infectious_indices_int <- which(self$infectious_indices)
     },
+    
+    
+    
 
     check_and_report_attributes = function(
       .times, .compartment_types, .initial_conditions, .parameters, .requested_flows, .initial_conditions_to_total,
@@ -446,6 +614,11 @@ EpiModel <- R6Class(
 
     add_transition_flow = function(.flow) {
       #   add a flow (row) to the dataframe storing the flows
+      if ('force_index' %in% colnames(self$transition_flows))
+        self$transition_flows <-
+          rbind(self$transition_flows, data.frame(type=.flow[1], parameter=as.character(.flow[2]), from=.flow[3], to=.flow[4],
+                                                  implement=length(self$stratifications), force_index=NA, stringsAsFactors=FALSE))
+      else
       self$transition_flows <-
         rbind(self$transition_flows, data.frame(type=.flow[1], parameter=as.character(.flow[2]), from=.flow[3], to=.flow[4],
                                                 implement=length(self$stratifications), stringsAsFactors=FALSE))
@@ -541,8 +714,8 @@ EpiModel <- R6Class(
         # calculate the flow and apply to the odes
         from_compartment <- match(flow$from, names(self$compartment_values))
         net_flow <- adjusted_parameter * .compartment_values[from_compartment] * infectious_population
-        .ode_equations <- increment_compartment(.ode_equations, from_compartment, -net_flow)
-        .ode_equations <- increment_compartment(.ode_equations, match(flow$to, names(self$compartment_values)), net_flow)
+        .ode_equations <- increment_list_by_index(.ode_equations, from_compartment, -net_flow)
+        .ode_equations <- increment_list_by_index(.ode_equations, match(flow$to, names(self$compartment_values)), net_flow)
 
         # track any quantities dependent on flow rates
         self$track_derived_outputs(flow, net_flow)
@@ -622,7 +795,7 @@ EpiModel <- R6Class(
       #   apply a birth rate to the entry compartments
       #
       #   :parameters and return: see previous method apply_all_flow_types_to_odes
-      .ode_equations <- increment_compartment(.ode_equations, match(self$entry_compartment, names(self$compartment_values)),
+      .ode_equations <- increment_list_by_index(.ode_equations, match(self$entry_compartment, names(self$compartment_values)),
                                                    self$find_total_births(.compartment_values))
     },
 
@@ -735,6 +908,10 @@ StratifiedModel <- R6Class(
     parameter_functions = list(),
     adaptation_functions = list(),
     mapped_adaptation_functions = list(),
+    mixing_numerator_indices = c(),
+    mixing_denominator_indices = c(),
+    heterogeneous_mixing = FALSE,
+    mixing_matrix = NULL,
 
     # __________
     # general methods
@@ -767,7 +944,7 @@ StratifiedModel <- R6Class(
     # main master method for model stratification
 
     stratify = function(stratification_name, strata_request, compartment_types_to_stratify,
-                        adjustment_requests=list(), requested_proportions=list(), infectiousness_adjustments=c(), verbose=TRUE) {
+                        adjustment_requests=list(), requested_proportions=list(), infectiousness_adjustments=c(), mixing_matrix=NULL, verbose=TRUE) {
       #   calls to initial preparation, checks and methods that stratify the various aspects of the model
       #
       #   :param stratification_name:
@@ -808,9 +985,16 @@ StratifiedModel <- R6Class(
         self$stratify_death_flows(stratification_name, strata_names, adjustment_requests)
       }
       self$stratify_universal_death_rate(stratification_name, strata_names, adjustment_requests)
-
+      
+      # check submitted mixing matrix and combine with existing matrix, if any
+      self$prepare_mixing_matrix(mixing_matrix, stratification_name, strata_names)
+      
+      # implement heterogeneous mixing across multiple population groups
+      self$prepare_implement_mixing()
+      
       # heterogeneous infectiousness adjustments
-      self$apply_heterogeneous_infectiousness(stratification_name, strata_request, infectiousness_adjustments)
+      #self$apply_heterogeneous_infectiousness(stratification_name, strata_request, infectiousness_adjustments)
+      self$prepare_infectiousness_levels(stratification_name, strata_names, infectiousness_adjustments)
     },
 
     # __________
@@ -1144,6 +1328,12 @@ StratifiedModel <- R6Class(
               parameter_name <- self$death_flows$parameter[n_flow]
             }
 
+            if('force_index' %in% colnames(self$transition_flows)){
+              print('check')
+              
+            }
+              
+            
             # add the stratified flow
             self$death_flows <- rbind(self$death_flows,
                                       data.frame(type=self$death_flows$type[n_flow],
@@ -1212,6 +1402,153 @@ StratifiedModel <- R6Class(
       }
     },
 
+    prepare_mixing_matrix = function(.mixing_matrix, .stratification_name, .strata_names){
+    
+    #    check that the mixing matrix has been correctly specified and call the other relevant functions
+    #  :param _mixing_matrix: ndarray
+    #  array, which must be square representing the mixing of the strata within this stratification
+    #  :param _stratification_name: str
+    #  the name of the stratification - i.e. the reason for implementing this type of stratification
+    #  :param _strata_names: list
+    #  see find_strata_names_from_input
+    if (is.null(.mixing_matrix))
+        return
+    else if (class(.mixing_matrix) != 'matrix')
+      print("submitted mixing matrix is wrong data type")
+    else if (length(dim(.mixing_matrix)) != 2)  
+      print("submitted mixing matrix is not two-dimensional")
+    else if (dim(.mixing_matrix)[1] != dim(.mixing_matrix)[2] )
+      print("submitted mixing is not square")
+    else if (dim(.mixing_matrix)[1] != length(.strata_names)) 
+      print("mixing matrix does not sized to number of strata being implemented")
+    self$combine_new_mixing_matrix_with_existing(.mixing_matrix, .stratification_name, .strata_names)
+      
+    },
+    
+    combine_new_mixing_matrix_with_existing = function(.mixing_matrix, .stratification_name, .strata_names){
+      # master mixing matrix function to take in a new mixing matrix and combine with the existing ones
+      # :param _mixing_matrix: ndarray
+      # array, which must be square representing the mixing of the strata within this stratification
+      # :param _stratification_name: str
+      # the name of the stratification - i.e. the reason for implementing this type of stratification
+      # :param _strata_names: list
+      # see find_strata_names_from_input
+      
+      # if no mixing matrix yet, just convert the existing one to a dataframe
+      if(is.null(self$mixing_matrix)){
+        self$mixing_categories <- paste(.stratification_name, '_', .strata_names, sep='' )
+        self$mixing_matrix <- as.data.frame(.mixing_matrix)
+        #colnames(self$mixing_matrix) <- mixing_cols
+      }
+      # otherwise take the kronecker product to get the new mixing matrix
+      else {
+           mixing_cols <- NULL
+           self$mixing_categories <- paste(colnames(sir_model$mixing_matrix), 'X', .stratification_name, sep="")
+           for (each_col in self$mixing_categories){
+             new_mixing_cols <- paste(each_col, '_', .strata_names, sep="") 
+             mixing_cols <- c(mixing_cols,new_mixing_cols )
+             print(mixing_cols)
+           }
+           self$mixing_matrix <- data.frame(kronecker(as.matrix(self$mixing_matrix), .mixing_matrix))
+           colnames(self$mixing_matrix) <- mixing_cols
+      }
+      print(self$mixing_matrix)
+      
+    },
+    
+    prepare_implement_mixing = function(){
+      # methods to be run if there is a mixing matrix being applied at all, regardless of whether one is being
+      # introduced during this stratification process
+      if (!is.null(self$mixing_matrix)){
+        self$find_mixing_indices()
+        self$add_force_indices_to_transitions()
+      }
+    },
+    
+    find_mixing_indices = function(){
+      # find the indices for the infectious compartments relevant to the column of the mixing matrix
+      
+      self$mixing_numerator_indices = list()
+      self$mixing_denominator_indices = list()
+      for (from_stratum in colnames(self$mixing_matrix)){
+        #self$mixing_numerator_indices[from_stratum] 
+        # create a list of list
+        n_comp = 0
+        for (compartment in self$compartment_names){
+          if(identical(tail(unlist(find_name_components(compartment)),-1),unlist(find_name_components(from_stratum)))){
+  
+               self$mixing_denominator_indices[[from_stratum]] <- c(self$mixing_denominator_indices[[from_stratum]], n_comp)
+               if(grepl(self$infectious_compartment,compartment)){
+                 self$mixing_numerator_indices[[from_stratum]] <- c(self$mixing_numerator_indices[[from_stratum]], n_comp)
+               }
+          }
+            n_comp = n_comp + 1  
+        }
+        
+      }
+      print(self$mixing_denominator_indices)
+      print(self$mixing_numerator_indices)
+      
+    },
+    
+    add_force_indices_to_transitions = function(){
+     # find the indices from the force of infection vector to be applied for each infection flow and populate to the
+     # force_index column of the flows frame 
+      infection_flow_indices = c()
+      # identify the indices of the infection-related flows to be implemented
+      
+      for (row in 1:nrow(self$transition_flows)){
+        if(grepl('infection',self$transition_flows[row, 'type']) & (self$transition_flows[row,'implement'] != 0))
+          infection_flow_indices <- c(infection_flow_indices, row)
+      }
+      print(infection_flow_indices)
+      self$transition_flows$force_index <- NA
+      # loop through them and find the indices of the mixing matrix that will apply to that flow
+      for (n_flow in infection_flow_indices){
+          for (row in seq(1,nrow(self$mixing_matrix))){
+            if(identical(tail(unlist(find_name_components(self$transition_flows$from[n_flow])), -1),
+               find_name_components(unlist(colnames(self$mixing_matrix))[row])))
+              print(row)
+              self$transition_flows[n_flow, 'force_index'] <- row #similar to ngroup
+
+          }
+      }
+      print(self$transition_flows)
+    },
+    
+    prepare_infectiousness_levels = function(.stratification_name, .strata_names, .infectiousness_adjustments){
+      # store infectiousness adjustments as dictionary attribute to the model object, with first tier of keys the
+      # stratification and second tier the strata to be modified
+      
+      # :param _stratification_name:
+      #  see prepare_and_check_stratification
+      # :param _strata_names:
+      #  see find_strata_names_from_input
+      # :param _infectiousness_adjustments: dict
+      # requested adjustments to infectiousness for this stratification
+      
+      if (length(.infectiousness_adjustments) == 0) {
+        self$output_to_user("heterogeneous infectiousness not requested for this stratification")
+      }
+      else if (!self$infectious_compartment %in% self$compartment_types_to_stratify) {
+        stop("request for infectiousness adjustments passed, but stratification doesn't apply to the infectious compartment")
+      }
+      else {
+        for (stratum in names(.infectiousness_adjustments)) {
+          self$infectiousness_adjustments[[create_stratified_name("", .stratification_name, stratum)]] <-
+            .infectiousness_adjustments[[stratum]]
+        }
+      }
+      
+      print(self$infectious_compartment)
+      
+      self$infectious_compartments <- self$compartment_names[self$infectious_indices]
+      self$infectiousness_multipliers <- rep(1,length(self$infectious_compartments))
+      for(compartment in self$infectious_compartments){
+        print('prepare_infectiousness_levels') #TODO set infectiousness multiplier
+      }
+    },
+    
     apply_heterogeneous_infectiousness = function(stratification_name, strata_request, infectiousness_adjustments) {
       #   work out infectiousness adjustments and set as model attributes
       #   this has not been fully documented, as we are intending to revise this to permit any approach to heterogeneous
@@ -1248,12 +1585,20 @@ StratifiedModel <- R6Class(
         self$output_to_user(paste("ageing rate from age group", start_age, "to", end_age, "is", round(ageing_rate, self$reporting_sigfigs)))
         self$parameters[ageing_parameter_name] <- ageing_rate
         for (compartment in names(self$compartment_values)) {
+          if('force_index' %in% colnames(self$transition_flows))
           self$transition_flows <-
             rbind(self$transition_flows,
                   data.frame(type="standard_flows", parameter=ageing_parameter_name,
                              from=create_stratified_name(compartment, "age", start_age),
                              to=create_stratified_name(compartment, "age", end_age),
-                             implement=length(self$strata), stringsAsFactors=FALSE))
+                             implement=length(self$strata), force_index=NA, stringsAsFactors=FALSE))
+          else
+            self$transition_flows <-
+              rbind(self$transition_flows,
+                    data.frame(type="standard_flows", parameter=ageing_parameter_name,
+                               from=create_stratified_name(compartment, "age", start_age),
+                               to=create_stratified_name(compartment, "age", end_age),
+                               implement=length(self$strata), stringsAsFactors=FALSE))
         }
       }
     },
@@ -1302,8 +1647,13 @@ StratifiedModel <- R6Class(
           }
 
           # add the new flow
+          if('force_index' %in% colnames(self$transition_flows))
           self$transition_flows <- rbind(self$transition_flows,data.frame(
-            parameter=parameter_name, from=from_compartment, to=to_compartment, implement=length(self$strata), type=self$transition_flows$type[.n_flow]))
+            parameter=parameter_name, from=from_compartment, to=to_compartment, implement=length(self$strata), force_index=NA, type=self$transition_flows$type[.n_flow]))
+          else
+            self$transition_flows <- rbind(self$transition_flows,data.frame(
+              parameter=parameter_name, from=from_compartment, to=to_compartment, implement=length(self$strata), type=self$transition_flows$type[.n_flow]))  
+            
         }
 
         # remove old flow
@@ -1514,13 +1864,17 @@ StratifiedModel <- R6Class(
           x_positions <- extract_x_positions(compartment)
           if (!x_positions[1] == -1) {
             for (x_instance in seq(length(x_positions) - 1)) {
-              entry_fraction <- entry_fraction *
-                self$parameters[[paste("entry_fractionX",
-                                       substr(compartment, x_positions[x_instance] + 1, x_positions[x_instance + 1] - 1), sep="")]]
+              entry_fraction_param = paste("entry_fractionX",
+                                         substr(compartment, x_positions[x_instance] + 1, x_positions[x_instance + 1]), sep="")
+              if (entry_fraction_param %in% names(self$parameters))
+              entry_fraction <- entry_fraction * self$parameters[[entry_fraction_param]]
             }
           }
+          print(total_births)
+          print(entry_fraction)
           compartment_births <- entry_fraction * total_births
-          .ode_equations <- increment_compartment(.ode_equations, match(compartment, names(self$compartment_values)), compartment_births)
+          print(compartment_births)
+          .ode_equations <- increment_list_by_index(.ode_equations, match(compartment, names(self$compartment_values)), compartment_births)
         }
       }
       .ode_equations
@@ -1731,4 +2085,46 @@ ModelInterpreter <- R6Class(
     }
   )
 )
+
+create_arbitrary_time_variant_function = function(time) {
+  365 / 13 * exp(-time)
+}
+
+
+# an example script to call the generic model builder file that constructs a compartmental model
+# from the instructions contained in this file
+
+sir_model <- StratifiedModel$new(seq(from=0, to=60/365, by=1/365),
+                                 c("susceptible", "infectious", "recovered"),
+                                 c("infectious"=0.001),
+                                 list(beta=400, recovery=365/13, infect_death=1),
+                                 list(c("standard_flows", "recovery", "infectious", "recovered"),
+                                      c("infection_density", "beta", "susceptible", "infectious"),
+                                      c("compartment_death", "infect_death", "infectious")),
+                                 verbose=FALSE)
+#hiv_mixing <- NULL
+hiv_mixing <- matrix(1, ncol = 2, nrow = 2)
+sir_model$stratify("hiv", c("negative", "positive"), c(),
+                   list(recovery=list("negative"=0.7, "positive"=0.5),
+                        infect_death=list("negative"=0.5)),
+                   list("negative"=0.6, "positive"=0.4), mixing_matrix=hiv_mixing, verbose = FALSE)
+
+#sir_model$stratify("strain", c("sensitive", "resistant"),  c("infectious"), requested_proportions=c(), verbose = FALSE)
+age_mixing <- NULL
+age_mixing <- diag(4)
+sir_model$stratify("age", c(1, 10, 3), c(),
+                     list(recovery=list("1"=0.5, "10"=0.8)),
+                           #recoveryXhiv_positive=list("1"=2, "3"=365/13*.5, "10"=1, overwrite=c("2")),
+                           #universal_death_rate=list("1"=1, "2"=2, "3"=3)), 
+                           infectiousness_adjustments=NA, 
+                           mixing_matrix = age_mixing, verbose=TRUE)
+
+#sir_model$stratify("age", c(3, 2, 1), c(), verbose = TRUE)
+# sir_model$add_time_variant("recovery", create_arbitrary_time_variant_function)
+
+sir_model$run_model()
+
+interpreter <- ModelInterpreter$new(sir_model)
+interpreter$plot_compartment_size()
+# interpreter$create_flowchart()
 
