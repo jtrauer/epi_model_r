@@ -612,8 +612,9 @@ class EpiModel:
         # attributes with specific format that are independent of user inputs
         self.tracked_quantities, self.time_variants, self.adaptation_functions = ({} for _ in range(3))
         self.derived_outputs = {"times": []}
-        self.compartment_values, self.compartment_names, self.all_stratifications, self.infectious_indices, \
-            self.infectious_indices_int = ([] for _ in range(5))
+        self.compartment_values, self.compartment_names, self.infectious_indices, \
+            self.infectious_indices_int = ([] for _ in range(4))
+        self.all_stratifications = {}
 
         # ensure requests are fed in correctly
         self.check_and_report_attributes(
@@ -1133,8 +1134,8 @@ class StratifiedModel(EpiModel):
     independently (and could even include stratifications by using loops in a more traditional way to coding these
     models)
 
-    :attribute all_stratifications: list
-        all the stratification names implemented so far
+    :attribute all_stratifications: dictionary
+        keys are all the stratification names implemented so far. values are the list of strata for each stratification
     :attribute full_stratifications_list: list
         all the stratification names implemented so far that apply to all of the compartment types
     :attribute removed_compartments: list
@@ -1236,13 +1237,13 @@ class StratifiedModel(EpiModel):
                           equilibrium_stopping_tolerance=equilibrium_stopping_tolerance,
                           integration_type=integration_type, output_connections=output_connections)
 
-        self.all_stratifications, self.full_stratifications_list, self.removed_compartments, \
+        self.full_stratifications_list, self.removed_compartments, \
             self.overwrite_parameters, self.compartment_types_to_stratify, self.infectious_populations, \
-            self.infectious_denominators, self.strains, self.mixing_categories = [[] for _ in range(9)]
-        self.infectiousness_adjustments, self.final_parameter_functions, self.adaptation_functions, \
+            self.infectious_denominators, self.strains, self.mixing_categories = [[] for _ in range(8)]
+        self.all_stratifications, self.infectiousness_adjustments, self.final_parameter_functions, self.adaptation_functions, \
             self.mixing_numerator_indices, self.mixing_denominator_indices, self.infectiousness_levels, \
             self.infectious_indices, self.infectious_compartments, self.infectiousness_multipliers = \
-            [{} for _ in range(9)]
+            [{} for _ in range(10)]
         self.overwrite_character, self.overwrite_key = "W", "overwrite"
         self.heterogeneous_mixing, self.mixing_matrix, self.available_death_rates = False, None, [""]
 
@@ -1352,12 +1353,12 @@ class StratifiedModel(EpiModel):
             self.output_to_user("converting stratification name %s to string" % _stratification_name)
 
         # ensure requested stratification hasn't previously been implemented
-        if _stratification_name in self.all_stratifications:
+        if _stratification_name in self.all_stratifications.keys():
             raise ValueError("requested stratification has already been implemented, please choose a different name")
 
         # record stratification as model attribute, find the names to apply strata and check requests
-        self.all_stratifications.append(_stratification_name)
         _strata_names = self.find_strata_names_from_input(_strata_names)
+        self.all_stratifications[_stratification_name] = _strata_names
         _adjustment_requests = self.incorporate_alternative_overwrite_approach(_adjustment_requests)
         self.check_compartment_request(_compartment_types_to_stratify)
         self.check_parameter_adjustment_requests(_adjustment_requests, _strata_names)
@@ -1378,7 +1379,7 @@ class StratifiedModel(EpiModel):
                              "in order to apply to all compartments")
         elif not all([isinstance(stratum, (int, float)) for stratum in _strata_names]):
             raise ValueError("inputs for age strata breakpoints are not numeric")
-        elif "age" in self.all_stratifications:
+        elif "age" in self.all_stratifications.keys():
             raise ValueError(
                 "requested stratification by age, but this has specific behaviour and can only be applied once")
         if 0 not in _strata_names:
