@@ -57,13 +57,16 @@ class PostProcessing:
             raise ValueError("all keys of 'requested_times' must be in 'requested_outputs'")
 
         # Check that the requested strata distributions correspond to an existing model stratification
+        indices_to_be_removed = []
         for i, output in enumerate(self.requested_outputs):
             if output[0:22] == "distribution_of_strata":
                 stratification_of_interest = output.split("X")[1]
                 if stratification_of_interest not in self.model.all_stratifications.keys():
                     print("Warning: Requested stratification '" + stratification_of_interest +
                           "' is not among the model stratifications. Will be ignored for output processing")
-                del self.requested_outputs[i]
+                indices_to_be_removed.append(i)
+        self.requested_outputs = [self.requested_outputs[i] for i in range(len(self.requested_outputs))
+                                  if i not in indices_to_be_removed]
 
     def interpret_requested_outputs(self):
         """
