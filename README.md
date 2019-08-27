@@ -100,6 +100,14 @@ Model running is called through the run_model to the model object once construct
 In Python, odeint and solve_ivp have been implemented, where solve_ivp can be used to stop model integration once
 equilibrium has been reached (if requested, both available from the scipy.integrate module).
 
+### Infectious compartment(s)
+Differing from earlier releases, this is now specified as a list of all the compartment types that are infectious, in
+order to allow for multiple infectious compartment types. For example, patients may be infectious when active
+undiagnosed, as well as after diagnosis. This can be requested by specifying the infectious_compartments with multiple
+list elements (e.g. ["infectious", "detected"] in Python). The default argument to infectious_compartment is
+["infectious"], so the model will not run if no alternative argument is submitted and "infectious" is not included in
+the compartment types requested.  
+
 ### Tracking outputs
 For outputs such as incidence and total mortality, a dictionary/list can be passed (output_connections) to request
 tracking of specific model quantities emerging from the model. The key/name of the quantity is its name, while the value
