@@ -815,7 +815,7 @@ class EpiModel:
         """
 
         # implement value starts at zero for unstratified that can be progressively incremented during stratification
-        _flow["implement"] = 0
+        _flow["implement"] = 0 if "implement" not in _flow else _flow['implement']
         self.transition_flows = self.transition_flows.append(_flow, ignore_index=True)
 
     def add_death_flow(self, _flow):
