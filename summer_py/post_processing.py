@@ -64,7 +64,7 @@ class PostProcessing:
                 if stratification_of_interest not in self.model.all_stratifications.keys():
                     print("Warning: Requested stratification '" + stratification_of_interest +
                           "' is not among the model stratifications. Will be ignored for output processing")
-                indices_to_be_removed.append(i)
+                    indices_to_be_removed.append(i)
         self.requested_outputs = [self.requested_outputs[i] for i in range(len(self.requested_outputs))
                                   if i not in indices_to_be_removed]
 
