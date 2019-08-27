@@ -2037,13 +2037,13 @@ class StratifiedModel(EpiModel):
 
         # and adjust
         for parameter in parameters_to_adjust:
-            sub_parameters = self.find_transition_components(parameter)
-            self.create_transition_functions(parameter, sub_parameters)
+            self.parameter_components[parameter] = self.find_transition_components(parameter)
+            self.create_transition_functions(parameter, self.parameter_components[parameter])
 
         # similarly for all model compartments
         for compartment in self.compartment_names:
-            sub_parameters = self.find_mortality_components(compartment)
-            self.create_mortality_functions(compartment, sub_parameters)
+            self.parameter_components[compartment] = self.find_mortality_components(compartment)
+            self.create_mortality_functions(compartment, self.parameter_components[compartment])
 
     def find_transition_components(self, _parameter):
         """
