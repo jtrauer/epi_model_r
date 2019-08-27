@@ -1,4 +1,4 @@
-import summer_py.python_source_code.summer_model as sm
+import summer_py.summer_model as sm
 from numpy import linspace
 
 
