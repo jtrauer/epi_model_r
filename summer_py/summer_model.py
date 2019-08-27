@@ -539,24 +539,26 @@ def create_flowchart(model_object, strata=None, stratify=True, name="flow_chart"
 class EpiModel:
     """
     general epidemiological model for constructing compartment-based models, typically of infectious disease
-    transmission. See README.md for full description of purpose and approach of this model.
+        transmission
+    see README.md file for full description of purpose and approach of this class
 
     :attribute times: list
         time steps at which outputs are to be evaluated
     :attribute compartment_types: list
-        strings representing the compartments of the model
+        each of the strings representing the compartments of the model
     :attribute initial_conditions: dict
         keys are compartment types, values are starting population values for each compartment
-        note that not all compartment_types must be included as keys here
+        note that not all compartment_types must be included as keys in requests
     :attribute parameters: dict
         string keys for each parameter, with values either string to refer to a time-variant function or float
+        becomes more complicated in the stratified version below
     :attribute requested_flows: list of dicts in standard format
-        list with each element being a model flow, with fixed key names according to the type of flow implemented
+        list with each element being a model flow that contains fixed key names according to the type of flow requested
     :attribute initial_conditions_to_total: bool
         whether to add the initial conditions up to a certain total if this value hasn't yet been reached through
-        the initial_conditions argument
+            the initial_conditions argument
     :attribute infectious_compartment: str
-        name of the infectious compartment for calculation of intercompartmental infection flows
+        name of the infectious compartment for calculation of inter-compartmental infection flows
     :attribute birth_approach: str
         approach to allowing entry flows into the model, must be add_crude_birth_rate, replace_deaths or no_births
     :attribute verbose: bool
@@ -594,7 +596,7 @@ class EpiModel:
     """
 
     def __init__(self, times, compartment_types, initial_conditions, parameters, requested_flows,
-                 initial_conditions_to_total=True, infectious_compartment="infectious", birth_approach="no_birth",
+                 initial_conditions_to_total=True, infectious_compartment=["infectious"], birth_approach="no_birth",
                  verbose=False, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1,
                  starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint",
                  output_connections={}):
@@ -653,7 +655,7 @@ class EpiModel:
         self.add_default_quantities()
 
         # find the compartments that are infectious
-        self.infectious_indices = [self.infectious_compartment in comp for comp in self.compartment_names]
+        self.infectious_indices = [find_stem(comp) in self.infectious_compartment for comp in self.compartment_names]
         self.infectious_indices_int = [n_bool for n_bool, boolean in enumerate(self.infectious_indices) if boolean]
 
     def check_and_report_attributes(
@@ -675,11 +677,11 @@ class EpiModel:
         for expected_float_variable in ["_equilibrium_stopping_tolerance"]:
             if not isinstance(eval(expected_float_variable), float):
                 raise TypeError("expected float for %s" % expected_float_variable)
-        for expected_list in ["_times", "_compartment_types", "_requested_flows"]:
+        for expected_list in ["_infectious_compartment", "_times", "_compartment_types", "_requested_flows"]:
             if not isinstance(eval(expected_list), list):
                 raise TypeError("expected list for %s" % expected_list)
         for expected_string in \
-                ["_infectious_compartment", "_birth_approach", "_entry_compartment", "_starting_compartment",
+                ["_birth_approach", "_entry_compartment", "_starting_compartment",
                  "_integration_type"]:
             if not isinstance(eval(expected_string), str):
                 raise TypeError("expected string for %s" % expected_string)
@@ -688,7 +690,7 @@ class EpiModel:
                 raise TypeError("expected boolean for %s" % expected_boolean)
 
         # check some specific requirements
-        if _infectious_compartment not in _compartment_types:
+        if any(_infectious_compartment) not in _compartment_types:
             ValueError("infectious compartment name is not one of the listed compartment types")
         if _birth_approach not in ("add_crude_birth_rate", "replace_deaths", "no_births"):
             ValueError("requested birth approach unavailable")
@@ -706,7 +708,7 @@ class EpiModel:
             print("unstratified requested initial conditions are:")
             for compartment in _initial_conditions:
                 print("\t%s: %s" % (compartment, _initial_conditions[compartment]))
-            print("infectious compartment is called '%s'" % _infectious_compartment)
+            print("infectious compartment(s) are '%s'" % _infectious_compartment)
             print("birth approach is %s" % _birth_approach)
 
     def set_initial_conditions(self, _initial_conditions_to_total):
@@ -1220,7 +1222,7 @@ class StratifiedModel(EpiModel):
         self.output_to_user("removing compartment: %s" % compartment_name)
 
     def __init__(self, times, compartment_types, initial_conditions, parameters, requested_flows,
-                 initial_conditions_to_total=True, infectious_compartment="infectious", birth_approach="no_birth",
+                 initial_conditions_to_total=True, infectious_compartment=["infectious"], birth_approach="no_birth",
                  verbose=False, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1,
                  starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint",
                  output_connections={}):
@@ -1876,7 +1878,7 @@ class StratifiedModel(EpiModel):
 
         :param _unadjusted_parameter:
             see add_adjusted_parameter
-        :param _stratification_name:
+        :param _adjustment_requests:
             see prepare_and_check_stratification
         :return: str or None
             the key of the adjustment request that is applicable to the parameter of interest if any, otherwise None
@@ -1963,7 +1965,7 @@ class StratifiedModel(EpiModel):
                 if all(stratum in find_name_components(compartment)[1:]
                        for stratum in find_name_components(from_stratum)):
                     self.mixing_denominator_indices[from_stratum].append(n_comp)
-                    if self.infectious_compartment in compartment:
+                    if find_stem(compartment) in self.infectious_compartment:
                         self.mixing_numerator_indices[from_stratum].append(n_comp)
 
     def add_force_indices_to_transitions(self):
@@ -2017,14 +2019,19 @@ class StratifiedModel(EpiModel):
 
     def find_infectious_indices(self):
         """
-
+        find the infectious indices by strain and overall, as opposed to just overall in EpiModel
+        note that this changes the structure by one hierarchical level compared to EpiModel - in that previously we had
+            self.infectious_indices a list of infectious indices and now it is has a dictionary structure at the highest
+            level, followed by keys for each strain with lists as values that are equivalent to the
+            self.infectious_indices list for the unstratified version
         """
         self.infectious_indices["all_strains"] = \
-            [self.infectious_compartment in comp for comp in self.compartment_names]
+            [find_stem(comp) in self.infectious_compartment for comp in self.compartment_names]
         if self.strains:
             for strain in self.strains:
                 self.infectious_indices[strain] = \
-                    [self.infectious_compartment in comp and strain in comp for comp in self.compartment_names]
+                    [strain in comp and self.infectious_indices["all_strains"][i_comp]
+                     for i_comp, comp in enumerate(self.compartment_names)]
 
     def set_ageing_rates(self, _strata_names):
         """
