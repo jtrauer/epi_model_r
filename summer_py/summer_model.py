@@ -1844,22 +1844,53 @@ class StratifiedModel(EpiModel):
             otherwise create a new parameter name and value and store away in the appropriate model structure
         """
         parameter_adjustment_name = None
-
-        # find the adjustment requests that are extensions of the base parameter type being considered
-        if _unadjusted_parameter in _adjustment_requests:
+        relevant_adjustment_request = self.find_relevant_adjustment_request(_adjustment_requests, _unadjusted_parameter)
+        if relevant_adjustment_request is not None:
             parameter_adjustment_name = \
                 create_stratified_name(_unadjusted_parameter, _stratification_name, _stratum) if \
-                _stratum in _adjustment_requests[_unadjusted_parameter] else _unadjusted_parameter
+                _stratum in _adjustment_requests[relevant_adjustment_request] else _unadjusted_parameter
             self.output_to_user("\t parameter for %s stratum of %s stratification is called %s"
                                 % (_stratum, _stratification_name, parameter_adjustment_name))
-            if _stratum in _adjustment_requests[_unadjusted_parameter]:
-                self.parameters[parameter_adjustment_name] = _adjustment_requests[_unadjusted_parameter][_stratum]
+            if _stratum in _adjustment_requests[relevant_adjustment_request]:
+                self.parameters[parameter_adjustment_name] = _adjustment_requests[relevant_adjustment_request][_stratum]
 
             # keep track of which parameters are to be over-written
-            if self.overwrite_key in _adjustment_requests[_unadjusted_parameter] and \
-                    _stratum in _adjustment_requests[_unadjusted_parameter][self.overwrite_key]:
+            if self.overwrite_key in _adjustment_requests[relevant_adjustment_request] and \
+                    _stratum in _adjustment_requests[relevant_adjustment_request][self.overwrite_key]:
                 self.overwrite_parameters.append(parameter_adjustment_name)
         return parameter_adjustment_name
+
+    def find_relevant_adjustment_request(self, _adjustment_requests, _unadjusted_parameter):
+        """
+        find the adjustment requests that are extensions of the base parameter type being considered
+        expected behaviour is as follows:
+        * if there are no submitted requests (keys to the adjustment requests) that are extensions of the unadjusted
+            parameter, will return None
+        * if there is one submitted request that is an extension of the unadjusted parameter, will return that parameter
+        * if there are multiple submitted requests that are extensions to the unadjusted parameter and one is more
+            stratified than any of the others (i.e. more instances of the "X" string), will return this most stratified
+            parameter
+        * if there are multiple submitted requests that are extensions to the unadjusted parameter and several of them
+            are equal in having the greatest extent of stratification, will return the first one with the greatest
+            length in the order of looping through the keys of the request dictionary
+
+        :param _unadjusted_parameter:
+            see add_adjusted_parameter
+        :param _stratification_name:
+            see prepare_and_check_stratification
+        :return: str or None
+            the key of the adjustment request that is applicable to the parameter of interest if any, otherwise None
+        """
+
+        # find all the requests that start with the parameter of interest and their level of stratification
+        applicable_params = [param for param in _adjustment_requests.keys() if param.startswith(_unadjusted_parameter)]
+        applicable_param_lengths = [len(find_name_components(param)) for param in applicable_params]
+
+        # find the first most stratified parameter
+        if applicable_param_lengths:
+            return applicable_params[applicable_param_lengths.index(max(applicable_param_lengths))]
+        else:
+            return None
 
     """
     heterogeneous mixing-related methods
@@ -2266,22 +2297,26 @@ if __name__ == "__main__":
                        {"recovery": {"negative": "increment_by_one", "positive": 0.5},
                         "infect_death": {"negative": 0.5},
                         "entry_fraction": {"negative": 0.6, "positive": 0.4}},
+                       adjustment_requests={"recovery": {"negative": 0.7}},
                        infectiousness_adjustments={"positive": 0.5},
                        mixing_matrix=hiv_mixing,
                        verbose=False)
 
-    sir_model.stratify("strain", ["sensitive", "resistant"], ["infectious"], requested_proportions={}, verbose=False)
+    sir_model.stratify("strain", ["sensitive", "resistant"], ["infectious"],
+                       adjustment_requests={"recoveryXhiv_negative": {"sensitive": 0.9},
+                                            "recovery": {"sensitive": 0.8}},
+                       requested_proportions={}, verbose=False)
 
-    age_mixing = None
-    sir_model.stratify("age", [1, 10, 3], [], {}, {"recovery": {"1": 0.5, "10": 0.8}},
-                       infectiousness_adjustments={"1": 0.8},
-                       mixing_matrix=age_mixing, verbose=False)
+    # age_mixing = None
+    # sir_model.stratify("age", [1, 10, 3], [], {}, {"recovery": {"1": 0.5, "10": 0.8}},
+    #                    infectiousness_adjustments={"1": 0.8},
+    #                    mixing_matrix=age_mixing, verbose=False)
 
     sir_model.run_model()
 
     # create_flowchart(sir_model)
     #
-    sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
+    # sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
 
 
 
