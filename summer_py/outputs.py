@@ -318,7 +318,7 @@ class Outputs:
                 requested_output not in self.post_processing.requested_times.keys() else \
                 self.post_processing.requested_times[requested_output]
 
-            output_name = requested_output.replace('X', '_')
+            output_name = requested_output
 
             if isinstance(self.post_processing.generated_outputs[requested_output], list):
                 axis.plot(times_to_plot, self.post_processing.generated_outputs[requested_output])
