@@ -19,6 +19,7 @@ os.environ["PATH"] += os.pathsep + 'C:/Program Files (x86)/Graphviz2.38/bin'
 os.environ["PATH"] += os.pathsep + 'C:/Users/rrag0004/Models/graphviz-2.38/release/bin'
 
 
+
 """
 string manipulation functions
 """
@@ -1242,8 +1243,8 @@ class StratifiedModel(EpiModel):
             self.infectious_denominators, self.strains, self.mixing_categories = [[] for _ in range(8)]
         self.all_stratifications, self.infectiousness_adjustments, self.final_parameter_functions, self.adaptation_functions, \
             self.mixing_numerator_indices, self.mixing_denominator_indices, self.infectiousness_levels, \
-            self.infectious_indices, self.infectious_compartments, self.infectiousness_multipliers = \
-            [{} for _ in range(10)]
+            self.infectious_indices, self.infectious_compartments, self.infectiousness_multipliers, \
+            self.parameter_components = [{} for _ in range(11)]
         self.overwrite_character, self.overwrite_key = "W", "overwrite"
         self.heterogeneous_mixing, self.mixing_matrix, self.available_death_rates = False, None, [""]
 
