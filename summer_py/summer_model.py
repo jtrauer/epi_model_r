@@ -2143,7 +2143,7 @@ class StratifiedModel(EpiModel):
     def find_mortality_components(self, _compartment):
 
         all_sub_parameters = []
-        compartments_strata = [""] + find_name_components(_compartment[len(find_stem(_compartment)) + 1:])
+        compartments_strata = find_name_components(_compartment)[1:] + [""]
         compartments_strata.reverse()
         for stratum in compartments_strata:
             if stratum in self.available_death_rates:
