@@ -219,6 +219,11 @@ def element_list_division(list_1, list_2):
     return [a / b for a, b in zip(list_1, list_2)]
 
 
+def convert_boolean_list_to_indices(list_of_booleans):
+
+    return [n_element for n_element, element in enumerate(list_of_booleans) if element]
+
+
 """
 functions for use as inputs to the model
 
@@ -615,8 +620,7 @@ class EpiModel:
         # attributes with specific format that are independent of user inputs
         self.tracked_quantities, self.time_variants, self.adaptation_functions = ({} for _ in range(3))
         self.derived_outputs = {"times": []}
-        self.compartment_values, self.compartment_names, self.infectious_indices, \
-            self.infectious_indices_int = ([] for _ in range(4))
+        self.compartment_values, self.compartment_names, self.infectious_indices = ([] for _ in range(3))
         self.all_stratifications = {}
 
         # ensure requests are fed in correctly
@@ -656,7 +660,6 @@ class EpiModel:
 
         # find the compartments that are infectious
         self.infectious_indices = [find_stem(comp) in self.infectious_compartment for comp in self.compartment_names]
-        self.infectious_indices_int = [n_bool for n_bool, boolean in enumerate(self.infectious_indices) if boolean]
 
     def check_and_report_attributes(
             self, _times, _compartment_types, _initial_conditions, _parameters, _requested_flows,
@@ -1070,7 +1073,7 @@ class EpiModel:
             as for preceding methods
         """
         self.infectious_populations = 0.0
-        for compartment in self.infectious_indices_int:
+        for compartment in convert_boolean_list_to_indices(self.infectious_indices):
             self.infectious_populations += _compartment_values[compartment]
         self.infectious_denominators = sum(_compartment_values)
 
