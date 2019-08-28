@@ -2141,10 +2141,21 @@ class StratifiedModel(EpiModel):
                 update_function, self.final_parameter_functions[_parameter])
 
     def find_mortality_components(self, _compartment):
+        """
+        find the sub-parameters for population-wide natural mortality that are relevant to a particular compartment
+        used in prepare_stratified_parameter_calculations for creating functions to find the mortality rate for each
+            compartment
 
+        :param _compartment: str
+            name of the compartment of interest
+        :return: all_sub_parameters: list
+            list of all the mortality-related sub-parameters for the compartment of interest
+        """
         all_sub_parameters = []
         compartments_strata = find_name_components(_compartment)[1:] + [""]
         compartments_strata.reverse()
+
+        # loop through each stratification of the parameter and adapt if the parameter is available
         for stratum in compartments_strata:
             if stratum in self.available_death_rates:
                 all_sub_parameters.append(stratum)
