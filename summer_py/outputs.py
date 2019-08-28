@@ -177,6 +177,24 @@ def intelligent_convert_string(string):
     """
     if string[0:22] == 'distribution_of_strata':
         return "Population distribution by " + string.split("X")[1]
+    elif string[0:4] == 'prev':
+        print(string)
+        char = "Prevalence of "
+        char += string.split("X")[1].split('X')[0]
+
+        subgroup = string.split("among")[1]
+        if len(subgroup) > 0:
+            char += " ("
+            need_comma = False
+            for group in subgroup.split("X"):
+                if len(group)>0:
+                    if need_comma:
+                        char += ", "
+                    char += group
+                    need_comma = True
+            char += ")"
+        print(char)
+        return char
     else:
         return string
 
@@ -288,7 +306,7 @@ class Outputs:
 
         # axis label
         if y_label and left_axis:
-            axis.set_ylabel(y_label, fontsize=get_label_font_size(max_dims))
+            axis.set_ylabel(intelligent_convert_string(y_label), fontsize=get_label_font_size(max_dims))
 
     def finish_off_figure(self, fig, filename, n_plots=1, title_text=None):
         """
