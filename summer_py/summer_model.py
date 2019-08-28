@@ -2160,8 +2160,9 @@ class StratifiedModel(EpiModel):
         """
         if not self.strains:
             self.infectious_populations = \
-                element_list_multiplication(list(itertools.compress(_compartment_values, self.infectious_indices)),
-                                            self.infectiousness_multipliers["all_strains"])
+                element_list_multiplication(
+                    list(itertools.compress(_compartment_values, self.infectious_indices["all_strains"])),
+                    self.infectiousness_multipliers["all_strains"])
         else:
             self.infectious_populations = {}
             for strain in self.strains:
