@@ -52,9 +52,21 @@ class PostProcessing:
         if self.model.outputs is None:
             raise ValueError("the model needs to be run before post-processing")
 
-        # Ckeck that the keys of self.requested_times are all listed in self.requested_outputs
+        # Check that the keys of self.requested_times are all listed in self.requested_outputs
         if not set(self.requested_times.keys()).issubset(self.requested_outputs):
             raise ValueError("all keys of 'requested_times' must be in 'requested_outputs'")
+
+        # Check that the requested strata distributions correspond to an existing model stratification
+        indices_to_be_removed = []
+        for i, output in enumerate(self.requested_outputs):
+            if output[0:22] == "distribution_of_strata":
+                stratification_of_interest = output.split("X")[1]
+                if stratification_of_interest not in self.model.all_stratifications.keys():
+                    print("Warning: Requested stratification '" + stratification_of_interest +
+                          "' is not among the model stratifications. Will be ignored for output processing")
+                    indices_to_be_removed.append(i)
+        self.requested_outputs = [self.requested_outputs[i] for i in range(len(self.requested_outputs))
+                                  if i not in indices_to_be_removed]
 
     def interpret_requested_outputs(self):
         """
@@ -110,9 +122,6 @@ class PostProcessing:
                 self.operations_to_perform[output]['compartment_indices'] = {}  # dictionary keyed with the stratum names
 
                 stratification_of_interest = output.split("X")[1]
-                if stratification_of_interest not in self.model.all_stratifications.keys():
-                    ValueError("Requested stratification" + stratification_of_interest +
-                               " is not among the model stratifications")
                 for stratum_name in self.model.all_stratifications[stratification_of_interest]:
                     self.operations_to_perform[output]['compartment_indices'][stratum_name] = []
                     keyword = stratification_of_interest + '_' + stratum_name
