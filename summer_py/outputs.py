@@ -178,7 +178,6 @@ def intelligent_convert_string(string):
     if string[0:22] == 'distribution_of_strata':
         return "Population distribution by " + string.split("X")[1]
     elif string[0:4] == 'prev':
-        print(string)
         char = "Prevalence of "
         char += string.split("X")[1].split('X')[0]
 
@@ -193,7 +192,6 @@ def intelligent_convert_string(string):
                     char += group
                     need_comma = True
             char += ")"
-        print(char)
         return char
     else:
         return string
