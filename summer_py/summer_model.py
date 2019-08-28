@@ -618,10 +618,10 @@ class EpiModel:
         self.death_flows = pd.DataFrame(columns=("type", "parameter", "origin", "implement"))
 
         # attributes with specific format that are independent of user inputs
-        self.tracked_quantities, self.time_variants, self.adaptation_functions = ({} for _ in range(3))
+        self.tracked_quantities, self.time_variants, self.adaptation_functions, self.all_stratifications = \
+            ({} for _ in range(4))
         self.derived_outputs = {"times": []}
         self.compartment_values, self.compartment_names, self.infectious_indices = ([] for _ in range(3))
-        self.all_stratifications = {}
 
         # ensure requests are fed in correctly
         self.check_and_report_attributes(
