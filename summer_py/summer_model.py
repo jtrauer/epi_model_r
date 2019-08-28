@@ -1912,7 +1912,7 @@ class StratifiedModel(EpiModel):
         """
 
         # find all the requests that start with the parameter of interest and their level of stratification
-        applicable_params = [param for param in _adjustment_requests if param.startswith(_unadjusted_parameter)]
+        applicable_params = [param for param in _adjustment_requests if _unadjusted_parameter.startswith(param)]
         applicable_param_lengths = [len(find_name_components(param)) for param in applicable_params]
 
         # find the first most stratified parameter
