@@ -1190,8 +1190,12 @@ class StratifiedModel(EpiModel):
 
     :attribute available_death_rates: list
         single strata names (within stratifications) for which population_wide mortality can be adjusted
-    :attribute parameter_components:
-
+    :attribute parameter_components: dict
+        keys for the name of each transition parameter, values the list of functions needed to recursively create the
+            functions to create these parameter values
+    :attribute mortality_components: dict
+        keys for the name of each compartment, values the list of functions needed to recursively create the functions
+            to calculate the mortality rates for each compartment
     """
 
     """
@@ -1249,7 +1253,7 @@ class StratifiedModel(EpiModel):
         self.all_stratifications, self.infectiousness_adjustments, self.final_parameter_functions, self.adaptation_functions, \
             self.mixing_numerator_indices, self.mixing_denominator_indices, self.infectiousness_levels, \
             self.infectious_indices, self.infectious_compartments, self.infectiousness_multipliers, \
-            self.parameter_components = [{} for _ in range(11)]
+            self.parameter_components, self.mortality_components = [{} for _ in range(12)]
         self.overwrite_character, self.overwrite_key = "W", "overwrite"
         self.heterogeneous_mixing, self.mixing_matrix, self.available_death_rates = False, None, [""]
 
@@ -2084,8 +2088,8 @@ class StratifiedModel(EpiModel):
 
         # similarly for all model compartments
         for compartment in self.compartment_names:
-            self.parameter_components[compartment] = self.find_mortality_components(compartment)
-            self.create_mortality_functions(compartment, self.parameter_components[compartment])
+            self.mortality_components[compartment] = self.find_mortality_components(compartment)
+            self.create_mortality_functions(compartment, self.mortality_components[compartment])
 
     def find_transition_components(self, _parameter):
         """
@@ -2165,7 +2169,15 @@ class StratifiedModel(EpiModel):
         return all_sub_parameters
 
     def create_mortality_functions(self, _compartment, _sub_parameters):
+        """
+        loop through all the components to the population-wide mortality and create the recursive functions
 
+        :param _compartment: str
+            name of the compartment of interest
+        :param _sub_parameters: list
+            the names of the functions that need to update the upstream parameters
+        :return:
+        """
         self.final_parameter_functions["universal_death_rateX" + _compartment] = \
             self.adaptation_functions["universal_death_rateX" + _sub_parameters[0]]
         for component in _sub_parameters[1:]:
