@@ -4,8 +4,8 @@ import numpy
 import os
 import copy
 
-import summer.python_source_code.summer_model as sm
-import summer.python_source_code.post_processing as post_proc
+import summer_py.summer_model as sm
+import summer_py.post_processing as post_proc
 
 
 def find_subplot_grid(n_plots):
@@ -171,6 +171,32 @@ def add_title_to_plot(fig, n_panels, content):
                  fontsize=greater_font_sizes[n_panels] if n_panels in greater_font_sizes else 10)
 
 
+def intelligent_convert_string(string):
+    """
+    returns a more readable version of string for figure title ...
+    """
+    if string[0:22] == 'distribution_of_strata':
+        return "Population distribution by " + string.split("X")[1]
+    elif string[0:4] == 'prev':
+        char = "Prevalence of "
+        char += string.split("X")[1].split('X')[0]
+
+        subgroup = string.split("among")[1]
+        if len(subgroup) > 0:
+            char += " ("
+            need_comma = False
+            for group in subgroup.split("X"):
+                if len(group)>0:
+                    if need_comma:
+                        char += ", "
+                    char += group
+                    need_comma = True
+            char += ")"
+        return char
+    else:
+        return string
+
+
 class Outputs:
     def __init__(self, post_processing, out_dir=None):
         """
@@ -233,8 +259,8 @@ class Outputs:
         axis.tick_params(axis='x', length=3, pad=6, labelsize=get_label_font_size(max_dims))
 
         # axis label
-        if x_label:
-            axis.set_xlabel(x_label, fontsize=get_label_font_size(max_dims))
+        if x_label is not None:
+            axis.set_xlabel(intelligent_convert_string(x_label), fontsize=get_label_font_size(max_dims))
 
     def tidy_y_axis(self, axis, quantity, max_dims, left_axis=True, max_value=1e6, space_at_top=.1, y_label=None,
                     y_lims=None, allow_negative=False):
@@ -278,7 +304,7 @@ class Outputs:
 
         # axis label
         if y_label and left_axis:
-            axis.set_ylabel(y_label, fontsize=get_label_font_size(max_dims))
+            axis.set_ylabel(intelligent_convert_string(y_label), fontsize=get_label_font_size(max_dims))
 
     def finish_off_figure(self, fig, filename, n_plots=1, title_text=None):
         """
@@ -291,7 +317,7 @@ class Outputs:
             title_text: Text for the title of the figure
         """
         if title_text is not None:
-            add_title_to_plot(fig, n_plots, title_text)
+            add_title_to_plot(fig, n_plots, intelligent_convert_string(title_text))
         filename = os.path.join(self.out_dir, filename + '.png')
         fig.savefig(filename, dpi=300)
         pyplot.close(fig)
@@ -308,7 +334,7 @@ class Outputs:
                 requested_output not in self.post_processing.requested_times.keys() else \
                 self.post_processing.requested_times[requested_output]
 
-            output_name = requested_output.replace('X', '_')
+            output_name = requested_output
 
             if isinstance(self.post_processing.generated_outputs[requested_output], list):
                 axis.plot(times_to_plot, self.post_processing.generated_outputs[requested_output])
