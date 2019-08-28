@@ -563,7 +563,7 @@ class EpiModel:
         whether to add the initial conditions up to a certain total if this value hasn't yet been reached through
             the initial_conditions argument
     :attribute infectious_compartment: str
-        name of the infectious compartment for calculation of inter-compartmental infection flows
+        name(s) of the infectious compartment for calculation of inter-compartmental infection flows
     :attribute birth_approach: str
         approach to allowing entry flows into the model, must be add_crude_birth_rate, replace_deaths or no_births
     :attribute verbose: bool
@@ -588,8 +588,7 @@ class EpiModel:
 
     def output_to_user(self, comment):
         """
-        short function to save the if statement in every call to output some information, may be adapted later and was
-        more important to the R version of the repository
+        short function to save the if statement in every call to output some information
 
         :param: comment: string for the comment to be displayed to the user
         """
@@ -606,8 +605,8 @@ class EpiModel:
                  starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint",
                  output_connections={}):
         """
-        construction method to create a basic (and at this stage unstratified) compartmental model, including checking
-        that the arguments have been provided correctly (in a separate method called here)
+        construction method to create a basic (and at this point unstratified) compartmental model, including checking
+            that the arguments have been provided correctly (in a separate method called here)
 
         :params: all arguments essentially become object attributes and are described in the first main docstring to
             this object class
@@ -656,10 +655,10 @@ class EpiModel:
         self.implement_flows(requested_flows)
 
         # add any missing quantities that will be needed
-        self.add_default_quantities()
+        self.initialise_default_quantities()
 
         # find the compartments that are infectious
-        self.infectious_indices = [find_stem(comp) in self.infectious_compartment for comp in self.compartment_names]
+        self.infectious_indices = self.find_all_infectious_indices()
 
     def check_and_report_attributes(
             self, _times, _compartment_types, _initial_conditions, _parameters, _requested_flows,
@@ -673,7 +672,7 @@ class EpiModel:
             renamed with a preceding _ character
         """
 
-        # check that variables are of the expected type
+        # check variables are of the expected type
         for expected_numeric_variable in ["_reporting_sigfigs", "_starting_population"]:
             if not isinstance(eval(expected_numeric_variable), int):
                 raise TypeError("expected integer for %s" % expected_numeric_variable)
@@ -683,9 +682,7 @@ class EpiModel:
         for expected_list in ["_infectious_compartment", "_times", "_compartment_types", "_requested_flows"]:
             if not isinstance(eval(expected_list), list):
                 raise TypeError("expected list for %s" % expected_list)
-        for expected_string in \
-                ["_birth_approach", "_entry_compartment", "_starting_compartment",
-                 "_integration_type"]:
+        for expected_string in ["_birth_approach", "_entry_compartment", "_starting_compartment", "_integration_type"]:
             if not isinstance(eval(expected_string), str):
                 raise TypeError("expected string for %s" % expected_string)
         for expected_boolean in ["_initial_conditions_to_total", "_verbose"]:
@@ -725,7 +722,7 @@ class EpiModel:
         # start by setting all compartments to zero
         self.compartment_values = [0.0] * len(self.compartment_names)
 
-        # set starting values of unstratified compartments to requested value
+        # set starting values of (unstratified) compartments to requested value
         for compartment in self.initial_conditions:
             if compartment in self.compartment_types:
                 self.compartment_values[self.compartment_names.index(compartment)] = \
@@ -789,7 +786,7 @@ class EpiModel:
             else:
                 self.add_transition_flow(flow)
 
-    def add_default_quantities(self):
+    def initialise_default_quantities(self):
         """
         add parameters and tracked quantities that weren't requested but will be needed
         """
@@ -811,6 +808,15 @@ class EpiModel:
 
         # parameters essential for later stratification if called
         self.parameters["entry_fractions"] = 1.0
+
+    def find_all_infectious_indices(self):
+        """
+        find all the compartment names that begin with one of the requested infectious compartments
+
+        :return: list
+            booleans for whether each compartment is infectious or not
+        """
+        return [find_stem(comp) in self.infectious_compartment for comp in self.compartment_names]
 
     def add_transition_flow(self, _flow):
         """
@@ -2032,8 +2038,7 @@ class StratifiedModel(EpiModel):
             level, followed by keys for each strain with lists as values that are equivalent to the
             self.infectious_indices list for the unstratified version
         """
-        self.infectious_indices["all_strains"] = \
-            [find_stem(comp) in self.infectious_compartment for comp in self.compartment_names]
+        self.infectious_indices["all_strains"] = self.find_all_infectious_indices()
         if self.strains:
             for strain in self.strains:
                 self.infectious_indices[strain] = \
