@@ -569,14 +569,13 @@ EpiModel <- R6Class(
           stop("to compartment name not found in compartment types")
         }
 
-        # add flow to appropriate dataframe
+        # add flow to appropriate data frame
         if (flow[1] == "compartment_death") {
           self$add_death_flow(flow)
         }
         else {
           self$add_transition_flow(flow)
         }
-
         # add any tracked quantities that will be needed for calculating flow rates during integration
         if (grepl("infection", flow[1])) {
           self$tracked_quantities$infectious_population <- 0
@@ -584,6 +583,7 @@ EpiModel <- R6Class(
         if (flow[1] == "infection_frequency") {
           self$tracked_quantities$total_population <- 0
         }
+        
       }
     },
 
@@ -608,12 +608,12 @@ EpiModel <- R6Class(
         self$tracked_quantities[[output]] <- 0
       }
 
-      # parameters essential for stratification
+      # parameters essential for latter stratification if called
       self$parameters$entry_fractions <- 1
     },
 
     add_transition_flow = function(.flow) {
-      #   add a flow (row) to the dataframe storing the flows
+      #   add a flow (row) to the data frame storing the flows
       if ('force_index' %in% colnames(self$transition_flows))
         self$transition_flows <-
           rbind(self$transition_flows, data.frame(type=.flow[1], parameter=as.character(.flow[2]), from=.flow[3], to=.flow[4],
@@ -1437,23 +1437,20 @@ StratifiedModel <- R6Class(
       # if no mixing matrix yet, just convert the existing one to a dataframe
       if(is.null(self$mixing_matrix)){
         self$mixing_categories <- paste(.stratification_name, '_', .strata_names, sep='' )
-        self$mixing_matrix <- as.data.frame(.mixing_matrix)
-        #colnames(self$mixing_matrix) <- mixing_cols
+        self$mixing_matrix <- .mixing_matrix
+        
       }
       # otherwise take the kronecker product to get the new mixing matrix
       else {
-           mixing_cols <- NULL
-           self$mixing_categories <- paste(colnames(sir_model$mixing_matrix), 'X', .stratification_name, sep="")
+           new_mixing_cols <- NULL
            for (each_col in self$mixing_categories){
-             new_mixing_cols <- paste(each_col, '_', .strata_names, sep="") 
-             mixing_cols <- c(mixing_cols,new_mixing_cols )
-             print(mixing_cols)
+             new_col_names <- paste(each_col,'X', .stratification_name, '_', .strata_names, sep="") 
+             new_mixing_cols <- c(new_mixing_cols, new_col_names )
            }
-           self$mixing_matrix <- data.frame(kronecker(as.matrix(self$mixing_matrix), .mixing_matrix))
-           colnames(self$mixing_matrix) <- mixing_cols
+           if(!is.null(.mixing_matrix)){
+           self$mixing_categories <- new_mixing_cols
+           self$mixing_matrix <- kronecker(as.matrix(self$mixing_matrix), .mixing_matrix)}
       }
-      print(self$mixing_matrix)
-      
     },
     
     prepare_implement_mixing = function(){
@@ -1470,13 +1467,12 @@ StratifiedModel <- R6Class(
       
       self$mixing_numerator_indices = list()
       self$mixing_denominator_indices = list()
-      for (from_stratum in colnames(self$mixing_matrix)){
+      for (from_stratum in self$mixing_categories){
         #self$mixing_numerator_indices[from_stratum] 
         # create a list of list
         n_comp = 0
         for (compartment in self$compartment_names){
           if(identical(tail(unlist(find_name_components(compartment)),-1),unlist(find_name_components(from_stratum)))){
-  
                self$mixing_denominator_indices[[from_stratum]] <- c(self$mixing_denominator_indices[[from_stratum]], n_comp)
                if(grepl(self$infectious_compartment,compartment)){
                  self$mixing_numerator_indices[[from_stratum]] <- c(self$mixing_numerator_indices[[from_stratum]], n_comp)
@@ -1486,9 +1482,8 @@ StratifiedModel <- R6Class(
         }
         
       }
-      print(self$mixing_denominator_indices)
-      print(self$mixing_numerator_indices)
-      
+     # print(self$mixing_denominator_indices)
+     # print(self$mixing_numerator_indices)
     },
     
     add_force_indices_to_transitions = function(){
@@ -1505,12 +1500,10 @@ StratifiedModel <- R6Class(
       self$transition_flows$force_index <- NA
       # loop through them and find the indices of the mixing matrix that will apply to that flow
       for (n_flow in infection_flow_indices){
-          for (row in seq(1,nrow(self$mixing_matrix))){
+          for (force_group in self$mixing_categories){
             if(identical(tail(unlist(find_name_components(self$transition_flows$from[n_flow])), -1),
-               find_name_components(unlist(colnames(self$mixing_matrix))[row])))
-              print(row)
-              self$transition_flows[n_flow, 'force_index'] <- row #similar to ngroup
-
+               find_name_components(force_group)))
+              self$transition_flows[n_flow, ]$force_index <- which(self$mixing_categories==force_group) #similar to ngroup
           }
       }
       print(self$transition_flows)
@@ -1540,7 +1533,7 @@ StratifiedModel <- R6Class(
         }
       }
       
-      print(self$infectious_compartment)
+      #print(self$infectious_compartment)
       
       self$infectious_compartments <- self$compartment_names[self$infectious_indices]
       self$infectiousness_multipliers <- rep(1,length(self$infectious_compartments))
@@ -1814,9 +1807,9 @@ StratifiedModel <- R6Class(
       }
 
       alternative_adjusted_parameter <- self$parameter_functions[[.parameter]]
-      if (is.numeric(alternative_adjusted_parameter)){
-          print(alternative_adjusted_parameter)
-          print(adjusted_parameter)}
+      # if (is.numeric(alternative_adjusted_parameter)){
+      #     print(alternative_adjusted_parameter)
+      #     print(adjusted_parameter)}
       adjusted_parameter
     },
 
@@ -1870,10 +1863,10 @@ StratifiedModel <- R6Class(
               entry_fraction <- entry_fraction * self$parameters[[entry_fraction_param]]
             }
           }
-          print(total_births)
-          print(entry_fraction)
+          #print(total_births)
+          #print(entry_fraction)
           compartment_births <- entry_fraction * total_births
-          print(compartment_births)
+          #print(compartment_births)
           .ode_equations <- increment_list_by_index(.ode_equations, match(compartment, names(self$compartment_values)), compartment_births)
         }
       }
@@ -2107,16 +2100,16 @@ hiv_mixing <- matrix(1, ncol = 2, nrow = 2)
 sir_model$stratify("hiv", c("negative", "positive"), c(),
                    list(recovery=list("negative"=0.7, "positive"=0.5),
                         infect_death=list("negative"=0.5)),
-                   list("negative"=0.6, "positive"=0.4), mixing_matrix=hiv_mixing, verbose = FALSE)
+                   list("negative"=0.6, "positive"=0.4), infectiousness_adjustments = c("positive"=0.5), mixing_matrix=hiv_mixing, verbose = TRUE)
 
-#sir_model$stratify("strain", c("sensitive", "resistant"),  c("infectious"), requested_proportions=c(), verbose = FALSE)
+sir_model$stratify("strain", c("sensitive", "resistant"),  c("infectious"), requested_proportions=c(), verbose = FALSE)
 age_mixing <- NULL
 age_mixing <- diag(4)
 sir_model$stratify("age", c(1, 10, 3), c(),
                      list(recovery=list("1"=0.5, "10"=0.8)),
                            #recoveryXhiv_positive=list("1"=2, "3"=365/13*.5, "10"=1, overwrite=c("2")),
                            #universal_death_rate=list("1"=1, "2"=2, "3"=3)), 
-                           infectiousness_adjustments=NA, 
+                           infectiousness_adjustments=c("1"=0.8), 
                            mixing_matrix = age_mixing, verbose=TRUE)
 
 #sir_model$stratify("age", c(3, 2, 1), c(), verbose = TRUE)
@@ -2125,6 +2118,7 @@ sir_model$stratify("age", c(1, 10, 3), c(),
 sir_model$run_model()
 
 interpreter <- ModelInterpreter$new(sir_model)
-interpreter$plot_compartment_size()
-# interpreter$create_flowchart()
+#interpreter$create_flowchart()
+interpreter$plot_compartment("infectious")
+
 
