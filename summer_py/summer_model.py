@@ -563,7 +563,7 @@ class EpiModel:
         whether to add the initial conditions up to a certain total if this value hasn't yet been reached through
             the initial_conditions argument
     :attribute infectious_compartment: str
-        name of the infectious compartment for calculation of inter-compartmental infection flows
+        name(s) of the infectious compartment for calculation of inter-compartmental infection flows
     :attribute birth_approach: str
         approach to allowing entry flows into the model, must be add_crude_birth_rate, replace_deaths or no_births
     :attribute verbose: bool
@@ -588,8 +588,7 @@ class EpiModel:
 
     def output_to_user(self, comment):
         """
-        short function to save the if statement in every call to output some information, may be adapted later and was
-        more important to the R version of the repository
+        short function to save the if statement in every call to output some information
 
         :param: comment: string for the comment to be displayed to the user
         """
@@ -606,8 +605,8 @@ class EpiModel:
                  starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint",
                  output_connections={}):
         """
-        construction method to create a basic (and at this stage unstratified) compartmental model, including checking
-        that the arguments have been provided correctly (in a separate method called here)
+        construction method to create a basic (and at this point unstratified) compartmental model, including checking
+            that the arguments have been provided correctly (in a separate method called here)
 
         :params: all arguments essentially become object attributes and are described in the first main docstring to
             this object class
@@ -656,10 +655,10 @@ class EpiModel:
         self.implement_flows(requested_flows)
 
         # add any missing quantities that will be needed
-        self.add_default_quantities()
+        self.initialise_default_quantities()
 
         # find the compartments that are infectious
-        self.infectious_indices = [find_stem(comp) in self.infectious_compartment for comp in self.compartment_names]
+        self.infectious_indices = self.find_all_infectious_indices()
 
     def check_and_report_attributes(
             self, _times, _compartment_types, _initial_conditions, _parameters, _requested_flows,
@@ -673,7 +672,7 @@ class EpiModel:
             renamed with a preceding _ character
         """
 
-        # check that variables are of the expected type
+        # check variables are of the expected type
         for expected_numeric_variable in ["_reporting_sigfigs", "_starting_population"]:
             if not isinstance(eval(expected_numeric_variable), int):
                 raise TypeError("expected integer for %s" % expected_numeric_variable)
@@ -683,9 +682,7 @@ class EpiModel:
         for expected_list in ["_infectious_compartment", "_times", "_compartment_types", "_requested_flows"]:
             if not isinstance(eval(expected_list), list):
                 raise TypeError("expected list for %s" % expected_list)
-        for expected_string in \
-                ["_birth_approach", "_entry_compartment", "_starting_compartment",
-                 "_integration_type"]:
+        for expected_string in ["_birth_approach", "_entry_compartment", "_starting_compartment", "_integration_type"]:
             if not isinstance(eval(expected_string), str):
                 raise TypeError("expected string for %s" % expected_string)
         for expected_boolean in ["_initial_conditions_to_total", "_verbose"]:
@@ -725,7 +722,7 @@ class EpiModel:
         # start by setting all compartments to zero
         self.compartment_values = [0.0] * len(self.compartment_names)
 
-        # set starting values of unstratified compartments to requested value
+        # set starting values of (unstratified) compartments to requested value
         for compartment in self.initial_conditions:
             if compartment in self.compartment_types:
                 self.compartment_values[self.compartment_names.index(compartment)] = \
@@ -789,7 +786,7 @@ class EpiModel:
             else:
                 self.add_transition_flow(flow)
 
-    def add_default_quantities(self):
+    def initialise_default_quantities(self):
         """
         add parameters and tracked quantities that weren't requested but will be needed
         """
@@ -812,25 +809,34 @@ class EpiModel:
         # parameters essential for later stratification if called
         self.parameters["entry_fractions"] = 1.0
 
+    def find_all_infectious_indices(self):
+        """
+        find all the compartment names that begin with one of the requested infectious compartments
+
+        :return: list
+            booleans for whether each compartment is infectious or not
+        """
+        return [find_stem(comp) in self.infectious_compartment for comp in self.compartment_names]
+
     def add_transition_flow(self, _flow):
         """
-        add a flow (row) to the data frame storing the flows
+        add a flow (row) to the data frame storing the transition flows
 
         :param _flow: dict
             user-submitted flow with keys that must match existing format
         """
 
         # implement value starts at zero for unstratified that can be progressively incremented during stratification
-        _flow["implement"] = len(self.all_stratifications) if "implement" not in _flow else _flow['implement']
+        _flow["implement"] = len(self.all_stratifications) if "implement" not in _flow else _flow["implement"]
         self.transition_flows = self.transition_flows.append(_flow, ignore_index=True)
 
     def add_death_flow(self, _flow):
         """
-        same as previous method for compartment-specific death flows
+        same as previous method, but for compartment-specific death flows
 
-        :param _flow: see previous method
+        :param _flow: as for previous method
         """
-        _flow["implement"] = len(self.all_stratifications) if "implement" not in _flow else _flow['implement']
+        _flow["implement"] = len(self.all_stratifications) if "implement" not in _flow else _flow["implement"]
         self.death_flows = self.death_flows.append(_flow, ignore_index=True)
 
     """
@@ -923,7 +929,7 @@ class EpiModel:
             _ode_equations = increment_list_by_index(
                 _ode_equations, self.compartment_names.index(self.transition_flows.to[n_flow]), net_flow)
 
-            # track any quantities dependent on n_flow rates
+            # track any quantities dependent on flow rates
             self.track_derived_outputs(n_flow, net_flow)
 
         # add another element to the derived outputs vector
@@ -948,14 +954,14 @@ class EpiModel:
             need to be implemented
 
         :return: list
-            integers for all the rows of the transition matrix
+            integers for all the rows of the death matrix
         """
         return list(range(len(self.death_flows)))
 
     def track_derived_outputs(self, _n_flow, _net_flow):
         """
         calculate derived quantities to be tracked, which are stored as the self.derived_outputs dictionary for the
-        current working time step
+            current working time step
 
         :param _n_flow: int
             row number of the flow being considered in the preceding method
@@ -986,9 +992,9 @@ class EpiModel:
         :parameters and return: see previous method apply_all_flow_types_to_odes
         """
         for n_flow in self.find_death_indices_to_implement():
-            adjusted_parameter = self.get_parameter_value(self.death_flows.parameter[n_flow], _time)
+            parameter_value = self.get_parameter_value(self.death_flows.parameter[n_flow], _time)
             from_compartment = self.compartment_names.index(self.death_flows.origin[n_flow])
-            net_flow = adjusted_parameter * _compartment_values[from_compartment]
+            net_flow = parameter_value * _compartment_values[from_compartment]
             _ode_equations = increment_list_by_index(_ode_equations, from_compartment, -net_flow)
             if "total_deaths" in self.tracked_quantities:
                 self.tracked_quantities["total_deaths"] += net_flow
@@ -1010,11 +1016,22 @@ class EpiModel:
         return _ode_equations
 
     def get_compartment_death_rate(self, _compartment, _time):
+        """
+        calculate rate of non-disease-related deaths from the compartment being considered
+        needs to be separated out for later stratification
+
+        :param _compartment: str
+            name of the compartment being considered, which is ignored here
+        :param _time: float
+            time in model integration
+        :return: float
+            rate of death from the compartment of interest
+        """
         return self.get_parameter_value("universal_death_rate", _time)
 
     def apply_birth_rate(self, _ode_equations, _compartment_values, _time):
         """
-        apply a birth rate to the entry compartments
+        apply a birth rate to the entry compartment
 
         :parameters and return: see previous method apply_all_flow_types_to_odes
         """
@@ -1026,6 +1043,8 @@ class EpiModel:
         work out the total births to apply dependent on the approach requested
 
         :param _compartment_values:
+            as for preceding methods
+        :param _time:
             as for preceding methods
         :return: float
             total rate of births to be implemented in the model
@@ -1040,6 +1059,7 @@ class EpiModel:
     def find_infectious_multiplier(self, n_flow):
         """
         find the multiplier to account for the infectious population in dynamic flows
+        using plural for infectious_populations because may be stratified later
 
         :param n_flow: int
             index for the row of the transition_flows dataframe
@@ -1115,18 +1135,18 @@ class EpiModel:
         :param compartment_tags: list
             list of string variables for the compartment stems of interest
         """
-        indices_to_plot = \
-            [i for i in range(len(self.compartment_names)) if find_stem(self.compartment_names[i]) in compartment_tags]
+        indices_to_plot = [i_comp for i_comp in range(len(self.compartment_names)) if
+                           find_stem(self.compartment_names[i_comp]) in compartment_tags]
         return self.outputs[:, indices_to_plot].sum(axis=1)
 
     def plot_compartment_size(self, compartment_tags, multiplier=1.):
         """
         plot the aggregate population of the compartments, the name of which contains all items of the list
-        compartment_tags
-        kept very simple for now, because output visualisation will generally be done outside of Python
+            compartment_tags
+        kept very simple for now, because output visualisation will generally be done outside of python
 
         :param compartment_tags: list
-            ilst of string variables for the compartments to plot
+            string variables for the compartments to plot
         :param multiplier: float
             scalar value to multiply the compartment values by
         """
@@ -1190,8 +1210,12 @@ class StratifiedModel(EpiModel):
 
     :attribute available_death_rates: list
         single strata names (within stratifications) for which population_wide mortality can be adjusted
-    :attribute parameter_components:
-
+    :attribute parameter_components: dict
+        keys for the name of each transition parameter, values the list of functions needed to recursively create the
+            functions to create these parameter values
+    :attribute mortality_components: dict
+        keys for the name of each compartment, values the list of functions needed to recursively create the functions
+            to calculate the mortality rates for each compartment
     """
 
     """
@@ -1200,7 +1224,7 @@ class StratifiedModel(EpiModel):
 
     def add_compartment(self, new_compartment_name, new_compartment_value):
         """
-        add a compartment by specifying its name and value to take
+        add a compartment by specifying its name and starting value to take
 
         :param new_compartment_name: str
             name of the new compartment to be created
@@ -1249,7 +1273,7 @@ class StratifiedModel(EpiModel):
         self.all_stratifications, self.infectiousness_adjustments, self.final_parameter_functions, self.adaptation_functions, \
             self.mixing_numerator_indices, self.mixing_denominator_indices, self.infectiousness_levels, \
             self.infectious_indices, self.infectious_compartments, self.infectiousness_multipliers, \
-            self.parameter_components = [{} for _ in range(11)]
+            self.parameter_components, self.mortality_components = [{} for _ in range(12)]
         self.overwrite_character, self.overwrite_key = "W", "overwrite"
         self.heterogeneous_mixing, self.mixing_matrix, self.available_death_rates = False, None, [""]
 
@@ -1888,7 +1912,7 @@ class StratifiedModel(EpiModel):
         """
 
         # find all the requests that start with the parameter of interest and their level of stratification
-        applicable_params = [param for param in _adjustment_requests.keys() if param.startswith(_unadjusted_parameter)]
+        applicable_params = [param for param in _adjustment_requests if _unadjusted_parameter.startswith(param)]
         applicable_param_lengths = [len(find_name_components(param)) for param in applicable_params]
 
         # find the first most stratified parameter
@@ -2028,8 +2052,7 @@ class StratifiedModel(EpiModel):
             level, followed by keys for each strain with lists as values that are equivalent to the
             self.infectious_indices list for the unstratified version
         """
-        self.infectious_indices["all_strains"] = \
-            [find_stem(comp) in self.infectious_compartment for comp in self.compartment_names]
+        self.infectious_indices["all_strains"] = self.find_all_infectious_indices()
         if self.strains:
             for strain in self.strains:
                 self.infectious_indices[strain] = \
@@ -2084,8 +2107,8 @@ class StratifiedModel(EpiModel):
 
         # similarly for all model compartments
         for compartment in self.compartment_names:
-            self.parameter_components[compartment] = self.find_mortality_components(compartment)
-            self.create_mortality_functions(compartment, self.parameter_components[compartment])
+            self.mortality_components[compartment] = self.find_mortality_components(compartment)
+            self.create_mortality_functions(compartment, self.mortality_components[compartment])
 
     def find_transition_components(self, _parameter):
         """
@@ -2141,22 +2164,42 @@ class StratifiedModel(EpiModel):
                 update_function, self.final_parameter_functions[_parameter])
 
     def find_mortality_components(self, _compartment):
+        """
+        find the sub-parameters for population-wide natural mortality that are relevant to a particular compartment
+        used in prepare_stratified_parameter_calculations for creating functions to find the mortality rate for each
+            compartment
 
+        :param _compartment: str
+            name of the compartment of interest
+        :return: all_sub_parameters: list
+            list of all the mortality-related sub-parameters for the compartment of interest
+        """
         all_sub_parameters = []
-        compartments_strata = find_name_components(_compartment)[1:] + [""]
+        compartments_strata = find_name_components(_compartment)[1:]
         compartments_strata.reverse()
+        compartments_strata.append("")
+
+        # loop through each stratification of the parameter and adapt if the parameter is available
         for stratum in compartments_strata:
             if stratum in self.available_death_rates:
-                all_sub_parameters.append(stratum)
+                all_sub_parameters.append("universal_death_rateX" + stratum)
             if "universal_death_rateX" + stratum in self.overwrite_parameters:
                 break
         all_sub_parameters.reverse()
         return all_sub_parameters
 
     def create_mortality_functions(self, _compartment, _sub_parameters):
+        """
+        loop through all the components to the population-wide mortality and create the recursive functions
 
+        :param _compartment: str
+            name of the compartment of interest
+        :param _sub_parameters: list
+            the names of the functions that need to update the upstream parameters
+        :return:
+        """
         self.final_parameter_functions["universal_death_rateX" + _compartment] = \
-            self.adaptation_functions["universal_death_rateX" + _sub_parameters[0]]
+            self.adaptation_functions[_sub_parameters[0]]
         for component in _sub_parameters[1:]:
 
             # get the new function to act on the less stratified function (closer to the "tree-trunk")
@@ -2171,7 +2214,7 @@ class StratifiedModel(EpiModel):
 
             # create the composite function
             self.final_parameter_functions["universal_death_rateX" + _compartment] = create_function_of_function(
-                update_function, self.final_parameter_functions[_compartment])
+                update_function, self.final_parameter_functions["universal_death_rateX" + _compartment])
 
     """
     methods to be called during the process of model running
