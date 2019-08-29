@@ -2181,10 +2181,9 @@ class StratifiedModel(EpiModel):
         # loop through each stratification of the parameter and adapt if the parameter is available
         for stratum in compartments_strata:
             if stratum in self.available_death_rates:
-                all_sub_parameters.append(stratum)
+                all_sub_parameters.append("universal_death_rateX" + stratum)
             if "universal_death_rateX" + stratum in self.overwrite_parameters:
                 break
-        all_sub_parameters.reverse()
         return all_sub_parameters
 
     def create_mortality_functions(self, _compartment, _sub_parameters):
@@ -2198,7 +2197,7 @@ class StratifiedModel(EpiModel):
         :return:
         """
         self.final_parameter_functions["universal_death_rateX" + _compartment] = \
-            self.adaptation_functions["universal_death_rateX" + _sub_parameters[0]]
+            self.adaptation_functions[_sub_parameters[0]]
         for component in _sub_parameters[1:]:
 
             # get the new function to act on the less stratified function (closer to the "tree-trunk")
