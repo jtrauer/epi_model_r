@@ -2184,6 +2184,7 @@ class StratifiedModel(EpiModel):
                 all_sub_parameters.append("universal_death_rateX" + stratum)
             if "universal_death_rateX" + stratum in self.overwrite_parameters:
                 break
+        all_sub_parameters.reverse()
         return all_sub_parameters
 
     def create_mortality_functions(self, _compartment, _sub_parameters):
