@@ -2213,7 +2213,7 @@ class StratifiedModel(EpiModel):
 
             # create the composite function
             self.final_parameter_functions["universal_death_rateX" + _compartment] = create_function_of_function(
-                update_function, self.final_parameter_functions[_compartment])
+                update_function, self.final_parameter_functions["universal_death_rateX" + _compartment])
 
     """
     methods to be called during the process of model running
