@@ -35,9 +35,8 @@ depth=0
 
 create_stratum_name = function(stratification_name, stratum_name, with_x = TRUE) {
   # generate the name just for the particular stratification
-  startum_name = paste(stratification_name, "_", str(stratum_name), sep="")
+  startum_name = paste(stratification_name, "_", stratum_name, sep="")
   ifelse(with_x, paste("X", stratification_name, "_", stratum_name, sep = ""), startum_name)
-  
 }
 
 
@@ -344,8 +343,8 @@ EpiModel <- R6Class(
     mixing_categories = list(),
     infectiousness_adjustments = c(),
     derived_outputs = list(),
-    flows_to_track = c(),
-    infectious_indices = c(),
+    flows_to_track = list(),
+    infectious_indices = list(),
     infectiousness_multipliers = c(),
     infectious_compartments = c(),
 
@@ -418,7 +417,7 @@ EpiModel <- R6Class(
       self$add_default_quantities()
       
       # find the compartments that are infectious
-      self$infectious_indices <- as.logical(grepl(self$infectious_compartment , self$compartment_names))
+      #self$infectious_indices <- as.logical(grepl(self$infectious_compartment , self$compartment_names))
       #self$infectious_indices_int <- which(self$infectious_indices)
     },
     
@@ -702,20 +701,21 @@ EpiModel <- R6Class(
       #   apply fixed or infection-related intercompartmental transition flows to odes
       #
       #   :parameters and return: see previous method apply_all_flow_types_to_odes
-      for (f in which(self$transition_flows$implement == length(self$strata))) {
-        flow <- self$transition_flows[f,]
+     # for (f in which(self$transition_flows$implement == length(self$strata))) {
+      for (n_flow in  self$find_transition_indices_to_implement()) {
+       
 
         # find adjusted parameter value
-        adjusted_parameter <- self$get_parameter_value(flow$parameter, .time)
+        parameter_value <- self$get_parameter_value(self$transition_flows$parameter[n_flow], .time)
 
         # find from compartment and "infectious population" (which is 1 for standard flows)
-        infectious_population <- self$find_infectious_multiplier(flow$type)
+        infectious_population <- self$find_infectious_multiplier(n_flow)
 
         # calculate the flow and apply to the odes
-        from_compartment <- match(flow$from, names(self$compartment_values))
-        net_flow <- adjusted_parameter * .compartment_values[from_compartment] * infectious_population
+        from_compartment <- match(self$transition_flows$from[n_flow], names(self$compartment_values))
+        net_flow <- parameter_value * .compartment_values[from_compartment] * infectious_population
         .ode_equations <- increment_list_by_index(.ode_equations, from_compartment, -net_flow)
-        .ode_equations <- increment_list_by_index(.ode_equations, match(flow$to, names(self$compartment_values)), net_flow)
+        .ode_equations <- increment_list_by_index(.ode_equations, match(self$transition_flows$to[n_flow], names(self$compartment_values)), net_flow)
 
         # track any quantities dependent on flow rates
         self$track_derived_outputs(flow, net_flow)
@@ -727,7 +727,24 @@ EpiModel <- R6Class(
       # return flow rates
       .ode_equations
     },
+    
+    find_transition_indices_to_implement = function(){
+      #for over-writing in stratified version, here just returns the indices of all the transition flows, as they all
+      #need to be implemented
+      
+      #:return: list
+      #integers for all the rows of the transition matrix
+      c(which(self$transition_flows$implement == length(self$strata)))
+    },
 
+    find_death_indices_to_implement = function(){
+      #for over-writing in stratified version, here just returns the indices of all the transition flows, as they all
+      #need to be implemented
+      
+      #:return: list
+      #integers for all the rows of the transition matrix
+      c(seq(nrow(self$death_flows)))
+    },
     track_derived_outputs = function(.flow, .net_flow) {
       #   calculate derived quantities to be tracked, which are stored as the self.derived_outputs dictionary for the
       #   current working time step
@@ -904,14 +921,28 @@ StratifiedModel <- R6Class(
     overwrite_parameters = c(),
     heterogeneous_infectiousness = FALSE,
     compartment_types_to_stratify = c(),
+    infectious_populations = NULL,
+    infectious_denominators = NULL,
+    strains = NULL,
+    mixing_categories = c(),
+    all_stratifications = NULL,
+    infectiousness_adjustments = NULL,
+    final_parameter_functions = NULL,
     parameter_components = list(),
     parameter_functions = list(),
     adaptation_functions = list(),
     mapped_adaptation_functions = list(),
     mixing_numerator_indices = c(),
     mixing_denominator_indices = c(),
+    infectiousness_levels = NULL,
+    infectious_indices = list(),
+    infectious_compartments = NULL,
+    infectiousness_multipliers = NULL,
     heterogeneous_mixing = FALSE,
     mixing_matrix = NULL,
+    overwrite_character = NULL,
+    overwrite_key = c("W", "overwrite"),
+    
 
     # __________
     # general methods
@@ -992,6 +1023,10 @@ StratifiedModel <- R6Class(
       # implement heterogeneous mixing across multiple population groups
       self$prepare_implement_mixing()
       
+      # if a multi-strain model
+      if (stratification_name == "strain"){
+        self$strains = strata_names
+      }
       # heterogeneous infectiousness adjustments
       #self$apply_heterogeneous_infectiousness(stratification_name, strata_request, infectiousness_adjustments)
       self$prepare_infectiousness_levels(stratification_name, strata_names, infectiousness_adjustments)
@@ -1509,6 +1544,15 @@ StratifiedModel <- R6Class(
       print(self$transition_flows)
     },
     
+    find_infectious_indices = function(){
+       self$infectious_indices['all_strains'] <- list(as.logical(grepl(self$infectious_compartment , self$compartment_names)))
+       if (!is.null(self$strains)){
+         for (strain in self$strains){
+           self$infectious_indices[strain]  <- list(as.logical(grepl(paste(self$infectious_compartment, '.*', strain,  sep="") , self$compartment_names)))
+         }
+       }
+    },
+    
     prepare_infectiousness_levels = function(.stratification_name, .strata_names, .infectiousness_adjustments){
       # store infectiousness adjustments as dictionary attribute to the model object, with first tier of keys the
       # stratification and second tier the strata to be modified
@@ -1528,19 +1572,28 @@ StratifiedModel <- R6Class(
       }
       else {
         for (stratum in names(.infectiousness_adjustments)) {
-          self$infectiousness_adjustments[[create_stratified_name("", .stratification_name, stratum)]] <-
+          self$infectiousness_levels[[create_stratum_name( .stratification_name, stratum, with_x = FALSE)]] <-
             .infectiousness_adjustments[[stratum]]
         }
       }
-      
-      #print(self$infectious_compartment)
-      
-      self$infectious_compartments <- self$compartment_names[self$infectious_indices]
-      self$infectiousness_multipliers <- rep(1,length(self$infectious_compartments))
-      for(compartment in self$infectious_compartments){
-        print('prepare_infectiousness_levels') #TODO set infectiousness multiplier
+      self$find_infectious_indices()
+      for(strain in names(self$infectious_indices)){
+        self$infectious_compartments[[strain]] <- self$compartment_names[self$infectious_indices[[strain]]]
+        self$infectiousness_multipliers[[strain]] <- rep(1,length(self$infectious_compartments[[strain]]))
+        for(compartment_idx in seq_along(self$infectious_compartments[[strain]])){
+           for (infectiousness_modifier in names(self$infectiousness_levels)){
+             if (infectiousness_modifier %in% find_name_components(self$infectious_compartments[[strain]][compartment_idx])){
+               self$infectiousness_multipliers[[strain]][compartment_idx] <- as.numeric(self$infectiousness_multipliers[[strain]][compartment_idx]) * as.numeric(self$infectiousness_levels[[infectiousness_modifier]])
+             }
+             
+           }
+        }
       }
+      print(self$infectious_compartment)
     },
+    
+    
+    
     
     apply_heterogeneous_infectiousness = function(stratification_name, strata_request, infectiousness_adjustments) {
       #   work out infectiousness adjustments and set as model attributes
@@ -2102,7 +2155,7 @@ sir_model$stratify("hiv", c("negative", "positive"), c(),
                         infect_death=list("negative"=0.5)),
                    list("negative"=0.6, "positive"=0.4), infectiousness_adjustments = c("positive"=0.5), mixing_matrix=hiv_mixing, verbose = TRUE)
 
-sir_model$stratify("strain", c("sensitive", "resistant"),  c("infectious"), requested_proportions=c(), verbose = FALSE)
+#sir_model$stratify("strain", c("sensitive", "resistant"),  c("infectious"), requested_proportions=c(), verbose = FALSE)
 age_mixing <- NULL
 age_mixing <- diag(4)
 sir_model$stratify("age", c(1, 10, 3), c(),
