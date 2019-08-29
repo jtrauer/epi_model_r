@@ -115,7 +115,7 @@ class PostProcessing:
                             is_relevant = False
                             break
                     if is_relevant:
-                        if all(category in name_components for category in infection_status):
+                        if all(category in compartment for category in infection_status):
                             self.operations_to_perform[output]['numerator_indices'].append(j)
                         else:
                             self.operations_to_perform[output]['denominator_extra_indices'].append(j)
