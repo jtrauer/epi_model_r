@@ -2243,10 +2243,16 @@ class StratifiedModel(EpiModel):
             current values for the compartment sizes
         """
         if not self.strains:
-            self.infectious_populations = \
+            infectious_populations = \
                 element_list_multiplication(
                     list(itertools.compress(_compartment_values, self.infectious_indices["all_strains"])),
                     self.infectiousness_multipliers["all_strains"])
+            self.infectious_populations = []
+
+            for category in self.mixing_categories:
+                category_indices = [category in i for i in list(itertools.compress(self.compartment_names, self.infectious_indices["all_strains"]))]
+                infectious_pop = sum(list(itertools.compress(infectious_populations, category_indices)))
+                self.infectious_populations.append(infectious_pop)
         else:
             self.infectious_populations = {}
             for strain in self.strains:
