@@ -179,11 +179,13 @@ def intelligent_convert_string(string):
         return "Population distribution by " + string.split("X")[1]
     elif string[0:4] == 'prev':
         char = "Prevalence of "
-        char += string.split("X")[1].split('X')[0]
+        numerator_groups = string.split('among')[0].split('X')[1:]
+        for group in numerator_groups:
+            char += group + " "
 
         subgroup = string.split("among")[1]
         if len(subgroup) > 0:
-            char += " ("
+            char += "("
             need_comma = False
             for group in subgroup.split("X"):
                 if len(group)>0:
@@ -407,7 +409,7 @@ if __name__ == "__main__":
 
     # request some outputs
     req_outputs = ['prevXinfectiousXamongXage_10Xstrain_sensitive',
-                   'prevXinfectiousXamong',
+                   'prevXinfectiousXresistantXamongXage_10Xstrain_sensitive',
                    'distribution_of_strataXstrain',
                    'distribution_of_strataXage'
                    ]
