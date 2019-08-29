@@ -101,19 +101,21 @@ class PostProcessing:
 
                 # work out the conditions to be satisfied regarding the infection status
                 string_pre_among = output.split("among")[0]
-                infection_status = string_pre_among.split("X")[1:]
+                infection_status_raw = string_pre_among.split("X")[1:]
+                infection_status = [x for x in infection_status_raw if len(x) > 0]
 
                 # list all relevant compartments that should be included into the numerator or the denominator
                 self.operations_to_perform[output]['numerator_indices'] = []
                 self.operations_to_perform[output]['denominator_extra_indices'] = []  # to be added to the numerator ones to form the whole denominator
                 for j, compartment in enumerate(self.model.compartment_names):
                     is_relevant = True
+                    name_components = sm.find_name_components(compartment)
                     for condition in conditions.keys():  # for each stratification
-                        if not any(category in compartment for category in conditions[condition]):
+                        if not any(category in name_components for category in conditions[condition]):
                             is_relevant = False
                             break
                     if is_relevant:
-                        if all(category in compartment for category in infection_status):
+                        if all(category in name_components for category in infection_status):
                             self.operations_to_perform[output]['numerator_indices'].append(j)
                         else:
                             self.operations_to_perform[output]['denominator_extra_indices'].append(j)
