@@ -2175,8 +2175,9 @@ class StratifiedModel(EpiModel):
             list of all the mortality-related sub-parameters for the compartment of interest
         """
         all_sub_parameters = []
-        compartments_strata = find_name_components(_compartment)[1:] + [""]
+        compartments_strata = find_name_components(_compartment)[1:]
         compartments_strata.reverse()
+        compartments_strata.append("")
 
         # loop through each stratification of the parameter and adapt if the parameter is available
         for stratum in compartments_strata:
