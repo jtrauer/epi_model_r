@@ -200,17 +200,25 @@ def intelligent_convert_string(string):
 
 
 class Outputs:
-    def __init__(self, post_processing, out_dir=None):
+    def __init__(self, post_processing_list, out_dir='outputs'):
         """
         :param post_processing: an object of class post_processing associated with a run model
         :param out_dir: the name of the directory where to write the outputs
         """
-        self.post_processing = post_processing
-        self.out_dir = ''
-        self.create_out_dir(out_dir)
+        self.post_processing_list = post_processing_list
+        self.out_dir = out_dir
+        self.scenario_names = []
 
+        self.create_out_directories()
         self.colour_theme \
             = [(0., 0., 0.),
+               (57./255., 106./255., 177./255.),
+               (218./255., 124./255., 48./255.),
+               (62./255., 150./255., 81./255.),
+               (204./255., 37./255., 41./255.),
+               (107./255., 76./255., 154./255.),
+               (146./255., 36./255., 40./255.),
+               (148./255., 139./255., 61./255.),
                (0., 0., 125. / 255.),
                (210. / 255., 70. / 255., 0.),
                (100. / 255., 150. / 255., 1.),
@@ -228,12 +236,20 @@ class Outputs:
                (.5, .5, .5),
                (.0, .0, .0)]
 
-    def create_out_dir(self, out_dir):
-        self.out_dir = 'outputs' if out_dir is None else out_dir
+    def create_out_directories(self):
         if not os.path.exists(self.out_dir):
             os.mkdir(self.out_dir)
-        else:
-            print("No creation needed for output directory " + self.out_dir)
+
+        for scenario_index in range(len(self.post_processing_list)):
+            scenario_name = 'Baseline' if scenario_index == 0 else "Scenario " + str(scenario_index)
+            self.scenario_names.append(scenario_name)
+
+            scenario_out_dir = os.path.join(self.out_dir, scenario_name)
+            if not os.path.exists(scenario_out_dir):
+                os.mkdir(scenario_out_dir)
+        multi_out_dir = os.path.join(self.out_dir, 'multi_plots')
+        if not os.path.exists(multi_out_dir):
+            os.mkdir(multi_out_dir)
 
     def tidy_x_axis(self, axis, start, end, max_dims, labels_off=False, x_label=None):
         """
@@ -328,30 +344,48 @@ class Outputs:
         """
         main method to run the plotting of all the outputs requested in the post-processing object
         """
-        for requested_output in self.post_processing.requested_outputs:
-            fig, axes, max_dims, n_rows, n_cols = initialise_figures_axes(1)
-            axis = find_panel_grid_indices([axes], 0, n_rows, n_cols)
+        for requested_output in self.post_processing_list[0].requested_outputs:
+            for multi_plot in [False, True]:
+                if isinstance(self.post_processing_list[0].generated_outputs[requested_output], dict) \
+                            and requested_output[0:22] == "distribution_of_strata" and multi_plot:
+                        continue
 
-            times_to_plot = self.post_processing.model.times if \
-                requested_output not in self.post_processing.requested_times.keys() else \
-                self.post_processing.requested_times[requested_output]
+                for scenario_index in range(len(self.post_processing_list)):
 
-            output_name = requested_output
+                    if not multi_plot or scenario_index == 0:
+                        fig, axes, max_dims, n_rows, n_cols = initialise_figures_axes(1)
+                        axis = find_panel_grid_indices([axes], 0, n_rows, n_cols)
+                        output_name = requested_output
 
-            if isinstance(self.post_processing.generated_outputs[requested_output], list):
-                axis.plot(times_to_plot, self.post_processing.generated_outputs[requested_output])
-                self.tidy_x_axis(axis, start=min(times_to_plot), end=max(times_to_plot), max_dims=max_dims,
-                                 x_label='time')
-                self.tidy_y_axis(axis, quantity='', max_dims=max_dims, y_label=output_name,
-                                 max_value=max(self.post_processing.generated_outputs[requested_output]))
+                    times_to_plot = self.post_processing_list[scenario_index].model.times if \
+                            requested_output not in self.post_processing_list[scenario_index].requested_times.keys() else \
+                            self.post_processing_list[scenario_index].requested_times[requested_output]
 
-            elif isinstance(self.post_processing.generated_outputs[requested_output], dict) \
-                    and requested_output[0:22] == "distribution_of_strata":
+                    if isinstance(self.post_processing_list[scenario_index].generated_outputs[requested_output], list):
+                        axis.plot(times_to_plot,
+                                  self.post_processing_list[scenario_index].generated_outputs[requested_output],
+                                  color=self.colour_theme[scenario_index],
+                                  label='Scenario ' + str(scenario_index))
+                        self.tidy_x_axis(axis, start=min(times_to_plot), end=max(times_to_plot), max_dims=max_dims,
+                                         x_label='time')
+                        self.tidy_y_axis(axis, quantity='', max_dims=max_dims, y_label=output_name,
+                                         max_value=max(self.post_processing_list[scenario_index].generated_outputs[requested_output]))
 
-                current_data = self.post_processing.generated_outputs[requested_output]
-                self.plot_stacked_epi_outputs(axis, times_to_plot, current_data, fraction=False)
+                    elif isinstance(self.post_processing_list[scenario_index].generated_outputs[requested_output], dict) \
+                            and requested_output[0:22] == "distribution_of_strata":
 
-            self.finish_off_figure(fig, filename=output_name, title_text=output_name)
+                        current_data = self.post_processing_list[scenario_index].generated_outputs[requested_output]
+                        self.plot_stacked_epi_outputs(axis, times_to_plot, current_data, fraction=False)
+
+                    if not multi_plot or scenario_index == len(self.scenario_names)-1:
+                        if multi_plot:
+                            dir_name = 'multi_plots'
+                            axis.legend(bbox_to_anchor=(1., 1))
+                        else:
+                            dir_name = self.scenario_names[scenario_index]
+
+                        file_name = os.path.join(dir_name, output_name)
+                        self.finish_off_figure(fig, filename=file_name, title_text=output_name)
 
     def plot_stacked_epi_outputs(self, axis, times_to_plot, current_data, fraction=True):
         # plot patches and proxy by category
@@ -409,7 +443,7 @@ if __name__ == "__main__":
 
     # request some outputs
     req_outputs = ['prevXinfectiousXamongXage_10Xstrain_sensitive',
-                   'prevXinfectiousXresistantXamongXage_10Xstrain_sensitive',
+                   # 'prevXinfectiousXresistantXamongXage_10Xstrain_sensitive',
                    'distribution_of_strataXstrain',
                    'distribution_of_strataXage'
                    ]
@@ -417,9 +451,11 @@ if __name__ == "__main__":
     multipliers = {'prevXinfectiousXamongXage_10Xstrain_sensitive': 1.e5,
                    'prevXinfectiousXamong': 1.e5}
     pp = post_proc.PostProcessing(sir_model, req_outputs, req_times, multipliers)
+    pp2 = post_proc.PostProcessing(sir_model, req_outputs, req_times, multipliers)
+
 
     # generate outputs
-    outputs = Outputs(pp)
+    outputs = Outputs([pp, pp2, pp, pp, pp, pp, pp, pp])
     outputs.plot_requested_outputs()
 
 
