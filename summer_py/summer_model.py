@@ -2152,7 +2152,7 @@ class StratifiedModel(EpiModel):
             # get the new function to act on the less stratified function (closer to the "tree-trunk")
             if component not in self.parameters:
                 raise ValueError("parameter component %s not found in parameters attribute" % component)
-            elif type(self.parameters[component]) == float:
+            elif isinstance(self.parameters[component], float):
                 update_function = create_multiplicative_function(self.parameters[component])
             elif type(self.parameters[component]) == str:
                 update_function = create_time_variant_multiplicative_function(self.adaptation_functions[component])
