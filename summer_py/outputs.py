@@ -350,8 +350,8 @@ class Outputs:
                             and requested_output[0:22] == "distribution_of_strata" and multi_plot:
                         continue
 
+                y_max = - 1.e9
                 for scenario_index in range(len(self.post_processing_list)):
-
                     if not multi_plot or scenario_index == 0:
                         fig, axes, max_dims, n_rows, n_cols = initialise_figures_axes(1)
                         axis = find_panel_grid_indices([axes], 0, n_rows, n_cols)
@@ -366,11 +366,14 @@ class Outputs:
                                   self.post_processing_list[scenario_index].generated_outputs[requested_output],
                                   color=self.colour_theme[scenario_index],
                                   label='Scenario ' + str(scenario_index))
+                        y_max = max([y_max,
+                                    max(self.post_processing_list[scenario_index].generated_outputs[requested_output])])
                         if scenario_index == 0:
                             self.tidy_x_axis(axis, start=min(times_to_plot), end=max(times_to_plot), max_dims=max_dims,
                                              x_label='time')
-                            self.tidy_y_axis(axis, quantity='', max_dims=max_dims, y_label=output_name,
-                                             max_value=max(self.post_processing_list[scenario_index].generated_outputs[requested_output]))
+
+                        if not multi_plot or scenario_index == len(self.scenario_names) - 1:
+                            self.tidy_y_axis(axis, quantity='', max_dims=max_dims, y_label=output_name, max_value=y_max)
 
                     elif isinstance(self.post_processing_list[scenario_index].generated_outputs[requested_output], dict) \
                             and requested_output[0:22] == "distribution_of_strata":
@@ -378,7 +381,7 @@ class Outputs:
                         current_data = self.post_processing_list[scenario_index].generated_outputs[requested_output]
                         self.plot_stacked_epi_outputs(axis, times_to_plot, current_data, fraction=False)
 
-                    if not multi_plot or scenario_index == len(self.scenario_names)-1:
+                    if not multi_plot or scenario_index == len(self.scenario_names) - 1:
                         if multi_plot:
                             dir_name = 'multi_plots'
                             axis.legend(bbox_to_anchor=(1., 1))
