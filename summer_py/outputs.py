@@ -366,10 +366,11 @@ class Outputs:
                                   self.post_processing_list[scenario_index].generated_outputs[requested_output],
                                   color=self.colour_theme[scenario_index],
                                   label='Scenario ' + str(scenario_index))
-                        self.tidy_x_axis(axis, start=min(times_to_plot), end=max(times_to_plot), max_dims=max_dims,
-                                         x_label='time')
-                        self.tidy_y_axis(axis, quantity='', max_dims=max_dims, y_label=output_name,
-                                         max_value=max(self.post_processing_list[scenario_index].generated_outputs[requested_output]))
+                        if scenario_index == 0:
+                            self.tidy_x_axis(axis, start=min(times_to_plot), end=max(times_to_plot), max_dims=max_dims,
+                                             x_label='time')
+                            self.tidy_y_axis(axis, quantity='', max_dims=max_dims, y_label=output_name,
+                                             max_value=max(self.post_processing_list[scenario_index].generated_outputs[requested_output]))
 
                     elif isinstance(self.post_processing_list[scenario_index].generated_outputs[requested_output], dict) \
                             and requested_output[0:22] == "distribution_of_strata":
