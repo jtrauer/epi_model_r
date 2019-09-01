@@ -1339,7 +1339,33 @@ class StratifiedModel(EpiModel):
             self.strains = strata_names
 
         # heterogeneous infectiousness adjustments
+        self.find_infectious_indices()
+
         self.prepare_infectiousness_levels(stratification_name, strata_names, infectiousness_adjustments)
+
+        self.infectiousness_multipliers_list = [1.] * len(self.compartment_names)
+        for n_comp, compartment in enumerate(self.compartment_names):
+            for modifier in self.infectiousness_levels:
+                if modifier in find_name_components(compartment):
+                    self.infectiousness_multipliers_list[n_comp] *= self.infectiousness_levels[modifier]
+
+        self.mixing_category_indices = {}
+        for category in self.mixing_categories:
+            self.mixing_category_indices[category] = []
+            for compartment in self.compartment_names:
+                include = True if all([component in find_name_components(compartment) for
+                                       component in find_name_components(category)]) else False
+                self.mixing_category_indices[category].append(include)
+
+        self.strain_mixing_multipliers = {}
+        for strain in self.strains + ["all_strains"]:
+            self.strain_mixing_multipliers[strain] = {}
+            for category in self.mixing_category_indices:
+                self.strain_mixing_multipliers[strain][category] = \
+                    [self.infectiousness_multipliers_list[comp] *
+                     float(self.mixing_category_indices[category][comp]) * float(self.infectious_indices[strain][comp])
+                     for comp in range(len(self.compartment_names))]
+
 
     """
     standard pre-integration methods
@@ -1642,13 +1668,19 @@ class StratifiedModel(EpiModel):
                     stratify_to else self.transition_flows.to[_n_flow]
 
                 # add the new flow
+                strain = stratum if _stratification_name == "strain" else self.transition_flows.strain[_n_flow]
+                print(strain)
+
                 self.transition_flows = self.transition_flows.append(
                     {"type": self.transition_flows.type[_n_flow],
                      "parameter": parameter_name,
                      "origin": from_compartment,
                      "to": to_compartment,
-                     "implement": len(self.all_stratifications)},
+                     "implement": len(self.all_stratifications),
+                     "strain": strain},
                     ignore_index=True)
+
+
 
         # if flow applies to a transition not involved in the stratification, still increment to ensure implemented
         else:
@@ -2033,7 +2065,6 @@ class StratifiedModel(EpiModel):
             for stratum in _infectiousness_adjustments:
                 self.infectiousness_levels[create_stratum_name(_stratification_name, stratum, joining_string="")] = \
                     _infectiousness_adjustments[stratum]
-        self.find_infectious_indices()
         for strain in self.infectious_indices:
             self.infectious_compartments[strain] = \
                 list(itertools.compress(self.compartment_names, self.infectious_indices[strain]))
@@ -2152,7 +2183,7 @@ class StratifiedModel(EpiModel):
             # get the new function to act on the less stratified function (closer to the "tree-trunk")
             if component not in self.parameters:
                 raise ValueError("parameter component %s not found in parameters attribute" % component)
-            elif type(self.parameters[component]) == float:
+            elif isinstance(self.parameters[component], float):
                 update_function = create_multiplicative_function(self.parameters[component])
             elif type(self.parameters[component]) == str:
                 update_function = create_time_variant_multiplicative_function(self.adaptation_functions[component])
@@ -2242,17 +2273,22 @@ class StratifiedModel(EpiModel):
         :param _compartment_values: ndarray
             current values for the compartment sizes
         """
+        self.infectious_populations_shadow = {}
+        if self.mixing_categories:
+            for strain in self.strains if self.strains else ["all_strains"]:
+                self.infectious_populations_shadow[strain] = []
+                for category in self.mixing_categories:
+                    self.infectious_populations_shadow[strain].append(sum(element_list_multiplication(
+                        _compartment_values, self.strain_mixing_multipliers[strain][category])))
+
+
         if not self.strains:
-            infectious_populations = \
+            print()
+
+            self.infectious_populations = \
                 element_list_multiplication(
                     list(itertools.compress(_compartment_values, self.infectious_indices["all_strains"])),
                     self.infectiousness_multipliers["all_strains"])
-            self.infectious_populations = []
-
-            for category in self.mixing_categories:
-                category_indices = [category in i for i in list(itertools.compress(self.compartment_names, self.infectious_indices["all_strains"]))]
-                infectious_pop = sum(list(itertools.compress(infectious_populations, category_indices)))
-                self.infectious_populations.append(infectious_pop)
         else:
             self.infectious_populations = {}
             for strain in self.strains:
@@ -2304,7 +2340,7 @@ class StratifiedModel(EpiModel):
             return infectious_populations / self.infectious_denominators
         elif self.transition_flows.at[n_flow, "type"] == "infection_frequency":
             return sum(element_list_multiplication(
-                infectious_populations,
+                self.infectious_populations_shadow[self.transition_flows.strain[n_flow]],
                 self.mixing_matrix[int(self.transition_flows.force_index[n_flow]), :])) / \
                    sum(self.infectious_denominators)
 
