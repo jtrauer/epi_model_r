@@ -2126,7 +2126,7 @@ class StratifiedModel(EpiModel):
 
         self.mixing_category_indices = {}
         if self.mixing_matrix is not None:
-            for category in self.mixing_category_indices:
+            for category in self.mixing_categories:
                 self.mixing_category_indices[category] = []
                 for compartment in self.compartment_names:
                     include = True if all([component in find_name_components(compartment) for
