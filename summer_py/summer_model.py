@@ -856,7 +856,7 @@ class EpiModel:
                 self.update_tracked_quantities(compartment_values)
                 return self.apply_all_flow_types_to_odes([0.0] * len(self.compartment_names), compartment_values, time)
 
-            self.outputs = odeint(make_model_function, self.compartment_values, self.times, atol=1.e-3., rtol=1.e-3)
+            self.outputs = odeint(make_model_function, self.compartment_values, self.times, atol=1.e-3, rtol=1.e-3)
 
         # alternative integration method
         elif self.integration_type == "solve_ivp":
