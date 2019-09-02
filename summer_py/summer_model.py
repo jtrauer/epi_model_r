@@ -1343,28 +1343,6 @@ class StratifiedModel(EpiModel):
 
         self.prepare_infectiousness_levels(stratification_name, strata_names, infectiousness_adjustments)
 
-        self.infectiousness_multipliers_list = [1.] * len(self.compartment_names)
-        for n_comp, compartment in enumerate(self.compartment_names):
-            for modifier in self.infectiousness_levels:
-                if modifier in find_name_components(compartment):
-                    self.infectiousness_multipliers_list[n_comp] *= self.infectiousness_levels[modifier]
-
-        self.mixing_category_indices = {}
-        for category in self.mixing_categories:
-            self.mixing_category_indices[category] = []
-            for compartment in self.compartment_names:
-                include = True if all([component in find_name_components(compartment) for
-                                       component in find_name_components(category)]) else False
-                self.mixing_category_indices[category].append(include)
-
-        self.strain_mixing_multipliers = {}
-        for strain in self.strains + ["all_strains"]:
-            self.strain_mixing_multipliers[strain] = {}
-            for category in self.mixing_category_indices:
-                self.strain_mixing_multipliers[strain][category] = \
-                    [self.infectiousness_multipliers_list[comp] *
-                     float(self.mixing_category_indices[category][comp]) * float(self.infectious_indices[strain][comp])
-                     for comp in range(len(self.compartment_names))]
 
 
     """
@@ -1669,8 +1647,6 @@ class StratifiedModel(EpiModel):
 
                 # add the new flow
                 strain = stratum if _stratification_name == "strain" else self.transition_flows.strain[_n_flow]
-                print(strain)
-
                 self.transition_flows = self.transition_flows.append(
                     {"type": self.transition_flows.type[_n_flow],
                      "parameter": parameter_name,
@@ -1679,8 +1655,6 @@ class StratifiedModel(EpiModel):
                      "implement": len(self.all_stratifications),
                      "strain": strain},
                     ignore_index=True)
-
-
 
         # if flow applies to a transition not involved in the stratification, still increment to ensure implemented
         else:
@@ -2027,6 +2001,7 @@ class StratifiedModel(EpiModel):
                     if find_stem(compartment) in self.infectious_compartment:
                         self.mixing_numerator_indices[from_stratum].append(n_comp)
 
+
     def add_force_indices_to_transitions(self):
         """
         find the indices from the force of infection vector to be applied for each infection flow and populate to the
@@ -2140,6 +2115,38 @@ class StratifiedModel(EpiModel):
         for compartment in self.compartment_names:
             self.mortality_components[compartment] = self.find_mortality_components(compartment)
             self.create_mortality_functions(compartment, self.mortality_components[compartment])
+
+
+
+        self.infectiousness_multipliers_list = [1.] * len(self.compartment_names)
+        for n_comp, compartment in enumerate(self.compartment_names):
+            for modifier in self.infectiousness_levels:
+                if modifier in find_name_components(compartment):
+                    self.infectiousness_multipliers_list[n_comp] *= self.infectiousness_levels[modifier]
+
+        self.mixing_category_indices = {}
+        if self.mixing_matrix is not None:
+            for category in self.mixing_category_indices:
+                self.mixing_category_indices[category] = []
+                for compartment in self.compartment_names:
+                    include = True if all([component in find_name_components(compartment) for
+                                           component in find_name_components(category)]) else False
+                    self.mixing_category_indices[category].append(include)
+        else:
+            self.mixing_category_indices["all_population"] = [True] * len(self.compartment_names)
+
+
+        self.strain_mixing_multipliers = {}
+        for strain in self.strains + ["all_strains"]:
+            self.strain_mixing_multipliers[strain] = {}
+            for category in self.mixing_category_indices if self.mixing_matrix is not None else ["all_population"]:
+                self.strain_mixing_multipliers[strain][category] = \
+                    [self.infectiousness_multipliers_list[comp] *
+                     float(self.mixing_category_indices[category][comp]) * float(self.infectious_indices[strain][comp])
+                     for comp in range(len(self.compartment_names))]
+
+        if self.mixing_matrix is None:
+            self.mixing_denominator_indices["all_population"] = list(range(len(self.compartment_names)))
 
     def find_transition_components(self, _parameter):
         """
@@ -2274,17 +2281,21 @@ class StratifiedModel(EpiModel):
             current values for the compartment sizes
         """
         self.infectious_populations_shadow = {}
-        if self.mixing_categories:
-            for strain in self.strains if self.strains else ["all_strains"]:
-                self.infectious_populations_shadow[strain] = []
-                for category in self.mixing_categories:
-                    self.infectious_populations_shadow[strain].append(sum(element_list_multiplication(
-                        _compartment_values, self.strain_mixing_multipliers[strain][category])))
+        for strain in self.strains if self.strains else ["all_strains"]:
+            self.infectious_populations_shadow[strain] = []
+            for category in self.mixing_categories if self.mixing_matrix is not None else ["all_population"]:
+                self.infectious_populations_shadow[strain].append(sum(element_list_multiplication(
+                    _compartment_values, self.strain_mixing_multipliers[strain][category])))
+
+        self.infectious_denominators = []
+        for from_stratum in self.mixing_categories if self.mixing_matrix is not None else ["all_population"]:
+            self.infectious_denominators.append(
+                sum([_compartment_values[i] for i in self.mixing_denominator_indices[from_stratum]]))
+
+        # print()
 
 
         if not self.strains:
-            print()
-
             self.infectious_populations = \
                 element_list_multiplication(
                     list(itertools.compress(_compartment_values, self.infectious_indices["all_strains"])),
@@ -2323,22 +2334,27 @@ class StratifiedModel(EpiModel):
         if "infection" not in self.transition_flows.at[n_flow, "type"]:
             return 1.0
 
-        if not self.strains:
-            infectious_populations = self.infectious_populations
-        else:
-            infectious_populations = \
-                self.infectious_populations[find_stratum_index_from_string(
-                    self.transition_flows.at[n_flow, "parameter"], "strain")]
+        # if not self.strains:
+        #     infectious_populations = self.infectious_populations
+        # else:
+        #     infectious_populations = self.infectious_populations_shadow[self.transition_flows.strain[n_flow]][0]
+        #     print(infectious_populations)
+        #     infectious_populations = \
+        #         self.infectious_populations[find_stratum_index_from_string(
+        #             self.transition_flows.at[n_flow, "parameter"], "strain")]
+        #     print(infectious_populations)
 
-        if self.transition_flows.at[n_flow, "type"] == "infection_density" and self.mixing_matrix is None:
-            return infectious_populations
-        elif self.transition_flows.at[n_flow, "type"] == "infection_density":
+
+        if self.transition_flows.type[n_flow] == "infection_density" and self.mixing_matrix is None:
+            return self.infectious_populations_shadow[self.transition_flows.strain[n_flow]][0]
+        elif self.transition_flows.type[n_flow] == "infection_density":
             return sum(element_list_multiplication(
-                infectious_populations,
+                self.infectious_populations_shadow[self.transition_flows.strain[n_flow]],
                 self.mixing_matrix[int(self.transition_flows.force_index[n_flow]), :]))
-        elif self.transition_flows.at[n_flow, "type"] == "infection_frequency" and self.mixing_matrix is None:
-            return infectious_populations / self.infectious_denominators
-        elif self.transition_flows.at[n_flow, "type"] == "infection_frequency":
+        elif self.transition_flows.type[n_flow] == "infection_frequency" and self.mixing_matrix is None:
+            return self.infectious_populations_shadow[self.transition_flows.strain[n_flow]][0] / \
+                   self.infectious_denominators
+        elif self.transition_flows.type[n_flow] == "infection_frequency":
             return sum(element_list_multiplication(
                 self.infectious_populations_shadow[self.transition_flows.strain[n_flow]],
                 self.mixing_matrix[int(self.transition_flows.force_index[n_flow]), :])) / \
