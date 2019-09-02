@@ -200,12 +200,13 @@ def intelligent_convert_string(string):
 
 
 class Outputs:
-    def __init__(self, post_processing_list, out_dir='outputs'):
+    def __init__(self, post_processing_list, targets_to_plot={}, out_dir='outputs'):
         """
         :param post_processing: an object of class post_processing associated with a run model
         :param out_dir: the name of the directory where to write the outputs
         """
         self.post_processing_list = post_processing_list
+        self.targets_to_plot = targets_to_plot
         self.out_dir = out_dir
         self.scenario_names = []
 
@@ -357,6 +358,17 @@ class Outputs:
                         axis = find_panel_grid_indices([axes], 0, n_rows, n_cols)
                         output_name = requested_output
 
+                        # plot targets
+                        if requested_output in self.targets_to_plot.keys():
+                            for marker_size in [100., 30.]:
+                                axis.scatter(self.targets_to_plot[requested_output][0],
+                                             self.targets_to_plot[requested_output][1], marker='o', color='red',
+                                             s=marker_size)
+                                axis.scatter(self.targets_to_plot[requested_output][0],
+                                             self.targets_to_plot[requested_output][1], marker='o', color='white',
+                                             s=marker_size-20.)
+
+
                     times_to_plot = self.post_processing_list[scenario_index].model.times if \
                             requested_output not in self.post_processing_list[scenario_index].requested_times.keys() else \
                             self.post_processing_list[scenario_index].requested_times[requested_output]
@@ -457,9 +469,10 @@ if __name__ == "__main__":
     pp = post_proc.PostProcessing(sir_model, req_outputs, req_times, multipliers)
     pp2 = post_proc.PostProcessing(sir_model, req_outputs, req_times, multipliers)
 
+    targets_to_plot = {'prevXinfectiousXamongXage_10Xstrain_sensitive': [[0.01, 0.05], [20000., 80000.]]}
 
     # generate outputs
-    outputs = Outputs([pp, pp2, pp, pp, pp, pp, pp, pp])
+    outputs = Outputs([pp, pp2], targets_to_plot=targets_to_plot)
     outputs.plot_requested_outputs()
 
 
