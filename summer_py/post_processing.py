@@ -33,8 +33,6 @@ class PostProcessing:
     """
     def __init__(self, model, requested_outputs, requested_times={}, multipliers={}):
         self.model = model
-        self.check_model_type_and_convert()
-
         self.requested_outputs = requested_outputs
         self.requested_times = requested_times
         self.multipliers = multipliers
@@ -45,19 +43,6 @@ class PostProcessing:
         self.check()
         self.interpret_requested_outputs()
         self.generate_outputs()
-
-    def check_model_type_and_convert(self):
-        """
-        At this stage, the model attribute could be an object of class EpiModel or a dictionary (if loaded after save)
-        This method will convert the attribute to an object of class 'DummyModel' if it is a dictionary.
-        """
-        if isinstance(self.model, dict):
-            class DummyModel:
-                def __init_(self, model_dict):
-                    for key in model_dict.keys():
-                        setattr(self, key, model_dict[key])
-
-            self.model = DummyModel(self.model)
 
     def check(self):
         """
