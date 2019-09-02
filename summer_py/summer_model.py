@@ -925,6 +925,10 @@ class EpiModel:
             # calculate the n_flow and apply to the odes
             from_compartment = self.compartment_names.index(self.transition_flows.origin[n_flow])
             net_flow = parameter_value * _compartment_values[from_compartment] * infectious_population
+            if 'ipt' in self.transition_flows.parameter[n_flow]:
+                net_flow = parameter_value * infectious_population * self.infectious_denominators
+                net_flow = min([net_flow, _compartment_values[from_compartment]])
+
             _ode_equations = increment_list_by_index(_ode_equations, from_compartment, -net_flow)
             _ode_equations = increment_list_by_index(
                 _ode_equations, self.compartment_names.index(self.transition_flows.to[n_flow]), net_flow)
