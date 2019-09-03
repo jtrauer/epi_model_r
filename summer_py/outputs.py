@@ -171,36 +171,8 @@ def add_title_to_plot(fig, n_panels, content):
                  fontsize=greater_font_sizes[n_panels] if n_panels in greater_font_sizes else 10)
 
 
-def intelligent_convert_string(string):
-    """
-    returns a more readable version of string for figure title ...
-    """
-    if string[0:22] == 'distribution_of_strata':
-        return "Population distribution by " + string.split("X")[1]
-    elif string[0:4] == 'prev':
-        char = "Prevalence of "
-        numerator_groups = string.split('among')[0].split('X')[1:]
-        for group in numerator_groups:
-            char += group + " "
-
-        subgroup = string.split("among")[1]
-        if len(subgroup) > 0:
-            char += "("
-            need_comma = False
-            for group in subgroup.split("X"):
-                if len(group)>0:
-                    if need_comma:
-                        char += ", "
-                    char += group
-                    need_comma = True
-            char += ")"
-        return char
-    else:
-        return string
-
-
 class Outputs:
-    def __init__(self, post_processing_list, targets_to_plot={}, out_dir='outputs'):
+    def __init__(self, post_processing_list, targets_to_plot={}, out_dir='outputs', translation_dict={}):
         """
         :param post_processing: an object of class post_processing associated with a run model
         :param out_dir: the name of the directory where to write the outputs
@@ -208,6 +180,7 @@ class Outputs:
         self.post_processing_list = post_processing_list
         self.targets_to_plot = targets_to_plot
         self.out_dir = out_dir
+        self.translation_dict = translation_dict
         self.scenario_names = []
 
         self.create_out_directories()
@@ -279,7 +252,7 @@ class Outputs:
 
         # axis label
         if x_label is not None:
-            axis.set_xlabel(intelligent_convert_string(x_label), fontsize=get_label_font_size(max_dims))
+            axis.set_xlabel(self.intelligent_convert_string(x_label), fontsize=get_label_font_size(max_dims))
 
     def tidy_y_axis(self, axis, quantity, max_dims, left_axis=True, max_value=1e6, space_at_top=.1, y_label=None,
                     y_lims=None, allow_negative=False):
@@ -323,7 +296,36 @@ class Outputs:
 
         # axis label
         if y_label and left_axis:
-            axis.set_ylabel(intelligent_convert_string(y_label), fontsize=get_label_font_size(max_dims))
+            axis.set_ylabel(self.intelligent_convert_string(y_label), fontsize=get_label_font_size(max_dims))
+
+    def intelligent_convert_string(self, string):
+        """
+        returns a more readable version of string for figure title ...
+        """
+        if string in self.translation_dict.keys():
+            return self.translation_dict[string]
+        elif string[0:22] == 'distribution_of_strata':
+            return "Population distribution by " + string.split("X")[1]
+        elif string[0:4] == 'prev':
+            char = "Prevalence of "
+            numerator_groups = string.split('among')[0].split('X')[1:]
+            for group in numerator_groups:
+                char += group + " "
+
+            subgroup = string.split("among")[1]
+            if len(subgroup) > 0:
+                char += "("
+                need_comma = False
+                for group in subgroup.split("X"):
+                    if len(group)>0:
+                        if need_comma:
+                            char += ", "
+                        char += group
+                        need_comma = True
+                char += ")"
+            return char
+        else:
+            return string
 
     def finish_off_figure(self, fig, filename, n_plots=1, title_text=None):
         """
@@ -336,7 +338,7 @@ class Outputs:
             title_text: Text for the title of the figure
         """
         if title_text is not None:
-            add_title_to_plot(fig, n_plots, intelligent_convert_string(title_text))
+            add_title_to_plot(fig, n_plots, self.intelligent_convert_string(title_text))
         filename = os.path.join(self.out_dir, filename + '.png')
         fig.savefig(filename, dpi=300)
         pyplot.close(fig)
@@ -435,6 +437,7 @@ class Outputs:
         self.tidy_y_axis(axis, quantity='', max_dims=1, y_label=y_label, max_value=y_max)
 
 
+
 if __name__ == "__main__":
     # build and run an example model
     sir_model = sm.StratifiedModel(
@@ -470,9 +473,10 @@ if __name__ == "__main__":
     pp2 = post_proc.PostProcessing(sir_model, req_outputs, req_times, multipliers)
 
     targets_to_plot = {'prevXinfectiousXamongXage_10Xstrain_sensitive': [[0.01, 0.05], [20000., 80000.]]}
+    translation_dict = {'prevXinfectiousXamongXage_10Xstrain_sensitive': 'Prevalence of TB among 10-30 years old'}
 
     # generate outputs
-    outputs = Outputs([pp, pp2], targets_to_plot=targets_to_plot)
+    outputs = Outputs([pp, pp2], targets_to_plot=targets_to_plot, translation_dict=translation_dict)
     outputs.plot_requested_outputs()
 
 
