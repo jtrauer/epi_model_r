@@ -2137,7 +2137,6 @@ class StratifiedModel(EpiModel):
         if self.mixing_matrix is None:
             self.mixing_denominator_indices["all_population"] = list(range(len(self.compartment_names)))
 
-
     def find_infectious_indices(self):
         """
         find the infectious indices by strain and overall, as opposed to just overall in EpiModel
@@ -2149,9 +2148,9 @@ class StratifiedModel(EpiModel):
         self.infectious_indices["all_strains"] = self.find_all_infectious_indices()
         if self.strains:
             for strain in self.strains:
-                print(strain)
                 self.infectious_indices[strain] = \
-                    ["strain_" + strain in find_name_components(comp) and self.infectious_indices["all_strains"][i_comp]
+                    [create_stratum_name("strain", strain, joining_string="")
+                     in find_name_components(comp) and self.infectious_indices["all_strains"][i_comp]
                      for i_comp, comp in enumerate(self.compartment_names)]
 
     def find_transition_components(self, _parameter):
