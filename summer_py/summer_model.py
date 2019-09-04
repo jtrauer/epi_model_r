@@ -613,7 +613,7 @@ class EpiModel:
         """
 
         # set flow attributes as pandas data frames with fixed column names
-        self.transition_flows = pd.DataFrame(columns=("type", "parameter", "origin", "to", "implement"))
+        self.transition_flows = pd.DataFrame(columns=("type", "parameter", "origin", "to", "implement", "strain"))
         self.death_flows = pd.DataFrame(columns=("type", "parameter", "origin", "implement"))
 
         # attributes with specific format that are independent of user inputs
@@ -656,9 +656,6 @@ class EpiModel:
 
         # add any missing quantities that will be needed
         self.initialise_default_quantities()
-
-        # find the compartments that are infectious
-        self.infectious_indices = self.find_all_infectious_indices()
 
     def check_and_report_attributes(
             self, _times, _compartment_types, _initial_conditions, _parameters, _requested_flows,
@@ -848,7 +845,9 @@ class EpiModel:
         main function to integrate model odes, called externally in the master running script
         """
         self.output_to_user("\n-----\nnow integrating")
-        self.prepare_stratified_parameter_calculations()
+        self.prepare_to_run()
+
+        print("running")
 
         # basic default integration method
         if self.integration_type == "odeint":
@@ -884,11 +883,12 @@ class EpiModel:
             raise ValueError("integration approach requested not available")
         self.output_to_user("integration complete")
 
-    def prepare_stratified_parameter_calculations(self):
+    def prepare_to_run(self):
         """
-        for use in the stratified version only
+        primarily for use in the stratified version only
+        here find the compartments that are infectious
         """
-        pass
+        self.infectious_indices = self.find_all_infectious_indices()
 
     def apply_all_flow_types_to_odes(self, _ode_equations, _compartment_values, _time):
         """
@@ -1328,26 +1328,22 @@ class StratifiedModel(EpiModel):
         self.stratify_universal_death_rate(
             stratification_name, strata_names, adjustment_requests, compartment_types_to_stratify)
 
+        # if a multi-strain model
+        self.strains = strata_names if stratification_name == "strain" else self.strains
+
         # check submitted mixing matrix and combine with existing matrix, if any
         self.prepare_mixing_matrix(mixing_matrix, stratification_name, strata_names)
 
-        # implement heterogeneous mixing across multiple population groups
-        self.prepare_implement_mixing()
-
-        # if a multi-strain model
-        if stratification_name == "strain":
-            self.strains = strata_names
-
-        # heterogeneous infectiousness adjustments
-        self.find_infectious_indices()
-
+        # prepare infectiousness levels attribute
         self.prepare_infectiousness_levels(stratification_name, strata_names, infectiousness_adjustments)
-
-
 
     """
     standard pre-integration methods
     """
+
+    def prepare_to_run(self):
+        self.prepare_stratified_parameter_calculations()
+        self.prepare_infectiousness_calculations()
 
     def prepare_and_check_stratification(
             self, _stratification_name, _strata_names, _compartment_types_to_stratify, _adjustment_requests, _verbose):
@@ -2040,30 +2036,6 @@ class StratifiedModel(EpiModel):
             for stratum in _infectiousness_adjustments:
                 self.infectiousness_levels[create_stratum_name(_stratification_name, stratum, joining_string="")] = \
                     _infectiousness_adjustments[stratum]
-        for strain in self.infectious_indices:
-            self.infectious_compartments[strain] = \
-                list(itertools.compress(self.compartment_names, self.infectious_indices[strain]))
-            self.infectiousness_multipliers[strain] = [1.] * len(self.infectious_compartments[strain])
-            for n_comp, compartment in enumerate(self.infectious_compartments[strain]):
-                for infectiousness_modifier in self.infectiousness_levels:
-                    if infectiousness_modifier in find_name_components(compartment):
-                        self.infectiousness_multipliers[strain][n_comp] *= \
-                            self.infectiousness_levels[infectiousness_modifier]
-
-    def find_infectious_indices(self):
-        """
-        find the infectious indices by strain and overall, as opposed to just overall in EpiModel
-        note that this changes the structure by one hierarchical level compared to EpiModel - in that previously we had
-            self.infectious_indices a list of infectious indices and now it is has a dictionary structure at the highest
-            level, followed by keys for each strain with lists as values that are equivalent to the
-            self.infectious_indices list for the unstratified version
-        """
-        self.infectious_indices["all_strains"] = self.find_all_infectious_indices()
-        if self.strains:
-            for strain in self.strains:
-                self.infectious_indices[strain] = \
-                    [strain in comp and self.infectious_indices["all_strains"][i_comp]
-                     for i_comp, comp in enumerate(self.compartment_names)]
 
     def set_ageing_rates(self, _strata_names):
         """
@@ -2116,6 +2088,23 @@ class StratifiedModel(EpiModel):
             self.mortality_components[compartment] = self.find_mortality_components(compartment)
             self.create_mortality_functions(compartment, self.mortality_components[compartment])
 
+    def prepare_infectiousness_calculations(self):
+
+        # heterogeneous infectiousness adjustments
+        self.find_infectious_indices()
+
+        for strain in self.infectious_indices:
+            self.infectious_compartments[strain] = \
+                list(itertools.compress(self.compartment_names, self.infectious_indices[strain]))
+            self.infectiousness_multipliers[strain] = [1.] * len(self.infectious_compartments[strain])
+            for n_comp, compartment in enumerate(self.infectious_compartments[strain]):
+                for infectiousness_modifier in self.infectiousness_levels:
+                    if infectiousness_modifier in find_name_components(compartment):
+                        self.infectiousness_multipliers[strain][n_comp] *= \
+                            self.infectiousness_levels[infectiousness_modifier]
+
+        # implement heterogeneous mixing across multiple population groups
+        self.prepare_implement_mixing()
 
 
         self.infectiousness_multipliers_list = [1.] * len(self.compartment_names)
@@ -2147,6 +2136,23 @@ class StratifiedModel(EpiModel):
 
         if self.mixing_matrix is None:
             self.mixing_denominator_indices["all_population"] = list(range(len(self.compartment_names)))
+
+
+    def find_infectious_indices(self):
+        """
+        find the infectious indices by strain and overall, as opposed to just overall in EpiModel
+        note that this changes the structure by one hierarchical level compared to EpiModel - in that previously we had
+            self.infectious_indices a list of infectious indices and now it is has a dictionary structure at the highest
+            level, followed by keys for each strain with lists as values that are equivalent to the
+            self.infectious_indices list for the unstratified version
+        """
+        self.infectious_indices["all_strains"] = self.find_all_infectious_indices()
+        if self.strains:
+            for strain in self.strains:
+                print(strain)
+                self.infectious_indices[strain] = \
+                    ["strain_" + strain in find_name_components(comp) and self.infectious_indices["all_strains"][i_comp]
+                     for i_comp, comp in enumerate(self.compartment_names)]
 
     def find_transition_components(self, _parameter):
         """
@@ -2295,18 +2301,18 @@ class StratifiedModel(EpiModel):
         # print()
 
 
-        if not self.strains:
-            self.infectious_populations = \
-                element_list_multiplication(
-                    list(itertools.compress(_compartment_values, self.infectious_indices["all_strains"])),
-                    self.infectiousness_multipliers["all_strains"])
-        else:
-            self.infectious_populations = {}
-            for strain in self.strains:
-                self.infectious_populations[strain] = \
-                    element_list_multiplication(
-                        list(itertools.compress(_compartment_values, self.infectious_indices[strain])),
-                        self.infectiousness_multipliers[strain])
+        # if not self.strains:
+        #     self.infectious_populations = \
+        #         element_list_multiplication(
+        #             list(itertools.compress(_compartment_values, self.infectious_indices["all_strains"])),
+        #             self.infectiousness_multipliers["all_strains"])
+        # else:
+        #     self.infectious_populations = {}
+        #     for strain in self.strains:
+        #         self.infectious_populations[strain] = \
+        #             element_list_multiplication(
+        #                 list(itertools.compress(_compartment_values, self.infectious_indices[strain])),
+        #                 self.infectiousness_multipliers[strain])
 
         if self.mixing_matrix is None:
             if not self.strains:
