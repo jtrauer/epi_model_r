@@ -613,7 +613,8 @@ class EpiModel:
         """
 
         # set flow attributes as pandas data frames with fixed column names
-        self.transition_flows = pd.DataFrame(columns=("type", "parameter", "origin", "to", "implement", "strain"))
+        self.transition_flows = \
+            pd.DataFrame(columns=("type", "parameter", "origin", "to", "implement", "strain", "force_index"))
         self.death_flows = pd.DataFrame(columns=("type", "parameter", "origin", "implement"))
 
         # attributes with specific format that are independent of user inputs
@@ -1974,28 +1975,27 @@ class StratifiedModel(EpiModel):
                  for old_strata, new_strata in itertools.product(self.mixing_categories, _strata_names)]
             self.mixing_matrix = numpy.kron(self.mixing_matrix, _mixing_matrix)
 
-    def find_mixing_indices(self):
+    def find_mixing_denominators(self):
         """
         find the indices for the infectious compartments relevant to the column of the mixing matrix
         """
-        self.mixing_numerator_indices, self.mixing_denominator_indices = {}, {}
-        for from_stratum in self.mixing_categories:
-            self.mixing_numerator_indices[from_stratum], self.mixing_denominator_indices[from_stratum] = [], []
-            for n_comp, compartment in enumerate(self.compartment_names):
-                if all(stratum in find_name_components(compartment)[1:]
-                       for stratum in find_name_components(from_stratum)):
-                    self.mixing_denominator_indices[from_stratum].append(n_comp)
-                    if find_stem(compartment) in self.infectious_compartment:
-                        self.mixing_numerator_indices[from_stratum].append(n_comp)
-
+        if self.mixing_matrix is not None:
+            for from_stratum in self.mixing_categories:
+                self.mixing_denominator_indices[from_stratum] = []
+                for n_comp, compartment in enumerate(self.compartment_names):
+                    if all(stratum in find_name_components(compartment)[1:]
+                           for stratum in find_name_components(from_stratum)):
+                        self.mixing_denominator_indices[from_stratum].append(n_comp)
+        else:
+            self.mixing_denominator_indices["all_population"] = list(range(len(self.compartment_names)))
 
     def add_force_indices_to_transitions(self):
         """
         find the indices from the force of infection vector to be applied for each infection flow and populate to the
-        force_index column of the flows frame
+            force_index column of the flows frame
         """
 
-        # identify the indices of the infection-related flows to be implemented
+        # identify the indices of all the infection-related flows to be implemented
         infection_flow_indices = \
             [n_flow for n_flow, flow in enumerate(self.transition_flows.type)
              if "infection" in flow and self.transition_flows.implement[n_flow] == len(self.all_stratifications)]
@@ -2003,9 +2003,9 @@ class StratifiedModel(EpiModel):
         # loop through them and find the indices of the mixing matrix that will apply to that flow
         for n_flow in infection_flow_indices:
             for n_group, force_group in enumerate(self.mixing_categories):
-                if all(stratum in find_name_components(self.transition_flows.origin[n_flow])[1:]
+                if all(stratum in find_name_components(self.transition_flows.origin[n_flow])
                        for stratum in find_name_components(force_group)):
-                    self.transition_flows.at[n_flow, "force_index"] = n_group
+                    self.transition_flows.force_index[n_flow] = n_group
 
     def prepare_infectiousness_levels(self, _stratification_name, _strata_names, _infectiousness_adjustments):
         """
@@ -2080,13 +2080,10 @@ class StratifiedModel(EpiModel):
             self.create_mortality_functions(compartment, self.mortality_components[compartment])
 
     def prepare_infectiousness_calculations(self):
-
-        # heterogeneous infectiousness adjustments
         self.find_infectious_indices()
+        self.find_mixing_denominators()
 
-        # implement heterogeneous mixing across multiple population groups
         if self.mixing_matrix is not None:
-            self.find_mixing_indices()
             self.add_force_indices_to_transitions()
 
         self.infectiousness_multipliers = [1.] * len(self.compartment_names)
@@ -2106,7 +2103,6 @@ class StratifiedModel(EpiModel):
         else:
             self.mixing_category_indices["all_population"] = [True] * len(self.compartment_names)
 
-
         self.strain_mixing_multipliers = {}
         for strain in self.strains + ["all_strains"]:
             self.strain_mixing_multipliers[strain] = {}
@@ -2115,9 +2111,6 @@ class StratifiedModel(EpiModel):
                     [self.infectiousness_multipliers[comp] *
                      float(self.mixing_category_indices[category][comp]) * float(self.infectious_indices[strain][comp])
                      for comp in range(len(self.compartment_names))]
-
-        if self.mixing_matrix is None:
-            self.mixing_denominator_indices["all_population"] = list(range(len(self.compartment_names)))
 
     def find_infectious_indices(self):
         """
