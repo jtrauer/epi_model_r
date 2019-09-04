@@ -2000,12 +2000,18 @@ class StratifiedModel(EpiModel):
             [n_flow for n_flow, flow in enumerate(self.transition_flows.type)
              if "infection" in flow and self.transition_flows.implement[n_flow] == len(self.all_stratifications)]
 
-        # loop through them and find the indices of the mixing matrix that will apply to that flow
+        # loop through and find the index of the mixing matrix applicable to the flow, of which there should be only one
         for n_flow in infection_flow_indices:
+            found = False
             for n_group, force_group in enumerate(self.mixing_categories):
                 if all(stratum in find_name_components(self.transition_flows.origin[n_flow])
                        for stratum in find_name_components(force_group)):
                     self.transition_flows.force_index[n_flow] = n_group
+                    if found:
+                        raise ValueError("mixing group found twice for transition flow number %s" % n_flow)
+                    found = True
+            if not found:
+                raise ValueError("mixing group not found for transition flow number %s" % n_flow)
 
     def prepare_infectiousness_levels(self, _stratification_name, _strata_names, _infectiousness_adjustments):
         """
