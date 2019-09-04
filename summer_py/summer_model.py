@@ -1974,15 +1974,6 @@ class StratifiedModel(EpiModel):
                  for old_strata, new_strata in itertools.product(self.mixing_categories, _strata_names)]
             self.mixing_matrix = numpy.kron(self.mixing_matrix, _mixing_matrix)
 
-    def prepare_implement_mixing(self):
-        """
-        methods to be run if there is a mixing matrix being applied at all, regardless of whether one is being
-        introduced during this stratification process
-        """
-        if self.mixing_matrix is not None:
-            self.find_mixing_indices()
-            self.add_force_indices_to_transitions()
-
     def find_mixing_indices(self):
         """
         find the indices for the infectious compartments relevant to the column of the mixing matrix
@@ -2093,25 +2084,16 @@ class StratifiedModel(EpiModel):
         # heterogeneous infectiousness adjustments
         self.find_infectious_indices()
 
-        for strain in self.infectious_indices:
-            self.infectious_compartments[strain] = \
-                list(itertools.compress(self.compartment_names, self.infectious_indices[strain]))
-            self.infectiousness_multipliers[strain] = [1.] * len(self.infectious_compartments[strain])
-            for n_comp, compartment in enumerate(self.infectious_compartments[strain]):
-                for infectiousness_modifier in self.infectiousness_levels:
-                    if infectiousness_modifier in find_name_components(compartment):
-                        self.infectiousness_multipliers[strain][n_comp] *= \
-                            self.infectiousness_levels[infectiousness_modifier]
-
         # implement heterogeneous mixing across multiple population groups
-        self.prepare_implement_mixing()
+        if self.mixing_matrix is not None:
+            self.find_mixing_indices()
+            self.add_force_indices_to_transitions()
 
-
-        self.infectiousness_multipliers_list = [1.] * len(self.compartment_names)
+        self.infectiousness_multipliers = [1.] * len(self.compartment_names)
         for n_comp, compartment in enumerate(self.compartment_names):
             for modifier in self.infectiousness_levels:
                 if modifier in find_name_components(compartment):
-                    self.infectiousness_multipliers_list[n_comp] *= self.infectiousness_levels[modifier]
+                    self.infectiousness_multipliers[n_comp] *= self.infectiousness_levels[modifier]
 
         self.mixing_category_indices = {}
         if self.mixing_matrix is not None:
@@ -2130,7 +2112,7 @@ class StratifiedModel(EpiModel):
             self.strain_mixing_multipliers[strain] = {}
             for category in self.mixing_category_indices if self.mixing_matrix is not None else ["all_population"]:
                 self.strain_mixing_multipliers[strain][category] = \
-                    [self.infectiousness_multipliers_list[comp] *
+                    [self.infectiousness_multipliers[comp] *
                      float(self.mixing_category_indices[category][comp]) * float(self.infectious_indices[strain][comp])
                      for comp in range(len(self.compartment_names))]
 
@@ -2296,22 +2278,6 @@ class StratifiedModel(EpiModel):
         for from_stratum in self.mixing_categories if self.mixing_matrix is not None else ["all_population"]:
             self.infectious_denominators.append(
                 sum([_compartment_values[i] for i in self.mixing_denominator_indices[from_stratum]]))
-
-        # print()
-
-
-        # if not self.strains:
-        #     self.infectious_populations = \
-        #         element_list_multiplication(
-        #             list(itertools.compress(_compartment_values, self.infectious_indices["all_strains"])),
-        #             self.infectiousness_multipliers["all_strains"])
-        # else:
-        #     self.infectious_populations = {}
-        #     for strain in self.strains:
-        #         self.infectious_populations[strain] = \
-        #             element_list_multiplication(
-        #                 list(itertools.compress(_compartment_values, self.infectious_indices[strain])),
-        #                 self.infectiousness_multipliers[strain])
 
         if self.mixing_matrix is None:
             if not self.strains:
