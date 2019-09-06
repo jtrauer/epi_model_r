@@ -928,8 +928,9 @@ class EpiModel:
 
             # Provisional patch to implement IPT
             if 'ipt' in self.transition_flows.parameter[n_flow]:
-                # split the flow between L_A and L_B
-                net_flow = parameter_value * infectious_population * self.infectious_denominators / 2.
+                net_flow = parameter_value * infectious_population * self.infectious_denominators / \
+                           len([self.compartment_names[i] for i in range(len(self.compartment_names)) if
+                                self.compartment_names[i][0:12] == 'early_latent'])
 
                 # flow from L_A
                 extra_to_move = 0.
@@ -945,7 +946,7 @@ class EpiModel:
                 # now apply to L_B
                 from_compartment = self.compartment_names.index(self.transition_flows.origin[n_flow].replace(
                     'early_latent', 'late_latent'))
-                net_flow = min([net_flow + extra_to_move, _compartment_values[from_compartment]])
+                net_flow = min([extra_to_move, _compartment_values[from_compartment]])
 
             _ode_equations = increment_list_by_index(_ode_equations, from_compartment, -net_flow)
             _ode_equations = increment_list_by_index(
