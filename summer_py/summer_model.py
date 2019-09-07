@@ -2277,10 +2277,7 @@ class StratifiedModel(EpiModel):
                 self.infectious_populations[strain].append(sum(element_list_multiplication(
                     _compartment_values, self.strain_mixing_multipliers[strain][category])))
 
-        self.infectious_denominators = []
-        for category in mixing_categories:
-            self.infectious_denominators.append(
-                sum([_compartment_values[i_comp] for i_comp in self.mixing_denominator_indices[category]]))
+        self.infectious_denominators = sum(_compartment_values)
 
     def find_infectious_multiplier(self, n_flow):
         """
@@ -2298,7 +2295,7 @@ class StratifiedModel(EpiModel):
         strain = "all_strains" if not self.strains else self.transition_flows.strain[n_flow]
         mixing_elements = [1.0] if self.mixing_matrix is None else \
             list(self.mixing_matrix[self.transition_flows.force_index[n_flow], :])
-        denominator = 1.0 if "_density" in self.transition_flows.type[n_flow] else sum(self.infectious_denominators)
+        denominator = 1.0 if "_density" in self.transition_flows.type[n_flow] else self.infectious_denominators
         return sum(element_list_multiplication(self.infectious_populations[strain], mixing_elements)) / denominator
 
     def get_compartment_death_rate(self, _compartment, _time):
