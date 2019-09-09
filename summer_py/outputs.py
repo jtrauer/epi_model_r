@@ -172,7 +172,7 @@ def add_title_to_plot(fig, n_panels, content):
 
 
 class Outputs:
-    def __init__(self, post_processing_list, targets_to_plot={}, out_dir='outputs', translation_dict={}):
+    def __init__(self, post_processing_list,targets_to_plot={}, out_dir='outputs', translation_dict={}):
         """
         :param post_processing: an object of class post_processing associated with a run model
         :param out_dir: the name of the directory where to write the outputs
@@ -181,7 +181,7 @@ class Outputs:
         self.targets_to_plot = targets_to_plot
         self.out_dir = out_dir
         self.translation_dict = translation_dict
-        self.scenario_names = []
+        self.scenario_names = {}
 
         self.create_out_directories()
         self.colour_theme \
@@ -215,8 +215,9 @@ class Outputs:
             os.mkdir(self.out_dir)
 
         for scenario_index in range(len(self.post_processing_list)):
-            scenario_name = 'Baseline' if scenario_index == 0 else "Scenario " + str(scenario_index)
-            self.scenario_names.append(scenario_name)
+            scenario_number = self.post_processing_list[scenario_index].scenario_number
+            scenario_name = 'Baseline' if scenario_number == 0 else "Scenario " + str(scenario_number)
+            self.scenario_names[scenario_number] =scenario_name
 
             scenario_out_dir = os.path.join(self.out_dir, scenario_name)
             if not os.path.exists(scenario_out_dir):
@@ -271,6 +272,7 @@ class Outputs:
             allow_negative: Whether to set the bottom of the axis to zero
         """
 
+
         # axis range
         if y_lims:
             axis.set_ylim(y_lims)
@@ -281,7 +283,8 @@ class Outputs:
         elif 'prop_' in quantity or 'likelihood' in quantity or 'cost' in quantity:
             pass
         elif axis.get_ylim()[1] < max_value * (1. + space_at_top):
-            axis.set_ylim(top=max_value * (1. + space_at_top))
+            pass
+            # axis.set_ylim(top=max_value * (1. + space_at_top))
         if not allow_negative:
             axis.set_ylim(bottom=0.)
 
@@ -340,7 +343,7 @@ class Outputs:
         if title_text is not None:
             add_title_to_plot(fig, n_plots, self.intelligent_convert_string(title_text))
         filename = os.path.join(self.out_dir, filename + '.png')
-        fig.savefig(filename, dpi=300)
+        fig.savefig(filename, dpi=300, bbox_inches='tight')
         pyplot.close(fig)
 
     def plot_requested_outputs(self):
@@ -354,7 +357,8 @@ class Outputs:
                         continue
 
                 y_max = - 1.e9
-                for scenario_index in range(len(self.post_processing_list)):
+
+                for scenario_index, scenario_number in enumerate(self.scenario_names.keys()):
                     if not multi_plot or scenario_index == 0:
                         fig, axes, max_dims, n_rows, n_cols = initialise_figures_axes(1)
                         axis = find_panel_grid_indices([axes], 0, n_rows, n_cols)
@@ -376,13 +380,26 @@ class Outputs:
                             self.post_processing_list[scenario_index].requested_times[requested_output]
 
                     if isinstance(self.post_processing_list[scenario_index].generated_outputs[requested_output], list):
+
+                        if not multi_plot and scenario_index > 0:
+                            times_to_plot_0 = self.post_processing_list[0].model.times if \
+                                requested_output not in self.post_processing_list[0].requested_times.keys() else \
+                                self.post_processing_list[0].requested_times[requested_output]
+                            axis.plot(times_to_plot_0,
+                                  self.post_processing_list[0].generated_outputs[requested_output],
+                                  color=self.colour_theme[0],
+                                  label='Baseline')
+
+                        this_label = 'Scenario ' + str(scenario_number) if scenario_number>0 else "Baseline"
+
                         axis.plot(times_to_plot,
                                   self.post_processing_list[scenario_index].generated_outputs[requested_output],
-                                  color=self.colour_theme[scenario_index],
-                                  label='Scenario ' + str(scenario_index))
+                                  color=self.colour_theme[scenario_number],
+                                  label=this_label)
+
                         y_max = max([y_max,
                                     max(self.post_processing_list[scenario_index].generated_outputs[requested_output])])
-                        if scenario_index == 0:
+                        if scenario_index == 0 or not multi_plot:
                             self.tidy_x_axis(axis, start=min(times_to_plot), end=max(times_to_plot), max_dims=max_dims,
                                              x_label='time')
 
@@ -400,7 +417,9 @@ class Outputs:
                             dir_name = 'multi_plots'
                             axis.legend(bbox_to_anchor=(1., 1))
                         else:
-                            dir_name = self.scenario_names[scenario_index]
+                            dir_name = self.scenario_names[scenario_number]
+                            if scenario_index > 0:
+                                axis.legend(bbox_to_anchor=(1., 1))
 
                         file_name = os.path.join(dir_name, output_name)
                         self.finish_off_figure(fig, filename=file_name, title_text=output_name)
@@ -436,6 +455,32 @@ class Outputs:
         self.tidy_x_axis(axis, start=min(times_to_plot), end=max(times_to_plot), max_dims=1, x_label='time')
         self.tidy_y_axis(axis, quantity='', max_dims=1, y_label=y_label, max_value=y_max)
 
+    def plot_outputs_by_stratum(self, requested_output='prevXinfectious', sc_index=0):
+        all_groups = self.post_processing_list[sc_index].model.all_stratifications
+        for stratification in all_groups.keys():
+            fig, axes, max_dims, n_rows, n_cols = initialise_figures_axes(1)
+            axis = find_panel_grid_indices([axes], 0, n_rows, n_cols)
+
+            times_to_plot = self.post_processing_list[sc_index].model.times if \
+                            requested_output not in self.post_processing_list[sc_index].requested_times.keys() else \
+                            self.post_processing_list[sc_index].requested_times[requested_output]
+
+            for i, stratum in enumerate(all_groups[stratification]):
+                requested_output_for_stratum = requested_output + 'XamongX' + stratification + '_' + stratum
+                axis.plot(times_to_plot, self.post_processing_list[sc_index].generated_outputs[requested_output_for_stratum],
+                                  color=self.colour_theme[i+1],
+                                  label= self.translation_dict[stratification + '_' + stratum])
+
+            self.tidy_x_axis(axis, start=1990., end=max(times_to_plot), max_dims=max_dims,
+                                             x_label='time')
+            self.tidy_y_axis(axis, quantity='', max_dims=max_dims, y_label=requested_output + 'Xamong')
+
+            axis.legend(bbox_to_anchor=(1., 1))
+
+            scenario_name = self.scenario_names.values()[sc_index]
+
+            file_name = os.path.join(scenario_name, requested_output + "BY" + stratification)
+            self.finish_off_figure(fig, filename=file_name, title_text=requested_output + 'Xamong')
 
 
 if __name__ == "__main__":

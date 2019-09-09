@@ -31,9 +31,10 @@ class PostProcessing:
     the values.
     :attribute generated_outputs: dictionary storing the newly generated outputs.
     """
-    def __init__(self, model, requested_outputs, requested_times={}, multipliers={}):
+    def __init__(self, model, requested_outputs, scenario_number=0, requested_times={}, multipliers={}):
         self.model = model
         self.requested_outputs = requested_outputs
+        self.scenario_number = scenario_number
         self.requested_times = requested_times
         self.multipliers = multipliers
 
