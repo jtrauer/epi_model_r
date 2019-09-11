@@ -603,7 +603,7 @@ class EpiModel:
                  initial_conditions_to_total=True, infectious_compartment=["infectious"], birth_approach="no_birth",
                  verbose=False, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1,
                  starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint",
-                 output_connections={}):
+                 output_connections={}, derived_output_functions={}):
         """
         construction method to create a basic (and at this point unstratified) compartmental model, including checking
             that the arguments have been provided correctly (in a separate method called here)
@@ -618,8 +618,8 @@ class EpiModel:
         self.customised_flow_functions = {}
 
         # attributes with specific format that are independent of user inputs
-        self.tracked_quantities, self.time_variants, self.adaptation_functions, self.all_stratifications = \
-            ({} for _ in range(4))
+        self.tracked_quantities, self.time_variants, self.adaptation_functions, self.all_stratifications, \
+        self.customised_flow_functions = ({} for _ in range(5))
         self.derived_outputs = {"times": []}
         self.compartment_values, self.compartment_names, self.infectious_indices = ([] for _ in range(3))
 
@@ -628,7 +628,7 @@ class EpiModel:
             times, compartment_types, initial_conditions, parameters, requested_flows, initial_conditions_to_total,
             infectious_compartment, birth_approach, verbose, reporting_sigfigs, entry_compartment,
             starting_population, starting_compartment, equilibrium_stopping_tolerance, integration_type,
-            output_connections)
+            output_connections, derived_output_functions)
 
         # stop ide complaining about attributes being defined outside __init__, even though they aren't
         self.times, self.compartment_types, self.initial_conditions, self.parameters, self.requested_flows, \
@@ -643,7 +643,8 @@ class EpiModel:
                 ["times", "compartment_types", "initial_conditions", "parameters", "initial_conditions_to_total",
                  "infectious_compartment", "birth_approach", "verbose", "reporting_sigfigs", "entry_compartment",
                  "starting_population", "starting_compartment", "infectious_compartment",
-                 "equilibrium_stopping_tolerance", "integration_type", "output_connections"]:
+                 "equilibrium_stopping_tolerance", "integration_type", "output_connections",
+                 "derived_output_functions"]:
             setattr(self, attribute, eval(attribute))
 
         # keep copy of the compartment types in case the compartment names are stratified later
@@ -665,7 +666,7 @@ class EpiModel:
             self, _times, _compartment_types, _initial_conditions, _parameters, _requested_flows,
             _initial_conditions_to_total, _infectious_compartment, _birth_approach, _verbose, _reporting_sigfigs,
             _entry_compartment, _starting_population, _starting_compartment, _equilibrium_stopping_tolerance,
-            _integration_type, _output_connections):
+            _integration_type, _output_connections, _derived_output_functions):
         """
         check all input data have been requested correctly
 
@@ -689,6 +690,9 @@ class EpiModel:
         for expected_boolean in ["_initial_conditions_to_total", "_verbose"]:
             if not isinstance(eval(expected_boolean), bool):
                 raise TypeError("expected boolean for %s" % expected_boolean)
+        for expected_dict in ["_derived_output_functions"]:
+            if not isinstance(eval(expected_boolean), dict):
+                raise TypeError("expected dictionary for %s" % expected_dict)
 
         # check some specific requirements
         if any(_infectious_compartment) not in _compartment_types:
@@ -805,6 +809,9 @@ class EpiModel:
         # for each derived output to be recorded, initialise a tracked quantities key to zero
         for output in self.output_connections:
             self.tracked_quantities[output] = 0.0
+            self.derived_outputs[output] = []
+
+        for output in self.derived_output_functions:
             self.derived_outputs[output] = []
 
         # parameters essential for later stratification if called
@@ -998,6 +1005,9 @@ class EpiModel:
         self.derived_outputs["times"].append(_time)
         for output_type in self.output_connections:
             self.derived_outputs[output_type].append(self.tracked_quantities[output_type])
+
+        for output_type in self.derived_output_functions:
+            self.derived_outputs[output_type].append(self.derived_output_functions[output_type](self))
 
     def apply_compartment_death_flows(self, _ode_equations, _compartment_values, _time):
         """
@@ -1266,7 +1276,7 @@ class StratifiedModel(EpiModel):
                  initial_conditions_to_total=True, infectious_compartment=["infectious"], birth_approach="no_birth",
                  verbose=False, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1,
                  starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint",
-                 output_connections={}):
+                 output_connections={}, derived_output_functions={}):
         """
         constructor mostly inherits from parent class, with a few additional attributes that are required for the
         stratified version
@@ -1279,7 +1289,8 @@ class StratifiedModel(EpiModel):
                           verbose=verbose, reporting_sigfigs=reporting_sigfigs, entry_compartment=entry_compartment,
                           starting_population=starting_population, starting_compartment=starting_compartment,
                           equilibrium_stopping_tolerance=equilibrium_stopping_tolerance,
-                          integration_type=integration_type, output_connections=output_connections)
+                          integration_type=integration_type, output_connections=output_connections,
+                          derived_output_functions=derived_output_functions)
 
         self.full_stratifications_list, self.removed_compartments, \
             self.overwrite_parameters, self.compartment_types_to_stratify, self.infectious_populations, \
@@ -2364,6 +2375,10 @@ class StratifiedModel(EpiModel):
 if __name__ == "__main__":
 
     # example code to test out many aspects of SUMMER function - intended to be equivalent to the example in R
+
+    def get_total_popsize(model):
+        return sum(model.compartment_values)
+
     sir_model = StratifiedModel(
         numpy.linspace(0, 60 / 365, 61).tolist(),
         ["susceptible", "infectious", "recovered"],
@@ -2373,7 +2388,8 @@ if __name__ == "__main__":
          {"type": "infection_frequency", "parameter": "beta", "origin": "susceptible", "to": "infectious"},
          {"type": "compartment_death", "parameter": "infect_death", "origin": "infectious"}],
         output_connections={"incidence": {"origin": "susceptible", "to": "infectious"}},
-        verbose=False, integration_type="solve_ivp")
+        verbose=False, integration_type="solve_ivp", derived_output_functions={'population': get_total_popsize}
+    )
     sir_model.adaptation_functions["increment_by_one"] = create_additive_function(1.)
 
     hiv_mixing = numpy.ones(4).reshape(2, 2)
@@ -2388,10 +2404,10 @@ if __name__ == "__main__":
                        mixing_matrix=hiv_mixing,
                        verbose=False)
 
-    sir_model.stratify("strain", ["sensitive", "resistant"], ["infectious"],
-                       adjustment_requests={"recoveryXhiv_negative": {"sensitive": 0.9},
-                                            "recovery": {"sensitive": 0.8}},
-                       requested_proportions={}, verbose=False)
+    # sir_model.stratify("strain", ["sensitive", "resistant"], ["infectious"],
+    #                    adjustment_requests={"recoveryXhiv_negative": {"sensitive": 0.9},
+    #                                         "recovery": {"sensitive": 0.8}},
+    #                    requested_proportions={}, verbose=False)
 
     # age_mixing = None
     # sir_model.stratify("age", [1, 10, 3], [], {}, {"recovery": {"1": 0.5, "10": 0.8}},
