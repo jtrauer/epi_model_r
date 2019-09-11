@@ -489,7 +489,7 @@ class Outputs:
 
             axis.legend(bbox_to_anchor=(1., 1))
 
-            scenario_name = self.scenario_names.values()[sc_index]
+            scenario_name = list(self.scenario_names.values())[sc_index]
 
             file_name = os.path.join(scenario_name, requested_output + "BY" + stratification)
             self.finish_off_figure(fig, filename=file_name, title_text=requested_output + 'Xamong')
