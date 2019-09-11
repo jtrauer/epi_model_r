@@ -691,7 +691,7 @@ class EpiModel:
             if not isinstance(eval(expected_boolean), bool):
                 raise TypeError("expected boolean for %s" % expected_boolean)
         for expected_dict in ["_derived_output_functions"]:
-            if not isinstance(eval(expected_boolean), dict):
+            if not isinstance(eval(expected_dict), dict):
                 raise TypeError("expected dictionary for %s" % expected_dict)
 
         # check some specific requirements
@@ -2275,6 +2275,7 @@ class StratifiedModel(EpiModel):
         :return: float
             the parameter value needed
         """
+        print(_parameter)
         return self.final_parameter_functions[_parameter](_time)
 
     def find_infectious_population(self, _compartment_values):
