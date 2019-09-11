@@ -615,6 +615,7 @@ class EpiModel:
         # set flow attributes as pandas data frames with fixed column names
         self.transition_flows = pd.DataFrame(columns=("type", "parameter", "origin", "to", "implement"))
         self.death_flows = pd.DataFrame(columns=("type", "parameter", "origin", "implement"))
+        self.customised_flow_functions = {}
 
         # attributes with specific format that are independent of user inputs
         self.tracked_quantities, self.time_variants, self.adaptation_functions, self.all_stratifications = \
@@ -828,7 +829,15 @@ class EpiModel:
 
         # implement value starts at zero for unstratified that can be progressively incremented during stratification
         _flow["implement"] = len(self.all_stratifications) if "implement" not in _flow else _flow["implement"]
-        self.transition_flows = self.transition_flows.append(_flow, ignore_index=True)
+        self.transition_flows = self.transition_flows.append(
+            {key: value for key, value in _flow.items() if key != 'function'}, ignore_index=True)
+
+        # record the function associated with a customised flow
+        if _flow['type'] == 'customised_flows':
+            if 'function' not in _flow.keys():
+                raise ValueError("a customised flow requires a function")
+            n_flow = len(self.transition_flows.index) - 1
+            self.customised_flow_functions[n_flow] = _flow['function']
 
     def add_death_flow(self, _flow):
         """
@@ -924,7 +933,11 @@ class EpiModel:
 
             # calculate the n_flow and apply to the odes
             from_compartment = self.compartment_names.index(self.transition_flows.origin[n_flow])
-            net_flow = parameter_value * _compartment_values[from_compartment] * infectious_population
+
+            if self.transition_flows.at[n_flow, "type"] == "customised_flows":
+                net_flow = parameter_value * self.customised_flow_functions[n_flow](self)
+            else:
+                net_flow = parameter_value * _compartment_values[from_compartment] * infectious_population
 
             # Provisional patch to implement IPT
             if 'ipt' in self.transition_flows.parameter[n_flow]:
@@ -1673,11 +1686,29 @@ class StratifiedModel(EpiModel):
                      "implement": len(self.all_stratifications)},
                     ignore_index=True)
 
+                if self.transition_flows.type[_n_flow] == 'customised_flows':
+                    self.update_customised_flow_function_dict(_n_flow)
+
         # if flow applies to a transition not involved in the stratification, still increment to ensure implemented
         else:
             new_flow = self.transition_flows.loc[_n_flow, :].to_dict()
             new_flow["implement"] += 1
             self.transition_flows = self.transition_flows.append(new_flow, ignore_index=True)
+
+            if self.transition_flows.type[_n_flow] == 'customised_flows':
+                self.update_customised_flow_function_dict(_n_flow)
+
+        if self.transition_flows.type[_n_flow] == 'customised_flows':
+            del(self.customised_flow_functions[_n_flow])
+
+    def update_customised_flow_function_dict(self, _n_flow):
+        """
+        When a stratified flow has just been created and if the original flow was customised, we need to update the
+        dictionary listing the functions associated with the customised flows.
+        :param _n_flow: the index of the unstratified flow
+        """
+        new_n_flow = len(self.transition_flows.index) - 1
+        self.customised_flow_functions[new_n_flow] = self.customised_flow_functions[_n_flow]
 
     def sort_absent_transition_parameter(
             self, _stratification_name, _strata_names, _stratum, _stratify_from, _stratify_to, unstratified_name):
