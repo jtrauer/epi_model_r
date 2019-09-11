@@ -939,28 +939,6 @@ class EpiModel:
             else:
                 net_flow = parameter_value * _compartment_values[from_compartment] * infectious_population
 
-            # Provisional patch to implement IPT
-            if 'ipt' in self.transition_flows.parameter[n_flow]:
-                net_flow = parameter_value * infectious_population * self.infectious_denominators / \
-                           len([self.compartment_names[i] for i in range(len(self.compartment_names)) if
-                                self.compartment_names[i][0:12] == 'early_latent'])
-
-                # flow from L_A
-                extra_to_move = 0.
-                if _compartment_values[from_compartment] >= net_flow:
-                    effectively_moved = net_flow
-                else:
-                    effectively_moved = _compartment_values[from_compartment]
-                    extra_to_move = net_flow - _compartment_values[from_compartment]
-                _ode_equations = increment_list_by_index(_ode_equations, from_compartment, -effectively_moved)
-                _ode_equations = increment_list_by_index(
-                    _ode_equations, self.compartment_names.index(self.transition_flows.to[n_flow]), effectively_moved)
-
-                # now apply to L_B
-                from_compartment = self.compartment_names.index(self.transition_flows.origin[n_flow].replace(
-                    'early_latent', 'late_latent'))
-                net_flow = min([extra_to_move, _compartment_values[from_compartment]])
-
             _ode_equations = increment_list_by_index(_ode_equations, from_compartment, -net_flow)
             _ode_equations = increment_list_by_index(
                 _ode_equations, self.compartment_names.index(self.transition_flows.to[n_flow]), net_flow)
