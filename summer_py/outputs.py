@@ -172,7 +172,8 @@ def add_title_to_plot(fig, n_panels, content):
 
 
 class Outputs:
-    def __init__(self, post_processing_list,targets_to_plot={}, out_dir='outputs', translation_dict={}):
+    def __init__(self, post_processing_list, targets_to_plot={}, out_dir='outputs', translation_dict={},
+                 multiplot_only=False):
         """
         :param post_processing: an object of class post_processing associated with a run model
         :param out_dir: the name of the directory where to write the outputs
@@ -181,6 +182,7 @@ class Outputs:
         self.targets_to_plot = targets_to_plot
         self.out_dir = out_dir
         self.translation_dict = translation_dict
+        self.multiplot_only = multiplot_only
         self.scenario_names = {}
 
         self.create_out_directories()
@@ -219,12 +221,15 @@ class Outputs:
             scenario_name = 'Baseline' if scenario_number == 0 else "Scenario " + str(scenario_number)
             self.scenario_names[scenario_number] =scenario_name
 
-            scenario_out_dir = os.path.join(self.out_dir, scenario_name)
-            if not os.path.exists(scenario_out_dir):
-                os.mkdir(scenario_out_dir)
-        multi_out_dir = os.path.join(self.out_dir, 'multi_plots')
-        if not os.path.exists(multi_out_dir):
-            os.mkdir(multi_out_dir)
+            if not self.multiplot_only:
+                scenario_out_dir = os.path.join(self.out_dir, scenario_name)
+                if not os.path.exists(scenario_out_dir):
+                    os.mkdir(scenario_out_dir)
+
+        if len(self.scenario_names) > 1:
+            multi_out_dir = os.path.join(self.out_dir, 'multi_plots')
+            if not os.path.exists(multi_out_dir):
+                os.mkdir(multi_out_dir)
 
     def tidy_x_axis(self, axis, start, end, max_dims, labels_off=False, x_label=None):
         """
@@ -351,7 +356,14 @@ class Outputs:
         main method to run the plotting of all the outputs requested in the post-processing object
         """
         for requested_output in self.post_processing_list[0].requested_outputs:
-            for multi_plot in [False, True]:
+            if self.multiplot_only:
+                multiplot_plotting_modes = [True]
+            elif len(self.scenario_names) > 1:
+                multiplot_plotting_modes = [False, True]
+            else:
+                multiplot_plotting_modes = [False]
+
+            for multi_plot in multiplot_plotting_modes:
                 if isinstance(self.post_processing_list[0].generated_outputs[requested_output], dict) \
                             and requested_output[0:22] == "distribution_of_strata" and multi_plot:
                         continue
