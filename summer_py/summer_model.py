@@ -935,7 +935,7 @@ class EpiModel:
             from_compartment = self.compartment_names.index(self.transition_flows.origin[n_flow])
 
             if self.transition_flows.at[n_flow, "type"] == "customised_flows":
-                net_flow = parameter_value * self.customised_flow_functions[n_flow](self)
+                net_flow = parameter_value * self.customised_flow_functions[n_flow](self, n_flow)
             else:
                 net_flow = parameter_value * _compartment_values[from_compartment] * infectious_population
 
