@@ -943,6 +943,8 @@ class EpiModel:
 
             if self.transition_flows.at[n_flow, "type"] == "customised_flows":
                 net_flow = parameter_value * self.customised_flow_functions[n_flow](self, n_flow)
+                if _compartment_values[from_compartment] < net_flow:
+                    net_flow = _compartment_values[from_compartment]
             else:
                 net_flow = parameter_value * _compartment_values[from_compartment] * infectious_population
 
@@ -2275,7 +2277,6 @@ class StratifiedModel(EpiModel):
         :return: float
             the parameter value needed
         """
-        print(_parameter)
         return self.final_parameter_functions[_parameter](_time)
 
     def find_infectious_population(self, _compartment_values):
