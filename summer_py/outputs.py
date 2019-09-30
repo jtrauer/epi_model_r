@@ -171,46 +171,30 @@ def add_title_to_plot(fig, n_panels, content):
                  fontsize=greater_font_sizes[n_panels] if n_panels in greater_font_sizes else 10)
 
 
-def intelligent_convert_string(string):
-    """
-    returns a more readable version of string for figure title ...
-    """
-    if string[0:22] == 'distribution_of_strata':
-        return "Population distribution by " + string.split("X")[1]
-    elif string[0:4] == 'prev':
-        char = "Prevalence of "
-        numerator_groups = string.split('among')[0].split('X')[1:]
-        for group in numerator_groups:
-            char += group + " "
-
-        subgroup = string.split("among")[1]
-        if len(subgroup) > 0:
-            char += "("
-            need_comma = False
-            for group in subgroup.split("X"):
-                if len(group)>0:
-                    if need_comma:
-                        char += ", "
-                    char += group
-                    need_comma = True
-            char += ")"
-        return char
-    else:
-        return string
-
-
 class Outputs:
-    def __init__(self, post_processing, out_dir=None):
+    def __init__(self, post_processing_list, targets_to_plot={}, out_dir='outputs', translation_dict={},
+                 multiplot_only=False):
         """
         :param post_processing: an object of class post_processing associated with a run model
         :param out_dir: the name of the directory where to write the outputs
         """
-        self.post_processing = post_processing
-        self.out_dir = ''
-        self.create_out_dir(out_dir)
+        self.post_processing_list = post_processing_list
+        self.targets_to_plot = targets_to_plot
+        self.out_dir = out_dir
+        self.translation_dict = translation_dict
+        self.multiplot_only = multiplot_only
+        self.scenario_names = {}
 
+        self.create_out_directories()
         self.colour_theme \
             = [(0., 0., 0.),
+               (57./255., 106./255., 177./255.),
+               (218./255., 124./255., 48./255.),
+               (62./255., 150./255., 81./255.),
+               (204./255., 37./255., 41./255.),
+               (107./255., 76./255., 154./255.),
+               (146./255., 36./255., 40./255.),
+               (148./255., 139./255., 61./255.),
                (0., 0., 125. / 255.),
                (210. / 255., 70. / 255., 0.),
                (100. / 255., 150. / 255., 1.),
@@ -228,12 +212,24 @@ class Outputs:
                (.5, .5, .5),
                (.0, .0, .0)]
 
-    def create_out_dir(self, out_dir):
-        self.out_dir = 'outputs' if out_dir is None else out_dir
+    def create_out_directories(self):
         if not os.path.exists(self.out_dir):
             os.mkdir(self.out_dir)
-        else:
-            print("No creation needed for output directory " + self.out_dir)
+
+        for scenario_index in range(len(self.post_processing_list)):
+            scenario_number = self.post_processing_list[scenario_index].scenario_number
+            scenario_name = 'Baseline' if scenario_number == 0 else "Scenario " + str(scenario_number)
+            self.scenario_names[scenario_number] =scenario_name
+
+            if not self.multiplot_only:
+                scenario_out_dir = os.path.join(self.out_dir, scenario_name)
+                if not os.path.exists(scenario_out_dir):
+                    os.mkdir(scenario_out_dir)
+
+        if len(self.scenario_names) > 1:
+            multi_out_dir = os.path.join(self.out_dir, 'multi_plots')
+            if not os.path.exists(multi_out_dir):
+                os.mkdir(multi_out_dir)
 
     def tidy_x_axis(self, axis, start, end, max_dims, labels_off=False, x_label=None):
         """
@@ -262,7 +258,7 @@ class Outputs:
 
         # axis label
         if x_label is not None:
-            axis.set_xlabel(intelligent_convert_string(x_label), fontsize=get_label_font_size(max_dims))
+            axis.set_xlabel(self.intelligent_convert_string(x_label), fontsize=get_label_font_size(max_dims))
 
     def tidy_y_axis(self, axis, quantity, max_dims, left_axis=True, max_value=1e6, space_at_top=.1, y_label=None,
                     y_lims=None, allow_negative=False):
@@ -281,6 +277,7 @@ class Outputs:
             allow_negative: Whether to set the bottom of the axis to zero
         """
 
+
         # axis range
         if y_lims:
             axis.set_ylim(y_lims)
@@ -291,7 +288,8 @@ class Outputs:
         elif 'prop_' in quantity or 'likelihood' in quantity or 'cost' in quantity:
             pass
         elif axis.get_ylim()[1] < max_value * (1. + space_at_top):
-            axis.set_ylim(top=max_value * (1. + space_at_top))
+            pass
+            # axis.set_ylim(top=max_value * (1. + space_at_top))
         if not allow_negative:
             axis.set_ylim(bottom=0.)
 
@@ -306,7 +304,36 @@ class Outputs:
 
         # axis label
         if y_label and left_axis:
-            axis.set_ylabel(intelligent_convert_string(y_label), fontsize=get_label_font_size(max_dims))
+            axis.set_ylabel(self.intelligent_convert_string(y_label), fontsize=get_label_font_size(max_dims))
+
+    def intelligent_convert_string(self, string):
+        """
+        returns a more readable version of string for figure title ...
+        """
+        if string in self.translation_dict.keys():
+            return self.translation_dict[string]
+        elif string[0:22] == 'distribution_of_strata':
+            return "Population distribution by " + string.split("X")[1]
+        elif string[0:4] == 'prev':
+            char = "Prevalence of "
+            numerator_groups = string.split('among')[0].split('X')[1:]
+            for group in numerator_groups:
+                char += group + " "
+
+            subgroup = string.split("among")[1]
+            if len(subgroup) > 0:
+                char += "("
+                need_comma = False
+                for group in subgroup.split("X"):
+                    if len(group)>0:
+                        if need_comma:
+                            char += ", "
+                        char += group
+                        need_comma = True
+                char += ")"
+            return char
+        else:
+            return string
 
     def finish_off_figure(self, fig, filename, n_plots=1, title_text=None):
         """
@@ -319,39 +346,95 @@ class Outputs:
             title_text: Text for the title of the figure
         """
         if title_text is not None:
-            add_title_to_plot(fig, n_plots, intelligent_convert_string(title_text))
+            add_title_to_plot(fig, n_plots, self.intelligent_convert_string(title_text))
         filename = os.path.join(self.out_dir, filename + '.png')
-        fig.savefig(filename, dpi=300)
+        fig.savefig(filename, dpi=300, bbox_inches='tight')
         pyplot.close(fig)
 
     def plot_requested_outputs(self):
         """
         main method to run the plotting of all the outputs requested in the post-processing object
         """
-        for requested_output in self.post_processing.requested_outputs:
-            fig, axes, max_dims, n_rows, n_cols = initialise_figures_axes(1)
-            axis = find_panel_grid_indices([axes], 0, n_rows, n_cols)
+        for requested_output in self.post_processing_list[0].requested_outputs:
+            if self.multiplot_only:
+                multiplot_plotting_modes = [True]
+            elif len(self.scenario_names) > 1:
+                multiplot_plotting_modes = [False, True]
+            else:
+                multiplot_plotting_modes = [False]
 
-            times_to_plot = self.post_processing.model.times if \
-                requested_output not in self.post_processing.requested_times.keys() else \
-                self.post_processing.requested_times[requested_output]
+            for multi_plot in multiplot_plotting_modes:
+                if isinstance(self.post_processing_list[0].generated_outputs[requested_output], dict) \
+                            and requested_output[0:22] == "distribution_of_strata" and multi_plot:
+                        continue
 
-            output_name = requested_output
+                y_max = - 1.e9
 
-            if isinstance(self.post_processing.generated_outputs[requested_output], list):
-                axis.plot(times_to_plot, self.post_processing.generated_outputs[requested_output])
-                self.tidy_x_axis(axis, start=min(times_to_plot), end=max(times_to_plot), max_dims=max_dims,
-                                 x_label='time')
-                self.tidy_y_axis(axis, quantity='', max_dims=max_dims, y_label=output_name,
-                                 max_value=max(self.post_processing.generated_outputs[requested_output]))
+                for scenario_index, scenario_number in enumerate(self.scenario_names.keys()):
+                    if not multi_plot or scenario_index == 0:
+                        fig, axes, max_dims, n_rows, n_cols = initialise_figures_axes(1)
+                        axis = find_panel_grid_indices([axes], 0, n_rows, n_cols)
+                        output_name = requested_output
 
-            elif isinstance(self.post_processing.generated_outputs[requested_output], dict) \
-                    and requested_output[0:22] == "distribution_of_strata":
+                        # plot targets
+                        if requested_output in self.targets_to_plot.keys():
+                            for marker_size in [100., 30.]:
+                                axis.scatter(self.targets_to_plot[requested_output][0],
+                                             self.targets_to_plot[requested_output][1], marker='o', color='red',
+                                             s=marker_size)
+                                axis.scatter(self.targets_to_plot[requested_output][0],
+                                             self.targets_to_plot[requested_output][1], marker='o', color='white',
+                                             s=marker_size-20.)
 
-                current_data = self.post_processing.generated_outputs[requested_output]
-                self.plot_stacked_epi_outputs(axis, times_to_plot, current_data, fraction=False)
 
-            self.finish_off_figure(fig, filename=output_name, title_text=output_name)
+                    times_to_plot = self.post_processing_list[scenario_index].model.times if \
+                            requested_output not in self.post_processing_list[scenario_index].requested_times.keys() else \
+                            self.post_processing_list[scenario_index].requested_times[requested_output]
+
+                    if isinstance(self.post_processing_list[scenario_index].generated_outputs[requested_output], list):
+
+                        if not multi_plot and scenario_index > 0:
+                            times_to_plot_0 = self.post_processing_list[0].model.times if \
+                                requested_output not in self.post_processing_list[0].requested_times.keys() else \
+                                self.post_processing_list[0].requested_times[requested_output]
+                            axis.plot(times_to_plot_0,
+                                  self.post_processing_list[0].generated_outputs[requested_output],
+                                  color=self.colour_theme[0],
+                                  label='Baseline')
+
+                        this_label = 'Scenario ' + str(scenario_number) if scenario_number>0 else "Baseline"
+
+                        axis.plot(times_to_plot,
+                                  self.post_processing_list[scenario_index].generated_outputs[requested_output],
+                                  color=self.colour_theme[scenario_number],
+                                  label=this_label)
+
+                        y_max = max([y_max,
+                                    max(self.post_processing_list[scenario_index].generated_outputs[requested_output])])
+                        if scenario_index == 0 or not multi_plot:
+                            self.tidy_x_axis(axis, start=min(times_to_plot), end=max(times_to_plot), max_dims=max_dims,
+                                             x_label='time')
+
+                        if not multi_plot or scenario_index == len(self.scenario_names) - 1:
+                            self.tidy_y_axis(axis, quantity='', max_dims=max_dims, y_label=output_name, max_value=y_max)
+
+                    elif isinstance(self.post_processing_list[scenario_index].generated_outputs[requested_output], dict) \
+                            and requested_output[0:22] == "distribution_of_strata":
+
+                        current_data = self.post_processing_list[scenario_index].generated_outputs[requested_output]
+                        self.plot_stacked_epi_outputs(axis, times_to_plot, current_data, fraction=False)
+
+                    if not multi_plot or scenario_index == len(self.scenario_names) - 1:
+                        if multi_plot:
+                            dir_name = 'multi_plots'
+                            axis.legend(bbox_to_anchor=(1., 1))
+                        else:
+                            dir_name = self.scenario_names[scenario_number]
+                            if scenario_index > 0:
+                                axis.legend(bbox_to_anchor=(1., 1))
+
+                        file_name = os.path.join(dir_name, output_name)
+                        self.finish_off_figure(fig, filename=file_name, title_text=output_name)
 
     def plot_stacked_epi_outputs(self, axis, times_to_plot, current_data, fraction=True):
         # plot patches and proxy by category
@@ -384,6 +467,33 @@ class Outputs:
         self.tidy_x_axis(axis, start=min(times_to_plot), end=max(times_to_plot), max_dims=1, x_label='time')
         self.tidy_y_axis(axis, quantity='', max_dims=1, y_label=y_label, max_value=y_max)
 
+    def plot_outputs_by_stratum(self, requested_output='prevXinfectious', sc_index=0):
+        all_groups = self.post_processing_list[sc_index].model.all_stratifications
+        for stratification in all_groups.keys():
+            fig, axes, max_dims, n_rows, n_cols = initialise_figures_axes(1)
+            axis = find_panel_grid_indices([axes], 0, n_rows, n_cols)
+
+            times_to_plot = self.post_processing_list[sc_index].model.times if \
+                            requested_output not in self.post_processing_list[sc_index].requested_times.keys() else \
+                            self.post_processing_list[sc_index].requested_times[requested_output]
+
+            for i, stratum in enumerate(all_groups[stratification]):
+                requested_output_for_stratum = requested_output + 'XamongX' + stratification + '_' + stratum
+                axis.plot(times_to_plot, self.post_processing_list[sc_index].generated_outputs[requested_output_for_stratum],
+                                  color=self.colour_theme[i+1],
+                                  label= self.translation_dict[stratification + '_' + stratum])
+
+            self.tidy_x_axis(axis, start=1990., end=max(times_to_plot), max_dims=max_dims,
+                                             x_label='time')
+            self.tidy_y_axis(axis, quantity='', max_dims=max_dims, y_label=requested_output + 'Xamong')
+
+            axis.legend(bbox_to_anchor=(1., 1))
+
+            scenario_name = list(self.scenario_names.values())[sc_index]
+
+            file_name = os.path.join(scenario_name, requested_output + "BY" + stratification)
+            self.finish_off_figure(fig, filename=file_name, title_text=requested_output + 'Xamong')
+
 
 if __name__ == "__main__":
     # build and run an example model
@@ -409,7 +519,7 @@ if __name__ == "__main__":
 
     # request some outputs
     req_outputs = ['prevXinfectiousXamongXage_10Xstrain_sensitive',
-                   'prevXinfectiousXresistantXamongXage_10Xstrain_sensitive',
+                   # 'prevXinfectiousXresistantXamongXage_10Xstrain_sensitive',
                    'distribution_of_strataXstrain',
                    'distribution_of_strataXage'
                    ]
@@ -417,9 +527,13 @@ if __name__ == "__main__":
     multipliers = {'prevXinfectiousXamongXage_10Xstrain_sensitive': 1.e5,
                    'prevXinfectiousXamong': 1.e5}
     pp = post_proc.PostProcessing(sir_model, req_outputs, req_times, multipliers)
+    pp2 = post_proc.PostProcessing(sir_model, req_outputs, req_times, multipliers)
+
+    targets_to_plot = {'prevXinfectiousXamongXage_10Xstrain_sensitive': [[0.01, 0.05], [20000., 80000.]]}
+    translation_dict = {'prevXinfectiousXamongXage_10Xstrain_sensitive': 'Prevalence of TB among 10-30 years old'}
 
     # generate outputs
-    outputs = Outputs(pp)
+    outputs = Outputs([pp, pp2], targets_to_plot=targets_to_plot, translation_dict=translation_dict)
     outputs.plot_requested_outputs()
 
 
