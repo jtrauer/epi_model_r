@@ -116,6 +116,26 @@ def find_name_components(compartment):
     return [compartment[x_positions[x_pos] + 1: x_positions[x_pos + 1]] for x_pos in range(len(x_positions) - 1)]
 
 
+def find_stratum_index_from_string(compartment, stratification, remove_stratification_name=True):
+    """
+    finds the stratum which the compartment (or parameter) name falls in when provided with the compartment name and the
+        name of the stratification of interest
+    for example, if the compartment name was infectiousXhiv_positiveXdiabetes_none and the stratification of interest
+        provided through the stratification argument was hiv, then return positive
+
+    :param compartment: str
+        name of the compartment (or parameter) to be interrogated
+    :param stratification: str
+        the stratification of interest
+    :param remove_stratification_name: bool
+        whether to remove the stratification name and its trailing _ from the string to return
+    :return: str
+        the name of the stratum within which the compartment falls
+    """
+    stratum_name = [name for n_name, name in enumerate(find_name_components(compartment)) if stratification in name][0]
+    return stratum_name[stratum_name.find("_") + 1:] if remove_stratification_name else stratum_name
+
+
 """
 data manipulation functions
 """
@@ -196,31 +216,6 @@ functions for use as inputs to the model
 
 considering moving to different file
 """
-
-
-def create_step_function_from_dict(input_dict):
-    """
-    create a step function out of dictionary with numeric keys and values, where the keys determine the values of the
-    independent variable at which the steps between the output values occur
-
-    :param input_dict: dict
-        dictionary in standard format as described above
-    :return: function
-        the function constructed from input data
-    """
-    dict_keys = list(input_dict.keys())
-    dict_keys.sort()
-    dict_values = [input_dict[key] for key in dict_keys]
-
-    def step_function(input_value):
-        if input_value >= dict_keys[-1]:
-            return dict_values[-1]
-        else:
-            for key in range(len(dict_keys)):
-                if input_value < dict_keys[key + 1]:
-                    return dict_values[key]
-
-    return step_function
 
 
 def sinusoidal_scaling_function(start_time, baseline_value, end_time, final_value):
@@ -2380,8 +2375,8 @@ if __name__ == "__main__":
     )
     sir_model.adaptation_functions["increment_by_one"] = create_additive_function(1.)
 
-    # hiv_mixing = numpy.ones(4).reshape(2, 2)
-    hiv_mixing = None
+    hiv_mixing = numpy.ones(4).reshape(2, 2)
+    # hiv_mixing = None
 
     sir_model.stratify("hiv", ["negative", "positive"], [], {"negative": 0.6},
                        {"recovery": {"negative": "increment_by_one", "positive": 0.5},
@@ -2392,10 +2387,10 @@ if __name__ == "__main__":
                        mixing_matrix=hiv_mixing,
                        verbose=False)
 
-    # sir_model.stratify("strain", ["sensitive", "resistant"], ["infectious"],
-    #                    adjustment_requests={"recoveryXhiv_negative": {"sensitive": 0.9},
-    #                                         "recovery": {"sensitive": 0.8}},
-    #                    requested_proportions={}, verbose=False)
+    sir_model.stratify("strain", ["sensitive", "resistant"], ["infectious"],
+                       adjustment_requests={"recoveryXhiv_negative": {"sensitive": 0.9},
+                                            "recovery": {"sensitive": 0.8}},
+                       requested_proportions={}, verbose=False)
 
     # age_mixing = None
     # sir_model.stratify("age", [1, 10, 3], [], {}, {"recovery": {"1": 0.5, "10": 0.8}},
@@ -2403,6 +2398,8 @@ if __name__ == "__main__":
     #                    mixing_matrix=age_mixing, verbose=False)
 
     sir_model.run_model()
+
+    create_flowchart(sir_model, name="sir_model_diagram")
 
     # create_flowchart(sir_model)
     #
