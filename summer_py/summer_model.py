@@ -19,7 +19,6 @@ os.environ["PATH"] += os.pathsep + 'C:/Program Files (x86)/Graphviz2.38/bin'
 os.environ["PATH"] += os.pathsep + 'C:/Users/rrag0004/Models/graphviz-2.38/release/bin'
 
 
-
 """
 string manipulation functions
 """
@@ -27,19 +26,19 @@ string manipulation functions
 
 def create_stratum_name(stratification_name, stratum_name, joining_string="X"):
     """
-    generate the name just for the particular stratum within a requested stratification
+    generate a name string to represent a particular stratum within a requested stratification
 
     :param stratification_name: str
-        the rationale for implementing the stratification of interest
+        the "stratification" or rationale for implementing the current stratification process
     :param stratum_name: str
         name of the stratum within the stratification
     :param joining_string: str
-        whether to add a character (X) to the front to indicate that this string is the extension of the existing one
+        the character to add to the front to indicate that this string is the extension of the existing one
+        in SUMMER, capitals are reserved for non-user-requested strings, in this case "X" is used as the default
     :return: str
         the composite string for the stratification
     """
-    stratum_name = "%s_%s" % (stratification_name, str(stratum_name))
-    return joining_string + stratum_name if joining_string else stratum_name
+    return joining_string + "%s_%s" % (stratification_name, str(stratum_name))
 
 
 def create_stratified_name(stem, stratification_name, stratum_name):
@@ -49,9 +48,9 @@ def create_stratified_name(stem, stratification_name, stratum_name):
     :param stem: str
         the previous stem to the compartment or parameter name that needs to be extended
     :param stratification_name: str
-        the rationale for implementing the stratification of interest
+        the "stratification" or rationale for implementing the current stratification process
     :param stratum_name: str
-        the name of the current stratum being implemented
+        name of the stratum within the stratification
     :return: str
         the composite name with the standardised stratification name added on to the old stem
     """
@@ -65,85 +64,60 @@ def extract_x_positions(parameter, joining_string="X"):
     :param parameter: str
         the string for interrogation
     :param joining_string: str
-        the string of interest whose positions need to be found
+        the string of interest whose character positions need to be found
     :return: list
         list of all the indices for where the X character occurs in the string, along with the total length of the list
     """
-    result = [loc for loc in range(len(parameter)) if parameter[loc] == joining_string]
-    result.append(len(parameter))
-    return result
+    return [loc for loc in range(len(parameter)) if parameter[loc] == joining_string] + [len(parameter)]
 
 
 def extract_reversed_x_positions(parameter):
     """
     find the positions within a string which are X and return as list reversed, including length of list
 
-    :params and return: see extract_x_positions
+    :params and return: see extract_x_positions above
     """
     result = extract_x_positions(parameter)
     result.reverse()
     return result
 
 
-def find_stem(stratified_string):
+def find_stem(stratified_string, joining_string="X"):
     """
-    find the stem of the compartment name as the text leading up to the first occurrence of "X"
+    find the stem of the compartment name as the text leading up to the first occurrence of the joining string
+        (usually "X")
+    should run slightly faster than using find_name_components
 
     :param stratified_string: str
         the stratified string for the compartment or parameter name
+    :param joining_string: str
+        the string of interest whose character position will be used to truncate the stratified string
     :return: int
         the point at which the first occurrence of the joining string occurs
     """
-    return find_name_components(stratified_string)[0]
-
-
-def find_stratum_index_from_string(compartment, stratification, remove_stratification_name=True):
-    """
-    finds the stratum which the compartment (or parameter) name falls in when provided with the compartment name and the
-        name of the stratification of interest
-    for example, if the compartment name was infectiousXhiv_positiveXdiabetes_none and the stratification of interest
-        provided through the stratification argument was hiv, then
-
-    :param compartment: str
-        name of the compartment or parameter to be interrogated
-    :param stratification: str
-        the stratification of interest
-    :param remove_stratification_name: bool
-        whether to remove the stratification name and its trailing _ from the string to return
-    :return: str
-        the name of the stratum within which the compartment falls
-    """
-    stratum_name = [name for n_name, name in enumerate(find_name_components(compartment)) if stratification in name][0]
-    return stratum_name[stratum_name.find("_") + 1:] if remove_stratification_name else stratum_name
-
-
-def add_w_to_param_names(parameter_dict):
-    """
-    add a "W" string to the end of the parameter name to indicate that we should over-write up the chain
-
-    :param parameter_dict: dict
-        the dictionary before the adjustments
-    :return: dict
-        same dictionary but with the "W" string added to each of the keys
-    """
-    return {str(age_group) + "W": value for age_group, value in parameter_dict.items()}
+    index = stratified_string.find(joining_string) if joining_string in stratified_string else len(stratified_string)
+    return stratified_string[:index]
 
 
 def find_name_components(compartment):
     """
-    extract all the components of a stratified compartment or parameter name
+    extract all the components of a stratified compartment or parameter name, including the stem
 
     :param compartment: str
         name of the compartment or parameter to be interrogated
     :return: list
         the extracted compartment components
     """
+
+    # add -1 at the start, which becomes zero to represent the start when one is added
     x_positions = [-1] + extract_x_positions(compartment)
-    return [compartment[x_positions[n_x] + 1: x_positions[n_x + 1]] for n_x in range(len(x_positions) - 1)]
+
+    # add one to the first index to go past the joining character, but not at the end
+    return [compartment[x_positions[x_pos] + 1: x_positions[x_pos + 1]] for x_pos in range(len(x_positions) - 1)]
 
 
 """
-basic data manipulation functions
+data manipulation functions
 """
 
 
@@ -152,13 +126,13 @@ def increment_list_by_index(list_to_increment, index_to_increment, increment_val
     very simple but general method to increment the odes by a specified value
 
     :param list_to_increment: list
-        the list to be incremented
+        the list to be incremented, expected to be the list of ODEs
     :param index_to_increment: int
         the index of the list that needs to be incremented
-    :param increment_value:
+    :param increment_value: float
         the value to increment the list by
     :return: list
-        the list after it has been incremented
+        the list after incrementing
     """
     list_to_increment[index_to_increment] += increment_value
     return list_to_increment
@@ -166,7 +140,8 @@ def increment_list_by_index(list_to_increment, index_to_increment, increment_val
 
 def normalise_dict(value_dict):
     """
-    simple function to normalise the values from a list
+    normalise the values from a list using the total of all values, i.e. returning dictionary whose keys sum to one with
+        same ratios between all the values in the dictionary after the function has been applied
 
     :param value_dict: dict
         dictionary whose values will be adjusted
@@ -176,21 +151,6 @@ def normalise_dict(value_dict):
     return {key: value_dict[key] / sum(value_dict.values()) for key in value_dict}
 
 
-def change_parameter_unit(parameter_dict, multiplier):
-    """
-    used to adapt the latency parameters from the earlier functions according to whether they are needed as by year
-        rather than by day
-
-    :param parameter_dict: dict
-        dictionary whose values need to be adjusted
-    :param multiplier: float
-        multiplier 
-    :return: dict
-        dictionary with values multiplied by the multiplier argument
-    """
-    return {param_key: param_value * multiplier for param_key, param_value in parameter_dict.items()}
-
-
 def element_list_multiplication(list_1, list_2):
     """
     multiply elements of two lists to return another list with the same dimensions
@@ -198,9 +158,9 @@ def element_list_multiplication(list_1, list_2):
     :param list_1: list
         first list of numeric values to be multiplied
     :param list_2: list
-        first list of numeric values to be multiplied
+        second list of numeric values to be multiplied
     :return: list
-        list populated with multiplied values
+        resulting list populated with the multiplied values
     """
     return [a * b for a, b in zip(list_1, list_2)]
 
@@ -212,15 +172,22 @@ def element_list_division(list_1, list_2):
     :param list_1: list
         first list of numeric values for numerators of division
     :param list_2: list
-        first list of numeric values for denominators of division
+        second list of numeric values for denominators of division
     :return: list
-        list populated with divided values
+        list populated with quotient values
     """
     return [a / b for a, b in zip(list_1, list_2)]
 
 
 def convert_boolean_list_to_indices(list_of_booleans):
+    """
+    take a list of boolean values and return the indices of the elements containing True
 
+    :param list_of_booleans: list
+        sequence of booleans
+    :return: list with integer values
+        list of the values that were True in the input list_of_booleans
+    """
     return [n_element for n_element, element in enumerate(list_of_booleans) if element]
 
 
