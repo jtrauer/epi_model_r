@@ -1,3 +1,4 @@
+import numpy
 
 
 def change_parameter_unit(parameter_dict, multiplier):
@@ -47,3 +48,50 @@ def create_step_function_from_dict(input_dict):
                     return dict_values[key]
 
     return step_function
+
+
+def sinusoidal_scaling_function(start_time, baseline_value, end_time, final_value):
+    """
+    in order to implement scale-up functions over time, use the cosine function to produce smooth scale-up functions
+    from one point to another, returning the starting value before the starting point and the final value after the
+    end point
+
+    :param start_time: float
+        starting value of the independent variable
+    :param baseline_value: float
+        starting value of the dependent variable
+    :param end_time: float
+        final value of the independent variable
+    :param final_value: float
+        final value of the dependent variable
+    :return:
+        function scaling from the starting value to the final value
+    """
+    def sinusoidal_function(time):
+        if not isinstance(time, float):
+            raise ValueError("value provided to scaling function not a float")
+        elif start_time > end_time:
+            raise ValueError("start time is later than end time")
+        elif time < start_time:
+            return baseline_value
+        elif start_time <= time <= end_time:
+            return baseline_value + \
+                   (final_value - baseline_value) * \
+                   (0.5 - 0.5 * numpy.cos((time - start_time) * numpy.pi / (end_time - start_time)))
+        else:
+            return final_value
+    return sinusoidal_function
+
+
+def logistic_scaling_function(parameter):
+    """
+    a specific sigmoidal form of function that scales up from zero to one around the point of parameter
+        won't be useful in all situations and is specifically for age-specific infectiousness - should be the same as in
+        Romain's BMC Medicine manuscript
+
+    :param parameter: float
+        the single parameter to the function
+    :return: function
+        the logistic function
+    """
+    return lambda x: 1.0 - 1.0 / (1.0 + numpy.exp(-(parameter - x)))
