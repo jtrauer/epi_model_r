@@ -351,7 +351,7 @@ def create_function_of_function(outer_function, inner_function):
 
 
 """
-other specific functions for application to the model object
+flow diagram creation
 """
 
 
@@ -422,7 +422,7 @@ class EpiModel:
     :attribute times: list
         time steps at which outputs are to be evaluated
     :attribute compartment_types: list
-        each of the strings representing the compartments of the model
+        strings representing the compartments of the model
     :attribute initial_conditions: dict
         keys are compartment types, values are starting population values for each compartment
         note that not all compartment_types must be included as keys in requests
@@ -460,7 +460,8 @@ class EpiModel:
 
     def output_to_user(self, comment):
         """
-        short function to save the if statement in every call to output some information
+        output some information
+        short function just to save the if statement in every call
 
         :param: comment: string for the comment to be displayed to the user
         """
@@ -477,11 +478,11 @@ class EpiModel:
                  starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint",
                  output_connections={}, derived_output_functions={}):
         """
-        construction method to create a basic (and at this point unstratified) compartmental model, including checking
+        construction method to create a basic (and at this stage unstratified) compartmental model, including checking
             that the arguments have been provided correctly (in a separate method called here)
 
         :params: all arguments essentially become object attributes and are described in the first main docstring to
-            this object class
+            this object class above
         """
 
         # set flow attributes as pandas data frames with fixed column names
@@ -492,7 +493,7 @@ class EpiModel:
 
         # attributes with specific format that are independent of user inputs
         self.tracked_quantities, self.time_variants, self.adaptation_functions, self.all_stratifications, \
-        self.customised_flow_functions = ({} for _ in range(5))
+            self.customised_flow_functions = ({} for _ in range(5))
         self.derived_outputs = {"times": []}
         self.compartment_values, self.compartment_names, self.infectious_indices = ([] for _ in range(3))
 
@@ -541,7 +542,7 @@ class EpiModel:
         check all input data have been requested correctly
 
         :parameters: all parameters have come directly from the construction (__init__) method unchanged and have been
-            renamed with a preceding _ character
+            renamed with a preceding _ character to indicate different scope
         """
 
         # check variables are of the expected type
@@ -567,7 +568,7 @@ class EpiModel:
         # check some specific requirements
         if any(_infectious_compartment) not in _compartment_types:
             ValueError("infectious compartment name is not one of the listed compartment types")
-        if _birth_approach not in ("add_crude_birth_rate", "replace_deaths", "no_births"):
+        if _birth_approach not in ["add_crude_birth_rate", "replace_deaths", "no_births"]:
             ValueError("requested birth approach unavailable")
         if sorted(_times) != _times:
             self.output_to_user("requested integration times are not sorted, now sorting")
@@ -580,7 +581,7 @@ class EpiModel:
         if _verbose:
             print("integration times are from %s to %s (time units are always arbitrary)"
                   % (round(_times[0], _reporting_sigfigs), round(_times[-1], _reporting_sigfigs)))
-            print("unstratified requested initial conditions are:")
+            print("unstratified, unprocessed initial conditions requested are:")
             for compartment in _initial_conditions:
                 print("\t%s: %s" % (compartment, _initial_conditions[compartment]))
             print("infectious compartment(s) are '%s'" % _infectious_compartment)
@@ -594,14 +595,13 @@ class EpiModel:
             unchanged from argument to __init__
         """
 
-        # start by setting all compartments to zero
+        # first set all compartments to zero
         self.compartment_values = [0.0] * len(self.compartment_names)
 
         # set starting values of (unstratified) compartments to requested value
-        for compartment in self.initial_conditions:
-            if compartment in self.compartment_types:
-                self.compartment_values[self.compartment_names.index(compartment)] = \
-                    self.initial_conditions[compartment]
+        for comp in self.initial_conditions:
+            if comp in self.compartment_types:
+                self.compartment_values[self.compartment_names.index(comp)] = self.initial_conditions[comp]
             else:
                 raise ValueError("compartment %s requested in initial conditions not found in model compartment types")
 
@@ -611,7 +611,7 @@ class EpiModel:
 
     def sum_initial_compartments_to_total(self):
         """
-        make initial conditions sum to a certain value
+        make initial conditions sum to a certain user-requested value
         """
         compartment = self.find_remainder_compartment()
         remaining_population = self.starting_population - sum(self.compartment_values)
