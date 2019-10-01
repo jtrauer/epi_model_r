@@ -86,7 +86,7 @@ def get_parameter_dict_from_function(input_function, breakpoints, upper_value=10
     create a dictionary of parameter values from a continuous function, an arbitrary upper value and some breakpoints
         within which to evaluate the function
     """
-    revised_breakpoints = copy.copy(add_zero_to_age_breakpoints(breakpoints))
+    revised_breakpoints = copy(add_zero_to_age_breakpoints(breakpoints))
     revised_breakpoints.append(upper_value)
     param_values = []
     for n_breakpoint in range(len(revised_breakpoints) - 1):
