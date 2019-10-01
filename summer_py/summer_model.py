@@ -355,22 +355,19 @@ other specific functions for application to the model object
 """
 
 
-def store_database(outputs, table_name="outputs"):
+def create_flowchart(model_object, strata=None, name="flow_chart"):
     """
-    store outputs from the model in sql database for use in producing outputs later
-    """
-    engine = create_engine("sqlite:///../databases/outputs.db", echo=True)
-    if table_name == "functions":
-        outputs.to_sql(table_name, con=engine, if_exists="replace", index=False, dtype={"cdr_values": FLOAT()})
-    else:
-        outputs.to_sql(table_name, con=engine, if_exists="replace", index=False)
+    use graphviz module to create flow diagram of compartments and inter-compartmental flows
 
-
-def create_flowchart(model_object, strata=None, stratify=True, name="flow_chart"):
-    """
-    use graphviz module to create flow diagram of compartments and intercompartmental flows.
+    :param model_object: summer object
+        model whose inter-compartmental flows need to be graphed
+    :param strata: int
+        number of stratifications that have been implemented at the point that diagram creation requested
+    :param name: str
+        filename for the image to be put out as
     """
 
+    # find the stratification level of interest, with the fully stratified model being the default
     if strata is None:
         strata = len(model_object.all_stratifications)
 
@@ -385,6 +382,10 @@ def create_flowchart(model_object, strata=None, stratify=True, name="flow_chart"
                         "fontname": "Courier",
                         "fontsize": "10", }}
 
+    # colour dictionary for different nodes indicating different stages of infection
+    colour_dict = {"susceptible": "#F0FFFF", "early_latent": "#A64942", "late_latent": "#A64942",
+                   "infectious": "#FE5F55", "recovered": "#FFF1C1"}
+
     def apply_styles(graph, styles):
         graph.graph_attr.update(("graph" in styles and styles["graph"]) or {})
         graph.node_attr.update(("nodes" in styles and styles["nodes"]) or {})
@@ -392,33 +393,18 @@ def create_flowchart(model_object, strata=None, stratify=True, name="flow_chart"
         return graph
 
     # find input nodes and edges
-    if stratify:
-        input_nodes = model_object.compartment_names
-        type_of_flow = model_object.transition_flows[model_object.transition_flows.implement == strata]\
-            if strata != -1 else \
-            model_object.transition_flows[model_object.transition_flows.implement == len(model_object.strata)]
-    else:
-        input_nodes = model_object.compartment_types
-        type_of_flow = model_object.unstratified_flows
+    type_of_flow = model_object.transition_flows[model_object.transition_flows.implement == strata]
 
+    # find compartment names to be used, from all compartments listed as origins or destinations in transition flows
+    new_labels = list(set().union(type_of_flow["origin"].values, type_of_flow["to"].values))
+
+    # start building graph
     model_object.flow_diagram = Digraph(format="png")
 
-    # colour dictionary for different nodes indicating different stages of infection
-    colour_dict = {"susceptible": "#F0FFFF", "early_latent": "#A64942", "late_latent": "#A64942",
-                   "infectious": "#FE5F55", "recovered": "#FFF1C1"}
-    if strata != -1:
-
-        # find the compartment names that will be used to make the graph
-        new_labels = list(set().union(type_of_flow["origin"].values, type_of_flow["to"].values))
-
-        for label in new_labels:
-            # inputs are sectioned according to the stem value so colours can be added to each type
-            node_color = colour_dict[find_name_components(label)[0]]
-            model_object.flow_diagram.node(label, fillcolor=node_color)
-    else:
-        for label in model_object.compartment_names:
-            node_color = colour_dict[find_name_components(label)[0]]
-            model_object.flow_diagram.node(label, fillcolor=node_color)
+    # inputs are sectioned according to the stem value so colours can be added to each type
+    for label in new_labels:
+        node_color = colour_dict[find_name_components(label)[0]]
+        model_object.flow_diagram.node(label, fillcolor=node_color)
 
     # build the graph edges
     for row in type_of_flow.iterrows():
@@ -2325,9 +2311,11 @@ if __name__ == "__main__":
 
     create_flowchart(sir_model, name="sir_model_diagram")
 
+    sir_model.transition_flows.to_csv("temp.csv")
+
     # create_flowchart(sir_model)
     #
-    sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
+    # sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
 
 
 
