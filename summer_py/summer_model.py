@@ -1,5 +1,5 @@
 import numpy
-from scipy.integrate import odeint, solve_ivp, quad
+from scipy.integrate import odeint, solve_ivp
 import matplotlib.pyplot
 import copy
 import pandas as pd
@@ -171,6 +171,24 @@ def normalise_dict(value_dict):
     return {key: value_dict[key] / sum(value_dict.values()) for key in value_dict}
 
 
+def order_dict_by_keys(input_dict):
+    """
+    sort the input dictionary keys and return two separate lists with keys and values as lists with corresponding
+        elements
+
+    :param input_dict: dict
+        dictionary to be sorted
+    :return:
+        :dict_keys: list
+            sorted list of what were the dictionary keys
+        : list
+            values applicable to the sorted list of dictionary keys
+    """
+    dict_keys = list(input_dict.keys())
+    dict_keys.sort()
+    return dict_keys, [input_dict[key] for key in dict_keys]
+
+
 def element_list_multiplication(list_1, list_2):
     """
     multiply elements of two lists to return another list with the same dimensions
@@ -212,7 +230,41 @@ def convert_boolean_list_to_indices(list_of_booleans):
 
 
 """
-functions for use as inputs to the model
+functions needed for dealing with age stratification
+"""
+
+
+def add_zero_to_age_breakpoints(breakpoints):
+    """
+    append a zero on to a list if there isn't one already present, for the purposes of age stratification
+
+    :param breakpoints: list
+        integers for the age breakpoints requested
+    :return: list
+        age breakpoints with the zero value included
+    """
+    return [0] + breakpoints if 0 not in breakpoints else breakpoints
+
+
+def split_age_parameter(age_breakpoints, parameter):
+    """
+    creates a dictionary to request splitting of a parameter according to age breakpoints, but using values of 1 for
+        each age stratum
+    allows that later parameters that might be age-specific can be modified for some age strata
+
+    :param age_breakpoints: list
+        list of the age breakpoints to be requested, with breakpoints as string
+    :param parameter: str
+        name of parameter that will need to be split
+    :return: dict
+        dictionary with age groups as string as keys and ones for all the values
+    """
+    age_breakpoints = ["0"] + age_breakpoints if "0" not in age_breakpoints else age_breakpoints
+    return {parameter: {str(age_group): 1.0 for age_group in age_breakpoints}}
+
+
+"""
+functions of functions for use in stratified models
 """
 
 
@@ -238,14 +290,12 @@ def create_time_variant_multiplicative_function(time_variant_function):
     :return: function
         function that will multiply the input value by the output value of the time_variant_function
     """
-
     return lambda input_value, time: time_variant_function(time) * input_value
 
 
 def create_additive_function(increment):
     """
-    return the addition of a fixed value as a function itself
-    currently only included for testing
+    return the addition of a fixed value as a function
 
     :param increment: float
         value that the returned function increments by
@@ -253,99 +303,6 @@ def create_additive_function(increment):
         function that can increment by the value parameter when called
     """
     return lambda value: value + increment
-
-
-def create_function_of_function(outer_function, inner_function):
-    """
-    function that can itself return a function that sequentially apply two functions
-
-    :param outer_function: function
-        last function to be called
-    :param inner_function: function
-        first function to be called
-    :return: function
-        composite function that applies the inner and then the outer function, allowing the time parameter to be passed
-            through if necessary
-    """
-    return lambda time: outer_function(inner_function(time), time)
-
-
-def get_average_value_of_function(input_function, start_value, end_value):
-    """
-    use numeric integration to find the average value of a function between two extremes
-
-    :param input_function: function
-        function to be interrogated
-    :param start_value: float
-        lower limit of the independent variable over which to integrate the function
-    :param end_value: float
-        upper limit of the independent variable over which to integrate the function
-    """
-    return quad(input_function, start_value, end_value)[0] / (end_value - start_value)
-
-
-def add_zero_to_age_breakpoints(breakpoints):
-    """
-    append a zero on to a list if there isn't one already present, for the purposes of age stratification
-
-    :param breakpoints: list
-        integers for the age breakpoints requested
-    :return: list
-        age breakpoints with the zero value included
-    """
-    return [0] + breakpoints if 0 not in breakpoints else breakpoints
-
-
-def get_parameter_dict_from_function(input_function, breakpoints, upper_value=100.0):
-    """
-    create a dictionary of parameter values from a continuous function, an arbitrary upper value and some breakpoints
-    within which to evaluate the function
-    """
-    revised_breakpoints = copy.copy(add_zero_to_age_breakpoints(breakpoints))
-    revised_breakpoints.append(upper_value)
-    param_values = []
-    for n_breakpoint in range(len(revised_breakpoints) - 1):
-        param_values.append(get_average_value_of_function(
-            input_function, revised_breakpoints[n_breakpoint], revised_breakpoints[n_breakpoint + 1]))
-    return {str(key): value for key, value in zip(revised_breakpoints, param_values)}
-
-
-def split_age_parameter(age_breakpoints, parameter):
-    """
-    creates a dictionary to request splitting of a parameter according to age breakpoints, but using values of 1 for
-        each age stratum
-    in order that later parameters that might be age-specific can be modified for some age strata
-
-    :param age_breakpoints: list
-        list of the age breakpoints to be requested, with breakpoints as string
-    :param parameter: str
-        name of parameter that will need to be split
-    :return: dict
-        dictionary with age groups as string as keys and ones for all the values
-    """
-    age_breakpoints = ["0"] + age_breakpoints if "0" not in age_breakpoints else age_breakpoints
-    return {parameter: {str(age_group): 1.0 for age_group in age_breakpoints}}
-
-
-def substratify_parameter(parameter_to_stratify, stratum_to_split, param_value_dict, breakpoints):
-    """
-    produce dictionary revise a stratum of a parameter that has been split at a higher level from dictionary of the
-        values for each stratum of the higher level of the split
-
-    :param parameter_to_stratify: str
-        name of the parameter that was split at the higher level
-    :param stratum_to_split: str
-        stratum whose values should be revised
-    :param param_value_dict: dict
-        dictionary with keys age breakpoints and values parameter values
-    :param breakpoints: list
-        list of age breakpoints submitted as integer
-    :return: dict
-        dictionary with keys being upstream stratified parameter to split and keys dictionaries with their keys the
-            current stratum of interest and values the parameter multiplier
-    """
-    return {parameter_to_stratify + "Xage_" + str(age_group): {stratum_to_split: param_value_dict[str(age_group)]} for
-            age_group in add_zero_to_age_breakpoints(breakpoints)}
 
 
 def create_sloping_step_function(start_x, start_y, end_x, end_y):
@@ -373,7 +330,24 @@ def create_sloping_step_function(start_x, start_y, end_x, end_y):
             return gradient * age + start_y - gradient * start_x
         elif end_x <= age:
             return end_y
+
     return step_function
+
+
+def create_function_of_function(outer_function, inner_function):
+    """
+    function that can itself return a function that sequentially apply two functions and so can be used recursively to
+        create a series of functions
+
+    :param outer_function: function
+        last function to be called
+    :param inner_function: function
+        first function to be called
+    :return: function
+        composite function that applies the inner and then the outer function, allowing the time parameter to be passed
+            through if necessary
+    """
+    return lambda time: outer_function(inner_function(time), time)
 
 
 """
