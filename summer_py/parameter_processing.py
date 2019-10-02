@@ -51,6 +51,20 @@ def get_average_value_of_function(input_function, start_value, end_value):
     return quad(input_function, start_value, end_value)[0] / (end_value - start_value)
 
 
+def get_parameter_dict_from_function(input_function, breakpoints, upper_value=100.0):
+    """
+    create a dictionary of parameter values from a continuous function, an arbitrary upper value and some breakpoints
+    within which to evaluate the function
+    """
+    revised_breakpoints = copy.copy(add_zero_to_age_breakpoints(breakpoints))
+    revised_breakpoints.append(upper_value)
+    param_values = []
+    for n_breakpoint in range(len(revised_breakpoints) - 1):
+        param_values.append(get_average_value_of_function(
+            input_function, revised_breakpoints[n_breakpoint], revised_breakpoints[n_breakpoint + 1]))
+    return {str(key): value for key, value in zip(revised_breakpoints, param_values)}
+
+
 def substratify_parameter(parameter_to_stratify, stratum_to_split, param_value_dict, breakpoints, stratification="age"):
     """
     produce dictionary revise a stratum of a parameter that has been split at a higher level from dictionary of the
