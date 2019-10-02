@@ -4,9 +4,7 @@ import matplotlib.pyplot
 import copy
 import pandas as pd
 from graphviz import Digraph
-from sqlalchemy import create_engine
 import os
-from sqlalchemy import FLOAT
 import itertools
 
 # set path - sachin
@@ -386,10 +384,10 @@ def create_flowchart(model_object, strata=None, name="flow_chart"):
     colour_dict = {"susceptible": "#F0FFFF", "early_latent": "#A64942", "late_latent": "#A64942",
                    "infectious": "#FE5F55", "recovered": "#FFF1C1"}
 
-    def apply_styles(graph, styles):
-        graph.graph_attr.update(("graph" in styles and styles["graph"]) or {})
-        graph.node_attr.update(("nodes" in styles and styles["nodes"]) or {})
-        graph.edge_attr.update(("edges" in styles and styles["edges"]) or {})
+    def apply_styles(graph, _styles):
+        graph.graph_attr.update(("graph" in _styles and _styles["graph"]) or {})
+        graph.node_attr.update(("nodes" in _styles and _styles["nodes"]) or {})
+        graph.edge_attr.update(("edges" in _styles and _styles["edges"]) or {})
         return graph
 
     # find input nodes and edges
@@ -473,7 +471,7 @@ class EpiModel:
     """
 
     def __init__(self, times, compartment_types, initial_conditions, parameters, requested_flows,
-                 initial_conditions_to_total=True, infectious_compartment=["infectious"], birth_approach="no_birth",
+                 initial_conditions_to_total=True, infectious_compartment=("infectious",), birth_approach="no_birth",
                  verbose=False, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1,
                  starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint",
                  output_connections={}, derived_output_functions={}):
@@ -514,11 +512,11 @@ class EpiModel:
 
         # convert input arguments to model attributes
         for attribute in \
-                ["times", "compartment_types", "initial_conditions", "parameters", "initial_conditions_to_total",
+                ("times", "compartment_types", "initial_conditions", "parameters", "initial_conditions_to_total",
                  "infectious_compartment", "birth_approach", "verbose", "reporting_sigfigs", "entry_compartment",
                  "starting_population", "starting_compartment", "infectious_compartment",
                  "equilibrium_stopping_tolerance", "integration_type", "output_connections",
-                 "derived_output_functions"]:
+                 "derived_output_functions"):
             setattr(self, attribute, eval(attribute))
 
         # keep copy of the compartment types in case the compartment names are stratified later
@@ -546,29 +544,29 @@ class EpiModel:
         """
 
         # check variables are of the expected type
-        for expected_numeric_variable in ["_reporting_sigfigs", "_starting_population"]:
+        for expected_numeric_variable in ("_reporting_sigfigs", "_starting_population"):
             if not isinstance(eval(expected_numeric_variable), int):
                 raise TypeError("expected integer for %s" % expected_numeric_variable)
-        for expected_float_variable in ["_equilibrium_stopping_tolerance"]:
+        for expected_float_variable in ("_equilibrium_stopping_tolerance",):
             if not isinstance(eval(expected_float_variable), float):
                 raise TypeError("expected float for %s" % expected_float_variable)
-        for expected_list in ["_infectious_compartment", "_times", "_compartment_types", "_requested_flows"]:
+        for expected_list in ("_infectious_compartment", "_times", "_compartment_types", "_requested_flows"):
             if not isinstance(eval(expected_list), list):
                 raise TypeError("expected list for %s" % expected_list)
-        for expected_string in ["_birth_approach", "_entry_compartment", "_starting_compartment", "_integration_type"]:
+        for expected_string in ("_birth_approach", "_entry_compartment", "_starting_compartment", "_integration_type",):
             if not isinstance(eval(expected_string), str):
                 raise TypeError("expected string for %s" % expected_string)
-        for expected_boolean in ["_initial_conditions_to_total", "_verbose"]:
+        for expected_boolean in ("_initial_conditions_to_total", "_verbose"):
             if not isinstance(eval(expected_boolean), bool):
                 raise TypeError("expected boolean for %s" % expected_boolean)
-        for expected_dict in ["_derived_output_functions"]:
+        for expected_dict in ("_derived_output_functions",):
             if not isinstance(eval(expected_dict), dict):
                 raise TypeError("expected dictionary for %s" % expected_dict)
 
         # check some specific requirements
         if any(_infectious_compartment) not in _compartment_types:
             ValueError("infectious compartment name is not one of the listed compartment types")
-        if _birth_approach not in ["add_crude_birth_rate", "replace_deaths", "no_births"]:
+        if _birth_approach not in ("add_crude_birth_rate", "replace_deaths", "no_births"):
             ValueError("requested birth approach unavailable")
         if sorted(_times) != _times:
             self.output_to_user("requested integration times are not sorted, now sorting")
