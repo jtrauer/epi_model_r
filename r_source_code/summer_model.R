@@ -33,26 +33,55 @@ depth=0
 # string manipulation functions
 # -------------------------------
 
-create_stratum_name = function(stratification_name, stratum_name, with_x = TRUE) {
-  # generate the name just for the particular stratification
+create_stratum_name = function(stratification_name, stratum_name, joining_string="X") {
+  # generate a name string to represent a particular stratum within a requested stratification
+  
+  # :param stratification_name: str
+  # the "stratification" or rationale for implementing the current stratification process
+  # :param stratum_name: str
+  # name of the stratum within the stratification
+  # :param joining_string: logical
+  # the character to add to the front to indicate that this string is the extension of the existing one
+  # in SUMMER, capitals are reserved for non-user-requested strings, in this case "X" is used as the default
+  # :return: str
+  # the composite string for the stratification
+  
   startum_name = paste(stratification_name, "_", stratum_name, sep="")
-  ifelse(with_x, paste("X", stratification_name, "_", stratum_name, sep = ""), startum_name)
+  ifelse(!is.na(joining_string), paste(joining_string, stratification_name, "_", stratum_name, sep = ""), startum_name)
 }
 
 
 create_stratified_name = function(stem, stratification_name, stratum_name) {
   # generate a standardised stratified compartment name
+  
+  # :param stem: str
+  # the previous stem to the compartment or parameter name that needs to be extended
+  # :param stratification_name: str
+  # the "stratification" or rationale for implementing the current stratification process
+  # :param stratum_name: str
+  # name of the stratum within the stratification
+  # :return: str
+  # the composite name with the standardised stratification name added on to the old stem
+  
   paste(stem, create_stratum_name(stratification_name, stratum_name), sep = "")
 }
 
 
 
-extract_x_positions = function(parameter) {
-  # extract the positions of the capital Xs from a string and join on to a number for the total length of the string
+extract_x_positions = function(parameter, joining_string="X") {
+  # find the positions within a string which are X and return as list, including length of list
+  
+  # :param parameter: str
+  # the string for interrogation
+  # :param joining_string: str
+  # the string of interest whose character positions need to be found
+  # :return: list
+  # list of all the indices for where the X character occurs in the string, along with the total length of the list
+  
   result = c()
   param = strsplit(parameter, "")[[1]]
   for (loc in seq(nchar(parameter))){
-    if (as.character(param[loc]) == as.character("X"))
+    if (as.character(param[loc]) == as.character(joining_string))
        result = c(result, loc)}
   result = c(result, length(param))
   result
@@ -61,13 +90,24 @@ extract_x_positions = function(parameter) {
 
 extract_reversed_x_positions = function(parameter) {
   # find the positions within a string which are X and return as list reversed, including length of list
+  
+  # :params and return: see extract_x_positions above
    rev(extract_x_positions(parameter))
 }
 
 
 
-find_stem = function(stratified_string) {
-  # find the stem of the compartment name as the text leading up to the first occurrence of "X"
+find_stem = function(stratified_string, joining_string="X") {
+  # find the stem of the compartment name as the text leading up to the first occurrence of the joining string
+  # (usually "X")
+  # should run slightly faster than using find_name_components
+  # 
+  # :param stratified_string: str
+  # the stratified string for the compartment or parameter name
+  # :param joining_string: str
+  # the string of interest whose character position will be used to truncate the stratified string
+  # :return: int
+  # the point at which the first occurrence of the joining string occurs
   find_name_components(stratified_string)[1]
 }
 
@@ -104,14 +144,14 @@ add_w_to_param_names = function(parameter_dict){
   
 }
 
-find_name_components = function(compartment_or_parameter){
+find_name_components = function(compartment_or_parameter, joining_string="X"){
   # extract all the components of a stratified compartment or parameter name
   # :param compartment: str
   # name of the compartment or parameter to be interrogated
   # :return:
   #  list of the extracted compartment components
   
-  component_list = unlist(strsplit(compartment_or_parameter, "X"))
+  component_list = unlist(strsplit(compartment_or_parameter, joining_string))
   component_list 
 }
 
@@ -1572,7 +1612,7 @@ StratifiedModel <- R6Class(
       }
       else {
         for (stratum in names(.infectiousness_adjustments)) {
-          self$infectiousness_levels[[create_stratum_name( .stratification_name, stratum, with_x = FALSE)]] <-
+          self$infectiousness_levels[[create_stratum_name( .stratification_name, stratum, joining_string="")]] <-
             .infectiousness_adjustments[[stratum]]
         }
       }
@@ -2155,7 +2195,7 @@ sir_model$stratify("hiv", c("negative", "positive"), c(),
                         infect_death=list("negative"=0.5)),
                    list("negative"=0.6, "positive"=0.4), infectiousness_adjustments = c("positive"=0.5), mixing_matrix=hiv_mixing, verbose = TRUE)
 
-#sir_model$stratify("strain", c("sensitive", "resistant"),  c("infectious"), requested_proportions=c(), verbose = FALSE)
+sir_model$stratify("strain", c("sensitive", "resistant"),  c("infectious"), requested_proportions=c(), verbose = FALSE)
 age_mixing <- NULL
 age_mixing <- diag(4)
 sir_model$stratify("age", c(1, 10, 3), c(),
