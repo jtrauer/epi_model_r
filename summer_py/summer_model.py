@@ -2357,6 +2357,8 @@ class StratifiedModel(EpiModel):
 
         :parameters: all parameters have come directly from the apply_all_flow_types_to_odes method unchanged
         """
+
+        # find the total number of births entering the system at the current time point
         total_births = self.find_total_births(_compartment_values, _time)
 
         # split the total births across entry compartments
