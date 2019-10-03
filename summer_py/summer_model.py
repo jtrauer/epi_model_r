@@ -1256,10 +1256,10 @@ class StratifiedModel(EpiModel):
             self.compartment_types_to_stratify, self.infectious_denominators, self.strains, self.mixing_categories = \
             ([] for _ in range(7))
         self.all_stratifications, self.infectiousness_adjustments, self.final_parameter_functions,\
-            self.adaptation_functions, self.mixing_denominator_indices, self.infectiousness_levels, \
-            self.infectious_indices, self.infectious_compartments, self.infectiousness_multipliers, \
-            self.parameter_components, self.mortality_components, self.infectious_populations, \
-            self.strain_mixing_elements, self.strain_mixing_multipliers = ({} for _ in range(14))
+            self.adaptation_functions, self.infectiousness_levels, self.infectious_indices, \
+            self.infectious_compartments, self.infectiousness_multipliers, self.parameter_components, \
+            self.mortality_components, self.infectious_populations, self.strain_mixing_elements, \
+            self.strain_mixing_multipliers = ({} for _ in range(13))
         self.overwrite_character, self.overwrite_key = "W", "overwrite"
         self.heterogeneous_mixing, self.mixing_matrix, self.available_death_rates = False, None, [""]
 
@@ -2158,10 +2158,10 @@ class StratifiedModel(EpiModel):
         # mixing preparations
         if self.mixing_matrix is not None:
             self.add_force_indices_to_transitions()
-        self.find_mixing_denominators()
+        mixing_indices = self.find_mixing_denominators()
 
         # reconciling the strains and the mixing attributes together into one structure
-        self.find_strain_mixing_multipliers()
+        self.find_strain_mixing_multipliers(mixing_indices)
 
     def prepare_all_infectiousness_multipliers(self):
         """
@@ -2225,18 +2225,22 @@ class StratifiedModel(EpiModel):
     def find_mixing_denominators(self):
         """
         for each mixing category, create a list of the compartment numbers that are relevant
-        the list (self.mixing_denominator_indices) is only used in the subsequent method find_strain_mixing_multipliers
+
+        :return mixing_indices: list
+            indices of the compartments that are applicable to a particular mixing category
         """
-        if self.mixing_matrix is not None:
+        if self.mixing_matrix is None:
+            return {"all_population": range(len(self.compartment_names))}
+        else:
+            mixing_indices = {}
             for category in self.mixing_categories:
-                self.mixing_denominator_indices[category] = \
+                mixing_indices[category] = \
                     [i_comp for i_comp, compartment in enumerate(self.compartment_names)
                      if all([component in find_name_components(compartment)
                              for component in find_name_components(category)])]
-        else:
-            self.mixing_denominator_indices["all_population"] = range(len(self.compartment_names))
+            return mixing_indices
 
-    def find_strain_mixing_multipliers(self):
+    def find_strain_mixing_multipliers(self, mixing_indices):
         """
         find the relevant indices to be used to calculate the force of infection contribution to each strain from each
             mixing category as a list of indices - and separately find multipliers as a list of the same length for
@@ -2246,7 +2250,7 @@ class StratifiedModel(EpiModel):
             self.strain_mixing_elements[strain], self.strain_mixing_multipliers[strain] = {}, {}
             for category in ["all_population"] if self.mixing_matrix is None else self.mixing_categories:
                 self.strain_mixing_elements[strain][category] = \
-                    [index for index in self.mixing_denominator_indices[category]
+                    [index for index in mixing_indices[category]
                      if index in self.infectious_indices[strain]]
                 self.strain_mixing_multipliers[strain][category] = \
                     [self.infectiousness_multipliers[i_comp]
