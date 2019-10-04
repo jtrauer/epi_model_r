@@ -431,7 +431,9 @@ class EpiModel:
     :attribute compartment_values: list
         list of floats for the working values of the compartment sizes
     :attribute customised_flow_functions: dict
-
+        user-defined functions that calculate specific model quantities that are needed to determine the rate of
+            specific flows - for example, transitions that need to be implemented as absolute rates regardless of the
+            size of the origin compartment
     :attribute death_flows: pandas data frame
         grid containing the information for the compartment-specific death flows to be implemented
         columns are type, parameter, origin, implement
@@ -748,12 +750,13 @@ class EpiModel:
         self.transition_flows = self.transition_flows.append(
             {key: value for key, value in _flow.items() if key != "function"}, ignore_index=True)
 
-        # record the function associated with a customised flow
+        # record the associated function if the flow being considered is a customised flow
         if _flow["type"] == "customised_flows":
             if "function" not in _flow.keys():
-                raise ValueError("a customised flow requires a function")
-            n_flow = len(self.transition_flows.index) - 1
-            self.customised_flow_functions[n_flow] = _flow["function"]
+                raise ValueError("a customised flow requires a function to be specified in user request dictionary")
+            elif not callable(_flow["function"]):
+                raise ValueError("value of 'function' key must be a function")
+            self.customised_flow_functions[self.transition_flows.shape[0] - 1] = _flow["function"]
 
     def add_death_flow(self, _flow):
         """
@@ -869,7 +872,9 @@ class EpiModel:
         _ode_equations = self.apply_transition_flows(_ode_equations, _compartment_values, _time)
         _ode_equations = self.apply_compartment_death_flows(_ode_equations, _compartment_values, _time)
         _ode_equations = self.apply_universal_death_flow(_ode_equations, _compartment_values, _time)
-        return self.apply_birth_rate(_ode_equations, _compartment_values, _time)
+        _ode_equations = self.apply_birth_rate(_ode_equations, _compartment_values, _time)
+        self.check_all_compartments_positive(_compartment_values)
+        return _ode_equations
 
     def apply_transition_flows(self, _ode_equations, _compartment_values, _time):
         """
@@ -888,13 +893,12 @@ class EpiModel:
             # find the index of the origin or from compartment
             from_compartment = self.compartment_names.index(self.transition_flows.origin[n_flow])
 
-            if self.transition_flows.at[n_flow, "type"] == "customised_flows":
-                net_flow = parameter_value * self.customised_flow_functions[n_flow](self, n_flow)
-                if _compartment_values[from_compartment] < net_flow:
-                    net_flow = _compartment_values[from_compartment]
-            else:
-                net_flow = parameter_value * _compartment_values[from_compartment] * infectious_population
+            # implement flows according to whether customised or standard/infection-related
+            net_flow = parameter_value * self.customised_flow_functions[n_flow](self, n_flow) if \
+                self.transition_flows.type[n_flow] == "customised_flows" else \
+                parameter_value * _compartment_values[from_compartment] * infectious_population
 
+            # update equations
             _ode_equations = increment_list_by_index(_ode_equations, from_compartment, -net_flow)
             _ode_equations = increment_list_by_index(
                 _ode_equations, self.compartment_names.index(self.transition_flows.to[n_flow]), net_flow)
@@ -990,6 +994,16 @@ class EpiModel:
         """
         return increment_list_by_index(_ode_equations, self.compartment_names.index(self.entry_compartment),
                                        self.find_total_births(_compartment_values, _time))
+
+    def check_all_compartments_positive(self, _compartment_values):
+        """
+        check that all compartment values have a positive value
+
+        :param _compartment_values:
+            see previous methods
+        """
+        if any([compartment < 0.0 for compartment in _compartment_values]):
+            print("warning, compartment or compartments with negative values")
 
     def find_total_births(self, _compartment_values, _time):
         """
@@ -1664,6 +1678,7 @@ class StratifiedModel(EpiModel):
                      "strain": strain},
                     ignore_index=True)
 
+                # update the customised flow function storage dictionary
                 if self.transition_flows.type[_n_flow] == 'customised_flows':
                     self.update_customised_flow_function_dict(_n_flow)
 
@@ -1672,12 +1687,8 @@ class StratifiedModel(EpiModel):
             new_flow = self.transition_flows.loc[_n_flow, :].to_dict()
             new_flow["implement"] += 1
             self.transition_flows = self.transition_flows.append(new_flow, ignore_index=True)
-
             if self.transition_flows.type[_n_flow] == 'customised_flows':
                 self.update_customised_flow_function_dict(_n_flow)
-
-        if self.transition_flows.type[_n_flow] == 'customised_flows':
-            del(self.customised_flow_functions[_n_flow])
 
     def add_adjusted_parameter(self, _unadjusted_parameter, _stratification_name, _stratum, _adjustment_requests):
         """
@@ -1780,14 +1791,14 @@ class StratifiedModel(EpiModel):
 
     def update_customised_flow_function_dict(self, _n_flow):
         """
-        when a stratified flow has just been created and if the original flow was customised, we need to update the
-            dictionary listing the functions associated with the customised flows
+        when a stratified flow is being created and if the original unstratified flow was customised, we need to update
+            the dictionary listing the functions associated with the customised flows with a new key to refer to the
+            same function
 
         :param _n_flow: int
             the index of the unstratified flow
         """
-        new_n_flow = len(self.transition_flows.index) - 1
-        self.customised_flow_functions[new_n_flow] = self.customised_flow_functions[_n_flow]
+        self.customised_flow_functions[self.transition_flows.shape[0] - 1] = self.customised_flow_functions[_n_flow]
 
     def stratify_entry_flows(self, _stratification_name, _strata_names, _entry_proportions, _requested_proportions):
         """

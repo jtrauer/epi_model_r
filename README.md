@@ -1,5 +1,5 @@
 # SUMMER Handbook
-Scalable, Universal Mathematical Modelling in R (and now Python!)
+Scalable, Universal Mathematical Modelling in R and Python.
 
 We encourage wide use of this repository with acknowledgement. Although it is anticipated that the code base will be
 developed by our team with time, the general functionality of the base code should not change markedly.
