@@ -2432,6 +2432,3 @@ if __name__ == "__main__":
     #
     sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
 
-    print(sir_model.all_stratifications)
-
-
