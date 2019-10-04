@@ -96,11 +96,21 @@ births accrue will be used.
 
 ### Flow requests
 Inter-compartmental or death flows are requested as a dict/list. The keys/names of the request must be:
-* type: to specify the type of the flow being requested as standard_flows, infection_density, infection_frequency or
-compartment_death
-* parameter: to provide the parameter name that the model should use to calculate the transition rate during integration
+* type: specifies the type of the flow being requested as standard_flows, infection_density, infection_frequency,
+compartment_death or customised_flows
+* parameter: provides the parameter name that the model should use to calculate the transition rate during integration
 * origin: the name of the compartment from which the flow arises
 * to: the name of the compartment that the transition goes towards, no applicable to death flows
+standard_flows will calculate the flow rate as the parameter value by the size of the origin compartment.
+
+infection_density flows will calculate the flow rate as the parameter value multiplied by the size of the infectious
+population multiplied by the size of the origin compartment.
+
+infection_frequency flows will calculate the flow rate as the parameter value multiplied by the size of the infectious
+population divided by the total population size multiplied by the size of the origin compartment.
+
+customised_flows use a user-defined function to define a rate of transition, which may not necessarily be multiplied by
+the size of the origin compartment, such that the negative compartment values could result. This will result in a 
 
 ### Model running
 Model running is called through the run_model method to the model object once constructed
@@ -121,7 +131,10 @@ For outputs such as incidence and total mortality, a dictionary/list can be pass
 that specific model quantities emerging from the model are tracked during integration.
 The key/name of the quantity is the name of the indicator, while the value is a dictionary/list specifying the origin
 and destination ("to") compartment. For example, in an SIR model in Python, this would be specified as: {"incidence":
-{"origin": "susceptible", "to": "infectious"}}
+{"origin": "susceptible", "to": "infectious"}}.
+
+Alternatively, user-defined functions can be tracked with any function used to track quantities within the model. These
+are submitted as dictionaries with keys to name the quantities and values to define the functions. 
 
 ### Birth rates
 There are currently three options for calculating the rate of birth implemented in SUMMER (although further approaches
@@ -134,6 +147,20 @@ birth/recruitment rate
 implemented automatically if this approach is requested) and these deaths re-enter the model as births
 Whichever approach is adopted, births then accrue to the compartment nominated by the user as the entry_compartment,
 which is assumed to be "susceptible" by default.
+
+### Death rates
+In addition to the disease/infection-specific death rates that are implemented individually as mentioned above, users
+may request a universal, population-wide death rate to be added to all compartments.
+This can be achieved by specifying the parameter "universal_death_rate" in the parameters submitted to the model.
+If this parameter name is not provided, it will be taken to be zero.
+
+### Outputs
+Once integration has completed, the class will have an attribute called outputs to represent the compartment sizes
+estimated at each time step, as well as any additional outputs collated into the derived_output attribute.
+Visualisation and other functions for outputting results have deliberately been kept minimal, as it is anticipated that
+other software platforms/modules would be used for these purposes.
+However, simple functions have been provided to calculate the total size of several compartments, which may be
+stratified and to plot the total value of this group of compartments. 
 
 ## Stratification
 If a stratified model is required, this can be built through the class StratifiedModel, which provides additional
@@ -257,14 +284,41 @@ will then be looked for as the key to the parameter_function attribute of the mo
 Therefore, a function must be provided before integration as the corresponding value to the parameter_function
 attribute.
 
+### Heterogeneous mixing
+Heterogeneous mixing between specific compartment types can be requested by submitting a square numpy array with values
+representing the group-specific contact rates between the strata being requested, such that this array must also have
+both dimensions equal to the number of strata being implemented.
+Note that this feature can only be applied if the stratification is being applied to all compartments.
+
+If this heterogeneous mixing is applied at multiple stages of stratification, the new mixing matrix will be square with
+dimensions equal to n x m, where n is the number of strata in the first heterogeneous mixing stratification and m is the
+number of strata in the second heterogeneous mixing stratification.
+In this case, the composite mixing matrix is calculated as the kronecker product of the two mixing matrices for the two
+stratifications.
+The contents of the matrices may not strictly be contact rates, because the the rates of contact would still be
+calculated by multiplying through by the parameter associated with that transition (although if this were set to one, 
+then they would be). 
+
 ### Heterogeneous infectiousness
-Heterogeneous infectiousness of specific compartments has been implemented.
+Heterogeneous infectiousness of different strata can be specified through the infectiousness_adjustments argument to the
+stratify method.
+These are specified as a dictionary of relative infectiousness values with keys strata and values the relative
+infectiousness of that strata.
 
-## Some key model attributes
+### Multi-strain models
+Multi-strain models can be created by specifying "strain" as the stratification name when calling stratify.
+When this is done, the force of infection will be calculated separately for each stratum, representing a strain of the
+organism of interest.
+Only compartments representing infection with the organism should be included in the compartments being stratified.
 
-# Transition flows and death flows
-These are recorded in the transition_flows attribute of the main model object. This is a data frame (base R or pandas
-for Python) with the following columns:
+# Model structure visualisation
+
+## Model attributes
+These are described in detail in the docstrings to the EpiModel class and the StratifiedModel class.
+However, note that the two attributes that are stored as data frames can be easily examined.
+For example, in Python, the to_csv method to the transition and death data frames allows easy visualisation of these
+structures in Excel.
+This has the following columns:
 * type: the type of flow being implemented, specifying the behaviour of the flow
 * parameter: the name of the parameter being used for the transition calculation
 * origin: the compartment that the flow comes from or depletes
@@ -273,6 +327,10 @@ death flows
 * implement: an integer value specifying which stratification this applies to - note that only flows for which the value
 of this field is equal to the number of stratifications implemented are actually applied, the others are recorded for
 use in flow diagram plotting, etc.
+
+## Flow diagram
+A flow diagram of the model compartments and inter-compartmental flows can be created with the create_flowchart function
+which takes the model object as an argument.
 
 
 
