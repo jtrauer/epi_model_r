@@ -173,17 +173,23 @@ The population assigned to each compartment under the user request for the initi
 be split between the strata of the stratification being requested - if the stratificaion applies to that compartment.
 This can be set through the user request, using a dictionary/list with keys being the strata names and values being the
 proportion of the population to be assigned to each stratum. Each provided stratum must be one of the strata names and
-the value assigned must be <1. For any stratum not provided in this argument, an equal proportion of the starting
-population will be assigned to that stratum (i.e. the reciprocal of the number of strata). Once this process has
-completed, the starting proportions will be normalised in order to total to 1. For example, if the strata are "positive"
-and "negative" and the user requests that 0.6 be assigned to negative and no request is submitted for positive, positive
-will be assigned 0.5 and the total will then be normalised (in this exampled multiplied by 10/11).
+the total of the values assigned must be <=1. For any stratum not provided in this argument, an equal proportion of the
+unallocated starting population will be assigned to that stratum (i.e. the reciprocal of the number of unassigned 
+strata). For example, if the strata are "positive" and "negative" and the user requests 0.6 for "positive", 0.4 will be
+assigned to "negative". If the strata are "a", "b" and "c" and the user requests 0.4 for "a", then "0.3" will be
+assigned to "b" and "c".
 
 ### Entry flows
-The proportion of new births/entries/recruitment into the model is determined by the same user request as submitted for
-the initial conditions, described in the previous section. However, this only applies if the entry compartment is
-stratified. Currently, only one user request applies to both entry flows and initial conditions stratification. (This
-may be relaxed in future development.)
+The proportion of new births (or "entries/recruitment") into the model is determined by the same user request as
+submitted for the initial conditions, described in the previous section. However, this only applies if the entry
+compartment is stratified. The proportion of births assigned to each stratum can be submitted as a constant or time-
+variant parameter, as for parameters pertaining to other model processes, such as inter-compartmental transitions.
+If no request is submitted for a particular stratum, the proportion of births assigned to that stratum is calculated as
+the reciprocal of the number of strata being applied in the current stratification process. Note that this will result
+in correct calculations if not request is submitted for any strata - however, if a request is submitted for some strata
+but not others, the proportions of births assigned across the strata could sum to more than one. This would not be
+appropriate model behaviour, but is hard to avoid because the entry proportions cannot be normalised before integration
+as the other proportions may be time-variant.
 
 ### Parameter stratification
 Adjustments to existing parameters can be applied through the process of stratification through the optional

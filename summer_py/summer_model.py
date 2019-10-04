@@ -1535,9 +1535,8 @@ class StratifiedModel(EpiModel):
         """
         prepare user inputs for starting proportions for the initial conditions to apply to the exact set of strata
             requested
-        must be specified with at least some of the names of strata being implemented during this stratification process
-        not sure whether the behaviour for requests that include some but not all of the strata is ideal, may change
-            this later
+        if one or more strata not specified, the proportion of the initial conditions allocated to that group will be
+            the total unallocated population divided by the number of strata for which no request was specified
 
         :param _strata_names:
             see find_strata_names_from_input
@@ -1553,20 +1552,18 @@ class StratifiedModel(EpiModel):
         if sum(_requested_proportions.values()) > 1.0:
             raise ValueError("requested starting proportions sum to a value greater than one")
 
-        # assuming an equal proportion of the total for the compartment if not otherwise specified
-        for stratum in _strata_names:
-            if stratum not in _requested_proportions:
-                starting_proportion = 1.0 / len(_strata_names)
-                _requested_proportions[stratum] = starting_proportion
-                self.output_to_user(
-                    "no starting proportion requested for %s stratum so provisionally allocated %s of total"
-                    % (stratum, round(starting_proportion, self.reporting_sigfigs)))
+        # assuming an equal proportion of the unallocated population if no request specified
+        unrequested_strata = [stratum for stratum in _strata_names if stratum not in _requested_proportions]
+        unrequested_proportions = {}
+        for stratum in unrequested_strata:
+            starting_proportion = (1.0 - sum(_requested_proportions.values())) / len(unrequested_strata)
+            unrequested_proportions[stratum] = starting_proportion
+            self.output_to_user(
+                "no starting proportion requested for %s stratum so provisionally allocated %s of total"
+                % (stratum, round(starting_proportion, self.reporting_sigfigs)))
 
-        # normalise the dictionary before return, in case adding the missing groups as equal proportions exceeds one
-        _requested_proportions = normalise_dict(_requested_proportions)
-        for stratum in _requested_proportions:
-            self.output_to_user("final proportion of initial conditions allocated to %s stratum is %s"
-                                % (stratum, _requested_proportions[stratum]))
+        # update specified proportions with inferred unspecified proportions
+        _requested_proportions.update(unrequested_proportions)
         return _requested_proportions
 
     def stratify_compartments(self, _stratification_name, _strata_names, _requested_proportions):
