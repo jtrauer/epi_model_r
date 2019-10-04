@@ -198,15 +198,16 @@ normalise_list = function(value_list) {
 }
 
 change_parameter_unit = function(parameter_dict, multiplier){
-  # adapt the latency parameters from the earlier functions according to whether they are needed as by year rather than
-  # by day
-  
+  # used to adapt the parameters according their unit - for example, could be used for models that are running in time
+  # steps that are different from the time step assumed by the input parameter
+  # 
   # :param parameter_dict: dict
   # dictionary whose values need to be adjusted
   # :param multiplier: float
-  # multiplier 
+  # multiplier
   # :return: dict
   # dictionary with values multiplied by the multiplier argument
+  
 }
 
 
@@ -653,10 +654,10 @@ EpiModel <- R6Class(
 
     add_transition_flow = function(.flow) {
       #   add a flow (row) to the data frame storing the flows
-      if ('force_index' %in% colnames(self$transition_flows))
+      if ('force_index' %in% colnames(self$transition_flows) | 'strain' %in% colnames(self$transition_flows))
         self$transition_flows <-
           rbind(self$transition_flows, data.frame(type=.flow[1], parameter=as.character(.flow[2]), from=.flow[3], to=.flow[4],
-                                                  implement=length(self$stratifications), force_index=NA, stringsAsFactors=FALSE))
+                                                  implement=length(self$stratifications), strain=NA, force_index=NA, stringsAsFactors=FALSE))
       else
       self$transition_flows <-
         rbind(self$transition_flows, data.frame(type=.flow[1], parameter=as.character(.flow[2]), from=.flow[3], to=.flow[4],
@@ -1671,13 +1672,13 @@ StratifiedModel <- R6Class(
         self$output_to_user(paste("ageing rate from age group", start_age, "to", end_age, "is", round(ageing_rate, self$reporting_sigfigs)))
         self$parameters[ageing_parameter_name] <- ageing_rate
         for (compartment in names(self$compartment_values)) {
-          if('force_index' %in% colnames(self$transition_flows))
+          if('force_index' %in% colnames(self$transition_flows) | 'strain' %in% colnames(self$transition_flows))
           self$transition_flows <-
             rbind(self$transition_flows,
                   data.frame(type="standard_flows", parameter=ageing_parameter_name,
                              from=create_stratified_name(compartment, "age", start_age),
                              to=create_stratified_name(compartment, "age", end_age),
-                             implement=length(self$strata), force_index=NA, stringsAsFactors=FALSE))
+                             implement=length(self$strata), strain=NA, force_index=NA, stringsAsFactors=FALSE))
           else
             self$transition_flows <-
               rbind(self$transition_flows,
@@ -1732,10 +1733,13 @@ StratifiedModel <- R6Class(
             to_compartment <- self$transition_flows$to[.n_flow]
           }
 
+          
           # add the new flow
-          if('force_index' %in% colnames(self$transition_flows))
+          if('force_index' %in% colnames(self$transition_flows) | 'strain' %in% colnames(self$transition_flows) ){
+            self$transition_flows$strain = NA
           self$transition_flows <- rbind(self$transition_flows,data.frame(
-            parameter=parameter_name, from=from_compartment, to=to_compartment, implement=length(self$strata), force_index=NA, type=self$transition_flows$type[.n_flow]))
+            parameter=parameter_name, from=from_compartment, to=to_compartment, implement=length(self$strata), strain=NA, force_index=NA, type=self$transition_flows$type[.n_flow]))
+          }
           else
             self$transition_flows <- rbind(self$transition_flows,data.frame(
               parameter=parameter_name, from=from_compartment, to=to_compartment, implement=length(self$strata), type=self$transition_flows$type[.n_flow]))  
