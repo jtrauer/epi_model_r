@@ -440,7 +440,8 @@ class EpiModel:
     :attribute death_indices_to_implement: list
         indices of the death indices to be implemented because applicable to the final level of stratification
     :attribute derived_output_functions: dict
-
+        functions that can be used during the process of integration to calculate quantities emerging from the model
+            that may not be as simple as that specified in output_connections
     :attribute derived_outputs: dict
         quantities whose values are to be recorded throughout integration, i.e. tracked_quantities
         collated as lists for each time step with descriptive keys equivalent to those for tracked_quantities
@@ -726,11 +727,10 @@ class EpiModel:
         elif self.birth_approach == "replace_deaths":
             self.tracked_quantities["total_deaths"] = 0.0
 
-        # for each derived output to be recorded, initialise a tracked quantities key to zero
+        # for each derived quantity to be recorded, initialise derived outputs, and a tracked quantity if needed
         for output in self.output_connections:
             self.tracked_quantities[output] = 0.0
             self.derived_outputs[output] = []
-
         for output in self.derived_output_functions:
             self.derived_outputs[output] = []
 
