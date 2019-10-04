@@ -1,2 +1,2 @@
 ## Tasks and thoughts to look into
-* Is there any need to distinguish adaptation_functions from time_variants attributes
+* review behaviour for initial conditions and entry flows when some strata are requested but not others
