@@ -1954,6 +1954,10 @@ StratifiedModel <- R6Class(
           x_positions <- extract_x_positions(compartment)
           if (!x_positions[1] == -1) {
             for (x_instance in seq(length(x_positions) - 1)) {
+              if (identical(x_positions[x_instance], numeric(0)))
+                 break
+              if (identical(x_positions[x_instance], integer(0)))
+                 break
               entry_fraction_param = paste("entry_fractionX",
                                          substr(compartment, x_positions[x_instance] + 1, x_positions[x_instance + 1]), sep="")
               if (entry_fraction_param %in% names(self$parameters))
@@ -2002,6 +2006,7 @@ ModelInterpreter <- R6Class(
         data.frame(matrix(NA, nrow=length(self$times), ncol=0))
       for (compartment_type in self$compartment_types) {
         self$compartment_totals[[compartment_type]] <- 0
+        
         for (compartment in names(self$outputs)) {
           if (find_stem(compartment) == compartment_type) {
             self$compartment_totals[[compartment_type]] <-
@@ -2205,8 +2210,8 @@ age_mixing <- diag(4)
 sir_model$stratify("age", c(1, 10, 3), c(),
                      list(recovery=list("1"=0.5, "10"=0.8)),
                            #recoveryXhiv_positive=list("1"=2, "3"=365/13*.5, "10"=1, overwrite=c("2")),
-                           #universal_death_rate=list("1"=1, "2"=2, "3"=3)), 
-                           infectiousness_adjustments=c("1"=0.8), 
+                           #universal_death_rate=list("1"=1, "2"=2, "3"=3)),
+                           infectiousness_adjustments=c("1"=0.8),
                            mixing_matrix = age_mixing, verbose=TRUE)
 
 #sir_model$stratify("age", c(3, 2, 1), c(), verbose = TRUE)
