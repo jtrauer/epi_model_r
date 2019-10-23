@@ -16,6 +16,7 @@ library(rsvg)
 library(stringr)
 
 
+
 # library(RSQLite)
 # this file contains the main model builder function, that is intended to be agnostic
 # to the type and complexity of model that the user wants to build
@@ -676,6 +677,7 @@ EpiModel <- R6Class(
     run_model = function () {
       #   main function to integrate model odes, called externally in the master running script
       self$output_to_user("now integrating")
+      self$prepare_to_run()
       self$prepare_stratified_parameter_calculations()
 
       #   unlike python version, only one integration solver included so far
@@ -981,6 +983,8 @@ StratifiedModel <- R6Class(
     infectiousness_multipliers = NULL,
     heterogeneous_mixing = FALSE,
     mixing_matrix = NULL,
+    strain_mixing_elements = data.frame(),
+    strain_mixing_multipliers = data.frame(),
     overwrite_character = NULL,
     overwrite_key = c("W", "overwrite"),
     
@@ -1529,6 +1533,14 @@ StratifiedModel <- R6Class(
       }
     },
     
+    prepare_to_run = function(){
+      # methods that can be run prior to integration to save various function calls being made at every time step
+      self$prepare_stratified_parameter_calculations()
+      self$prepare_infectiousness_calculations()
+      #self$transition_indices_to_implement = self$find_transition_indices_to_implement()
+      #self$death_indices_to_implement = self$find_death_indices_to_implement()
+    },
+    
     prepare_implement_mixing = function(){
       # methods to be run if there is a mixing matrix being applied at all, regardless of whether one is being
       # introduced during this stratification process
@@ -1562,6 +1574,52 @@ StratifiedModel <- R6Class(
      # print(self$mixing_numerator_indices)
     },
     
+    find_mixing_denominators = function(){
+      # for each mixing category, create a list of the compartment numbers that are relevant
+      
+      # :return mixing_indices: list
+      # indices of the compartments that are applicable to a particular mixing category
+      
+      if (is.null(self$mixing_matrix))
+        return
+      else{ 
+        mixing_indices = list()
+        for (category in self$mixing_categories){
+          i_comp = 1
+          for (compartment in self$compartment_names){
+          if (find_name_components(category) %in% find_name_components(compartment))
+              mixing_indices[[category]] <- c(mixing_indices[[category]], i_comp)
+          i_comp = i_comp + 1}
+         } 
+        return(mixing_indices)
+        }
+    },
+    
+    find_strain_mixing_multipliers = function(mixing_indices){
+      # find the relevant indices to be used to calculate the force of infection contribution to each strain from each
+      # mixing category as a list of indices - and separately find multipliers as a list of the same length for
+      # their relative infectiousness extracted from self.infectiousness_multipliers
+      for(strain in c(self$strains, "all_strains")){
+        mixing_categories_list = c()
+        if (is.null(self$mixing_matrix))
+          mixing_categories_list = c("all_population")
+        else
+          mixing_categories_list = self$mixing_categories
+        
+        for (category in mixing_categories_list){
+          for (idx in mixing_indices[[category]]){
+            if (self$infectious_indices[[strain]][idx]){
+                self$strain_mixing_elements = rbind(self$strain_mixing_elements, data.frame(strain=strain, category=category, idx=idx))}
+          }
+          i_comp_list = self$strain_mixing_elements[ (self$strain_mixing_elements$strain==strain & self$strain_mixing_elements$category==category), "idx"]
+          for(i_comp in i_comp_list ){
+              self$strain_mixing_multipliers = rbind(self$strain_mixing_multipliers, data.frame( strain=strain, category=category, idx=self$infectiousness_multipliers[i_comp]))}
+            
+        }
+      }
+      
+    },
+    
     add_force_indices_to_transitions = function(){
      # find the indices from the force of infection vector to be applied for each infection flow and populate to the
      # force_index column of the flows frame 
@@ -1583,6 +1641,22 @@ StratifiedModel <- R6Class(
           }
       }
       print(self$transition_flows)
+    },
+    
+    prepare_all_infectiousness_multipliers = function(){
+      # find the infectiousness multipliers for each compartment being implemented in the model
+      # start from assumption that each compartment is fully and equally infectious
+      self$infectiousness_multipliers = c(rep(1., length(self$compartment_names)))
+      
+      # if infectiousness modification requested for the compartment type, multiply through by the current value
+      n_comp = 0
+      for (compartment in self$compartment_names){
+        for (modifier in self$infectiousness_levels){
+        if (modifier %in% find_name_components(compartment))
+           self$infectiousness_multipliers[n_comp] = self$infectiousness_multipliers[n_comp] * self.infectiousness_levels[modifier]
+        }
+        n_comp = n_comp + 1
+      }
     },
     
     find_infectious_indices = function(){
@@ -1633,7 +1707,21 @@ StratifiedModel <- R6Class(
       print(self$infectious_compartment)
     },
     
-    
+    prepare_infectiousness_calculations = function(){
+      # aster method to run all the code concerned with preparation for force of infection calculations
+      # infectiousness preparations
+      self$prepare_all_infectiousness_multipliers()
+      self$find_infectious_indices()
+      
+      # mixing preparations
+      if (!is.null(self$mixing_matrix))
+        self$add_force_indices_to_transitions()
+      mixing_indices = self$find_mixing_denominators()
+      
+      # reconciling the strains and the mixing attributes together into one structure
+      self$find_strain_mixing_multipliers(mixing_indices)
+      
+    },
     
     
     apply_heterogeneous_infectiousness = function(stratification_name, strata_request, infectiousness_adjustments) {
@@ -2197,22 +2285,22 @@ sir_model <- StratifiedModel$new(seq(from=0, to=60/365, by=1/365),
                                       c("infection_density", "beta", "susceptible", "infectious"),
                                       c("compartment_death", "infect_death", "infectious")),
                                  verbose=FALSE)
-#hiv_mixing <- NULL
+# hiv_mixing <- NULL
 hiv_mixing <- matrix(1, ncol = 2, nrow = 2)
 sir_model$stratify("hiv", c("negative", "positive"), c(),
                    list(recovery=list("negative"=0.7, "positive"=0.5),
                         infect_death=list("negative"=0.5)),
-                   list("negative"=0.6, "positive"=0.4), infectiousness_adjustments = c("positive"=0.5), mixing_matrix=hiv_mixing, verbose = TRUE)
+                   list("negative"=0.6, "positive"=0.4), infectiousness_adjustments = c("positive"=0.5), mixing_matrix=hiv_mixing, verbose = FALSE)
 
 sir_model$stratify("strain", c("sensitive", "resistant"),  c("infectious"), requested_proportions=c(), verbose = FALSE)
 age_mixing <- NULL
-age_mixing <- diag(4)
+#age_mixing <- diag(4)
 sir_model$stratify("age", c(1, 10, 3), c(),
                      list(recovery=list("1"=0.5, "10"=0.8)),
                            #recoveryXhiv_positive=list("1"=2, "3"=365/13*.5, "10"=1, overwrite=c("2")),
                            #universal_death_rate=list("1"=1, "2"=2, "3"=3)),
                            infectiousness_adjustments=c("1"=0.8),
-                           mixing_matrix = age_mixing, verbose=TRUE)
+                           mixing_matrix = age_mixing, verbose=FALSE)
 
 #sir_model$stratify("age", c(3, 2, 1), c(), verbose = TRUE)
 # sir_model$add_time_variant("recovery", create_arbitrary_time_variant_function)
@@ -2220,7 +2308,7 @@ sir_model$stratify("age", c(1, 10, 3), c(),
 sir_model$run_model()
 
 interpreter <- ModelInterpreter$new(sir_model)
-#interpreter$create_flowchart()
+# interpreter$create_flowchart()
 interpreter$plot_compartment("infectious")
 
 
