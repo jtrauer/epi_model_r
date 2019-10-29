@@ -6,6 +6,7 @@ import pandas as pd
 from graphviz import Digraph
 import os
 import itertools
+from sqlalchemy import create_engine
 
 # set path - sachin
 os.environ["PATH"] += os.pathsep + 'C:/Users/swas0001/graphviz-2.38/release/bin'
@@ -411,6 +412,15 @@ def create_flowchart(model_object, strata=None, name="flow_chart"):
     model_object.flow_diagram.render(name)
 
 
+def store_database(outputs, table_name="outputs",  database_name="../databases/outputs.db", append=True):
+    """
+    store outputs from the model in sql database for use in producing outputs later
+    """
+
+    engine = create_engine("sqlite:///"+ database_name, echo=False)
+    outputs.to_sql(table_name, con=engine, if_exists="append",  index=False)
+
+
 class EpiModel:
     """
     general epidemiological model for constructing compartment-based models, typically of infectious disease
@@ -559,6 +569,9 @@ class EpiModel:
             self.output_connections, self.infectious_populations, self.infectious_denominators, \
             self.derived_output_functions, self.transition_indices_to_implement, self.death_indices_to_implement = \
             (None for _ in range(22))
+
+        # for storing derived output in db
+        self.step = 0
 
         # convert input arguments to model attributes
         for attribute in \
@@ -824,6 +837,10 @@ class EpiModel:
         if self.integration_type == "odeint":
             def make_model_function(compartment_values, time):
                 self.update_tracked_quantities(compartment_values)
+                derived_output_df = pd.DataFrame.from_dict(self.derived_outputs)
+                derived_output_df['step'] = self.step
+                store_database(derived_output_df, table_name="derived_outputs")
+                self.step = self.step + 1
                 return self.apply_all_flow_types_to_odes([0.0] * len(self.compartment_names), compartment_values, time)
 
             self.outputs = odeint(make_model_function, self.compartment_values, self.times, atol=1.e-3, rtol=1.e-3)
@@ -834,6 +851,10 @@ class EpiModel:
             # solve_ivp requires arguments to model function in the reverse order
             def make_model_function(time, compartment_values):
                 self.update_tracked_quantities(compartment_values)
+                derived_output_df = pd.DataFrame.from_dict(self.derived_outputs)
+                derived_output_df['step'] = self.step
+                store_database(derived_output_df, table_name="derived_outputs")
+                self.step = self.step + 1
                 return self.apply_all_flow_types_to_odes([0.0] * len(self.compartment_names), compartment_values, time)
 
             # add a stopping condition, which was the original purpose of using this integration approach
