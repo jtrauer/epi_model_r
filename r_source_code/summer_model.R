@@ -171,7 +171,7 @@ increment_list_by_index = function(list_to_increment, index_to_increment, increm
   #  the value to increment the list by
   # :return: list
   # the list after it has been incremented
- 
+    
   #if(index_to_increment != NA){
     if(nchar(as.character(increment_value))!= 0){
     
@@ -658,7 +658,7 @@ EpiModel <- R6Class(
       if ('force_index' %in% colnames(self$transition_flows) | 'strain' %in% colnames(self$transition_flows))
         self$transition_flows <-
           rbind(self$transition_flows, data.frame(type=.flow[1], parameter=as.character(.flow[2]), from=.flow[3], to=.flow[4],
-                                                  implement=length(self$stratifications), strain=NA, force_index=NA, stringsAsFactors=FALSE))
+                                                  implement=length(self$stratifications), strain=NA, force_index=1, stringsAsFactors=FALSE))
       else
       self$transition_flows <-
         rbind(self$transition_flows, data.frame(type=.flow[1], parameter=as.character(.flow[2]), from=.flow[3], to=.flow[4],
@@ -670,9 +670,33 @@ EpiModel <- R6Class(
       self$death_flows <- rbind(self$death_flows, data.frame(type=.flow[1], parameter=as.character(.flow[2]), from=.flow[3],
                                                              implement=0, stringsAsFactors=FALSE))
     },
+    
+    find_all_infectious_indices = function(){
+      # find all the compartment names that begin with one of the requested infectious compartments
+      
+      # :return: list
+      # booleans for whether each compartment is infectious or not
+      infectious_compartment_index = c()
+      i_comp = 1
+      for (comp in self$compartment_names)
+        i_comp = i_comp + 1
+        if (find_stem(comp) %in% self$infectious_compartment)
+          infectious_compartment_index = c(infectious_compartment_index, i_comp)
+      return(infectious_compartment_index)
+    },
+    
+    prepare_to_run = function(){
+      # primarily for use in the stratified version when over-written
+      # here just find all of the compartments that are infectious and prepare some list indices to speed integration 
+       self$infectious_indices = self$find_all_infectious_indices()
+       self$transition_indices_to_implement = self$find_transition_indices_to_implement()
+       self$death_indices_to_implement = self$find_death_indices_to_implement()
+      },
 
     # __________
     # methods for model running
+    
+    
 
     run_model = function () {
       #   main function to integrate model odes, called externally in the master running script
@@ -877,7 +901,7 @@ EpiModel <- R6Class(
       }
     },
 
-    find_infectious_multiplier = function(flow_type) {
+    find_infectious_multiplier = function(n_flow) {
       #   find the multiplier to account for the infectious population in dynamic flows
       #
       #   :param flow_type: char
@@ -885,15 +909,18 @@ EpiModel <- R6Class(
       #   :return:
       #       the total infectious quantity, whether that be the number or proportion of infectious persons
       #       needs to return as one for flows that are not transmission dynamic infectiousness flows
-      if (flow_type == "infection_density") {
-        infectious_population <- self$tracked_quantities$infectious_population
+      print('check----------------')
+      print(self$transition_flows)
+      if (self$transition_flows$type[n_flow] == "infection_density") {
+        self$infectious_population <- self$infectious_population
       }
-      else if (flow_type == "infection_frequency") {
-        infectious_population <- self$tracked_quantities$infectious_population / self$tracked_quantities$total_population
+      else if (self$transition_flows$type[n_flow] == "infection_frequency") {
+        self$infectious_population <- self$infectious_population / self$infectious_denominators
       }
       else {
-        infectious_population <- 1
+        return(1) 
       }
+      
     },
 
     update_tracked_quantities = function(.compartment_values) {
@@ -918,9 +945,10 @@ EpiModel <- R6Class(
       #   :param _compartment_values:
       #       as for preceding methods
       for (compartment in which(names(self$compartment_values) == self$infectious_compartment)) {
-        self$tracked_quantities$infectious_population <-
-          self$tracked_quantities$infectious_population + compartment_values[compartment]
+        self$infectious_population <-
+          self$infectious_population + compartment_values[compartment]
       }
+      self$infectious_denominators <- sum(compartment_values)
     },
 
     get_parameter_value = function(.parameter, .time) {
@@ -1072,6 +1100,7 @@ StratifiedModel <- R6Class(
       if (stratification_name == "strain"){
         self$strains = strata_names
       }
+        
       # heterogeneous infectiousness adjustments
       #self$apply_heterogeneous_infectiousness(stratification_name, strata_request, infectiousness_adjustments)
       self$prepare_infectiousness_levels(stratification_name, strata_names, infectiousness_adjustments)
@@ -1533,12 +1562,38 @@ StratifiedModel <- R6Class(
       }
     },
     
+    find_transition_indices_to_implement1 = function(back_one=0){
+      # find all the indices of the transition flows that need to be stratified
+      # separated out as very short method in order that it can over-ride the version in the unstratified EpiModel
+      
+      # :param back_one: int
+      # number to subtract from self.all_stratification, which will be one if this method is being called after the
+      # stratification has been added
+      # :return: list
+      # list of indices of the flows that need to be stratified
+      
+      return(c(which(self$transition_flows$implement == length(self$all_stratifications)-back_one)))
+    },
+    
+    find_death_indices_to_implement1 = function(back_one=0){
+      # find all the indices of the death flows that need to be stratified
+      # separated out as very short method in order that it can over-ride the version in the unstratified EpiModel
+      
+      # :param back_one: int
+      # number to subtract from self.all_stratification, which will be one if this method is being called after the
+      # stratification has been added
+      # :return: list
+      # list of indices of the flows that need to be stratified
+      
+      return(c(which(self$death_flows$implement == length(self$all_stratifications)-back_one)))
+    },
+    
     prepare_to_run = function(){
       # methods that can be run prior to integration to save various function calls being made at every time step
       self$prepare_stratified_parameter_calculations()
       self$prepare_infectiousness_calculations()
-      #self$transition_indices_to_implement = self$find_transition_indices_to_implement()
-      #self$death_indices_to_implement = self$find_death_indices_to_implement()
+      #self$transition_indices_to_implement = self$find_transition_indices_to_implement1()
+      #self$death_indices_to_implement = self$find_death_indices_to_implement1()
     },
     
     prepare_implement_mixing = function(){
@@ -1620,6 +1675,8 @@ StratifiedModel <- R6Class(
       
     },
     
+   
+    
     add_force_indices_to_transitions = function(){
      # find the indices from the force of infection vector to be applied for each infection flow and populate to the
      # force_index column of the flows frame 
@@ -1631,13 +1688,21 @@ StratifiedModel <- R6Class(
           infection_flow_indices <- c(infection_flow_indices, row)
       }
       print(infection_flow_indices)
-      self$transition_flows$force_index <- NA
+      self$transition_flows$force_index <- 1
       # loop through them and find the indices of the mixing matrix that will apply to that flow
       for (n_flow in infection_flow_indices){
+        found = FALSE
           for (force_group in self$mixing_categories){
-            if(identical(tail(unlist(find_name_components(self$transition_flows$from[n_flow])), -1),
-               find_name_components(force_group)))
-              self$transition_flows[n_flow, ]$force_index <- which(self$mixing_categories==force_group) #similar to ngroup
+            #if(identical(tail(unlist(find_name_components(self$transition_flows$from[n_flow])), -1),
+            #   find_name_components(force_group)))
+            if (find_name_components(force_group) %in% find_name_components(self$transition_flows$from[n_flow]))
+              self$transition_flows[n_flow, ]$force_index <- which(self$mixing_categories==force_group) + 1 #similar to ngroup
+            if (found){
+              print('mixing group found twice for transition flow number')
+              print(n_flow)
+            }
+            found = TRUE
+            next
           }
       }
       print(self$transition_flows)
@@ -1649,14 +1714,15 @@ StratifiedModel <- R6Class(
       self$infectiousness_multipliers = c(rep(1., length(self$compartment_names)))
       
       # if infectiousness modification requested for the compartment type, multiply through by the current value
-      n_comp = 0
+      n_comp = 1
       for (compartment in self$compartment_names){
-        for (modifier in self$infectiousness_levels){
+        for (modifier in names(self$infectiousness_levels)){
         if (modifier %in% find_name_components(compartment))
-           self$infectiousness_multipliers[n_comp] = self$infectiousness_multipliers[n_comp] * self.infectiousness_levels[modifier]
+           self$infectiousness_multipliers[n_comp] = self$infectiousness_multipliers[n_comp] * self$infectiousness_levels[modifier]
         }
         n_comp = n_comp + 1
       }
+      print('check')
     },
     
     find_infectious_indices = function(){
@@ -1820,13 +1886,24 @@ StratifiedModel <- R6Class(
           else {
             to_compartment <- self$transition_flows$to[.n_flow]
           }
-
+          
+          strain = 'None'
+          if(stratification_name == "strain")
+              strain = stratum
+          else
+             strain = self$transition_flows$strain[.n_flow]
+          
+          
           
           # add the new flow
-          if('force_index' %in% colnames(self$transition_flows) | 'strain' %in% colnames(self$transition_flows) ){
-            self$transition_flows$strain = NA
+          if('force_index' %in% colnames(self$transition_flows)){
+          #self$transition_flows$strain = strain
+            if('strain' %in% colnames(self$transition_flows))
+              print(self$transition_flows$strain)
+            else
+              self$transition_flows$strain = 'None'
           self$transition_flows <- rbind(self$transition_flows,data.frame(
-            parameter=parameter_name, from=from_compartment, to=to_compartment, implement=length(self$strata), strain=NA, force_index=NA, type=self$transition_flows$type[.n_flow]))
+            parameter=parameter_name, from=from_compartment, to=to_compartment, implement=length(self$strata), strain=strain, force_index=NA, type=self$transition_flows$type[.n_flow]))
           }
           else
             self$transition_flows <- rbind(self$transition_flows,data.frame(
@@ -1999,32 +2076,64 @@ StratifiedModel <- R6Class(
     },
 
     find_infectious_population = function(.compartment_values) {
-      #   calculations to find the effective infectious population
-      #
-      #   :param .compartment_values:
-      #       as for preceding methods
-
-      # loop through all compartments and find the ones representing active infectious disease
-      for (compartment in names(self$compartment_values)) {
-        if (find_stem(compartment) == self$infectious_compartment) {
-
-          # assume homogeneous infectiousness until requested otherwise
-          infectiousness_modifier <- 1
-
-          # haven't yet finished heterogeneous infectiousness - want to implement all forms of heterogeneous mixing
-          if (self$heterogeneous_infectiousness) {
-            for (adjustment in names(self$infectiousness_adjustments)) {
-              if (grepl(adjustment, compartment)) {
-                infectiousness_modifier <- self$infectiousness_adjustments[[adjustment]]
-              }
-            }
-          }
-
-          # increment infectious population
-          self$tracked_quantities$infectious_population <-
-            self$tracked_quantities$infectious_population + .compartment_values[match(compartment, names(self$compartment_values))] * infectiousness_modifier
-        }
+      # find vectors for the total infectious populations and the total population that is needed in the case of
+      # frequency-dependent transmission
+      
+      # :param _compartment_values: numpy array
+      #     current values for the compartment sizes
+      mixing_categories = c()
+      if(is.na(self$mixing_matrix))
+         mixing_categories = c('all_population')
+      else
+        mixing_categories = self$mixing_categories
+      strain_list = c()
+      if(is.na(self$strains))
+        strain_list = c('all_strains')
+      else
+        strain_list = self$strains
+      for (strain in strain_list){
+        # self$infectious_populations[strain] = c()
+        for (category in mixing_categories){
+           elem_list = self$strain_mixing_elements[ (self$strain_mixing_elements$strain==strain & self$strain_mixing_elements$category==category), "idx"]
+           mult_list = self$strain_mixing_multipliers[ (self$strain_mixing_multipliers$strain==strain & self$strain_mixing_multipliers$category==category), "idx"]
+           sum_list  <- element_list_multiplication(.compartment_values[elem_list], mult_list )
+           self$infectious_populations[strain] = c(sum_list, self$infectious_populations[strain])
+           }
       }
+      self$infectious_denominators = sum(.compartment_values)
+    },
+    
+    find_infectious_multiplier = function(n_flow){
+      # find the multiplier to account for the infectious population in dynamic flows
+      
+      # :param n_flow: int
+      # index for the row of the transition_flows data frame
+      # :return:
+      #  the total infectious quantity, whether that is the number or proportion of infectious persons
+      # needs to return as one for flows that are not transmission dynamic infectiousness flows
+      
+      if (grepl("infection", self$transition_flows$type[n_flow])){
+        strain = "all_strains"
+        if(is.na(self$strains)){
+          strain = "all_strains"
+        }else{
+          strain = self$transition_flows$strain[n_flow]
+        }
+      } else
+        return(1)
+      mixing_elements = c()
+      if(is.na(self$mixing_matrix))
+        mixing_elements = c(1.0)
+      else
+        mixing_elements = c(self$mixing_matrix[self$transition_flows$force_index[n_flow]-2,]) #force index subtract by 2 to make
+      if (grepl('_density', self$transition_flows$type[n_flow]))
+        denominator = 1.0
+        else
+          denominator = self$infectious_denominator
+        
+        sum(element_list_multiplication(self$infectious_populations[strain], mixing_elements))/denominator
+      
+      
     },
 
     apply_birth_rate = function(.ode_equations, .compartment_values) {
@@ -2310,5 +2419,7 @@ sir_model$run_model()
 interpreter <- ModelInterpreter$new(sir_model)
 # interpreter$create_flowchart()
 interpreter$plot_compartment("infectious")
+#print(sir_model$infectiousness_multipliers)
+print(interpreter$compartment_totals[["infectious"]])
 
 
