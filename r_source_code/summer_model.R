@@ -173,10 +173,10 @@ increment_list_by_index = function(list_to_increment, index_to_increment, increm
   # the list after it has been incremented
     
   #if(index_to_increment != NA){
-    if(nchar(as.character(increment_value))!= 0){
-    
-    list_to_increment[index_to_increment] = list_to_increment[index_to_increment] + increment_value
-  }
+    #print(increment_value)
+    if (!(identical(increment_value, numeric(0)) | identical(increment_value, integer(0))))
+      list_to_increment[index_to_increment] = list_to_increment[index_to_increment] + increment_value
+  
   
   
   list_to_increment
@@ -298,7 +298,10 @@ create_multiplicative_function = function(multiplier) {
     multiplier * value
   }
   multiplicative_function
+  
 }
+
+
 
 create_function_of_function = function(outer_function, inner_function, max_depth=2) {
   function_to_return = function(depth) {
@@ -400,10 +403,10 @@ EpiModel <- R6Class(
       #   :param time: model integration time (if needed)
       #   :return: parameter value, whether constant or time variant
       if (parameter_name %in% names(self$time_variants)) {
-        self$time_variants[[parameter_name]](time)
+        return(self$time_variants[[parameter_name]](time))
       }
       else {
-        self$parameters[[parameter_name]]
+        return(self$parameters[[parameter_name]])
       }
     },
 
@@ -768,19 +771,25 @@ EpiModel <- R6Class(
       #   apply fixed or infection-related intercompartmental transition flows to odes
       #
       #   :parameters and return: see previous method apply_all_flow_types_to_odes
-     # for (f in which(self$transition_flows$implement == length(self$strata))) {
-      for (n_flow in  self$find_transition_indices_to_implement()) {
+      for (n_flow in which(self$transition_flows$implement == length(self$strata))) {
+      #for (n_flow in  self$find_transition_indices_to_implement()) {
        
 
         # find adjusted parameter value
         parameter_value <- self$get_parameter_value(self$transition_flows$parameter[n_flow], .time)
-
+        print(self$transition_flows$parameter[n_flow])
+        print(parameter_value)
+        
         # find from compartment and "infectious population" (which is 1 for standard flows)
         infectious_population <- self$find_infectious_multiplier(n_flow)
-
+        #print('infectious_population')
+        #print(infectious_population)
+      
         # calculate the flow and apply to the odes
         from_compartment <- match(self$transition_flows$from[n_flow], names(self$compartment_values))
-        net_flow <- parameter_value * .compartment_values[from_compartment] * infectious_population
+        net_flow <- parameter_value * .compartment_values[[from_compartment]] * infectious_population
+        #print('net_flow')
+        #print(net_flow)
         .ode_equations <- increment_list_by_index(.ode_equations, from_compartment, -net_flow)
         .ode_equations <- increment_list_by_index(.ode_equations, match(self$transition_flows$to[n_flow], names(self$compartment_values)), net_flow)
 
@@ -846,10 +855,10 @@ EpiModel <- R6Class(
       #   :parameters and return: see previous method apply_all_flow_types_to_odes
       for (f in which(self$death_flows$implement == length(self$strata))) {
         flow <- self$death_flows[f,]
-        adjusted_parameter <- self$get_parameter_value(flow$parameter, .time)
+        parameter_value <- self$get_parameter_value(flow$parameter, .time)
         from_compartment <- match(flow$from, names(self$compartment_values))
-        net_flow <- adjusted_parameter * .compartment_values[from_compartment]
-        .ode_equations <- increment_compartment(.ode_equations, from_compartment, -net_flow)
+        net_flow <- parameter_value * .compartment_values[from_compartment]
+        .ode_equations <- increment_list_by_index(.ode_equations, from_compartment, -net_flow)
         if ("total_deaths" %in% names(self$tracked_quantities)) {
           self$tracked_quantities$total_deaths <- self$tracked_quantities$total_deaths + net_flow
         }
@@ -861,18 +870,30 @@ EpiModel <- R6Class(
       #   apply the population-wide death rate to all compartments
       #
       #   :parameters and return: see previous method apply_all_flow_types_to_odes
+      n_comp = 1
       for (compartment in names(self$compartment_values)) {
-        adjusted_parameter <- self$get_parameter_value("universal_death_rate", .time)
-        from_compartment <- match(compartment, names(self$compartment_values))
-        net_flow <- adjusted_parameter * .compartment_values[from_compartment]
-        .ode_equations <- increment_compartment(.ode_equations, from_compartment, -net_flow)
+        net_flow <- self$get_compartment_death_rate(compartment, .time) * .compartment_values[n_comp]
+        .ode_equations <- increment_list_by_index(.ode_equations, n_comp, -net_flow)
 
         # track deaths in case births are meant to replace deaths
         if ("total_deaths" %in% names(self$tracked_quantities)) {
           self$tracked_quantities$total_deaths <- self$tracked_quantities$total_deaths + net_flow
         }
+        n_comp = n_comp + 1
       }
       .ode_equations
+    },
+    
+    get_compartment_death_rate = function(.compartment, .time){
+      # find the universal or population-wide death rate for a particular compartment
+      
+      # :param _compartment: str
+      # name of the compartment
+      # :param _time: float
+      # current integration time
+      # :return: float
+      # death rate
+      self$get_parameter_value(paste("universal_death_rate", .time))
     },
 
     apply_birth_rate = function(.ode_equations, .compartment_values) {
@@ -909,8 +930,7 @@ EpiModel <- R6Class(
       #   :return:
       #       the total infectious quantity, whether that be the number or proportion of infectious persons
       #       needs to return as one for flows that are not transmission dynamic infectiousness flows
-      print('check----------------')
-      print(self$transition_flows)
+      
       if (self$transition_flows$type[n_flow] == "infection_density") {
         self$infectious_population <- self$infectious_population
       }
@@ -951,6 +971,23 @@ EpiModel <- R6Class(
       self$infectious_denominators <- sum(compartment_values)
     },
 
+    
+    get_single_parameter_component = function(.parameter, .time){
+      # find the value of a parameter with time-variant values trumping constant ones
+      
+      # param _parameter: str
+      # string for the name of the parameter of interest
+      # :param time: float
+      # model integration time (if needed)
+      # :return: float
+      # parameter value, whether constant or time variant
+      if(.parameter %in% self$time_variants)
+        return(self$time_variants$parameter[.time])
+      else
+        return(self$parameters[.parameter])
+      
+    },
+    
     get_parameter_value = function(.parameter, .time) {
       #   very simple, essentially place-holding, but need to split this out as a function in order to
       #   stratification later
@@ -961,7 +998,7 @@ EpiModel <- R6Class(
       #       current integration time
       #   :return: numeric scalar value
       #       parameter value
-      self$find_parameter_value(.parameter, .time)
+      self$get_single_parameter_component(.parameter, .time)
     }
   )
 )
@@ -1000,6 +1037,7 @@ StratifiedModel <- R6Class(
     infectiousness_adjustments = NULL,
     final_parameter_functions = NULL,
     parameter_components = list(),
+    mortality_components = list(),
     parameter_functions = list(),
     adaptation_functions = list(),
     mapped_adaptation_functions = list(),
@@ -1011,6 +1049,7 @@ StratifiedModel <- R6Class(
     infectiousness_multipliers = NULL,
     heterogeneous_mixing = FALSE,
     mixing_matrix = NULL,
+    available_death_rates=c(""),
     strain_mixing_elements = data.frame(),
     strain_mixing_multipliers = data.frame(),
     overwrite_character = NULL,
@@ -1464,6 +1503,19 @@ StratifiedModel <- R6Class(
       #       see find_strata_names_from_input
       #   :param .adjustment_requests:
       #       see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
+      
+      if(!(.stratification_name %in% self$full_stratification_list) & ("universal_death_rate" %in% .adjustment_requests) )
+        stop("universal death rate can only be stratified when applied to all compartment types")
+      else if (!(.stratification_name %in% self$full_stratification_list))
+        return()
+      else
+        print('check')
+      
+      if ("universal_death_rate" %in% self.$time_variants)
+        self$adaptation_functions["universal_death_rateX"] = self$time_variants["universal_death_rate"]
+      else
+        self$adaptation_functions["universal_death_rateX"] = (function(time){self$parameters["universal_death_rate"]})()
+        
       for (parameter in names(self$parameters)) {
         if (find_stem(parameter) == "universal_death_rate") {
           for (stratum in .strata_names) {
@@ -1523,13 +1575,13 @@ StratifiedModel <- R6Class(
     if (is.null(.mixing_matrix))
         return
     else if (class(.mixing_matrix) != 'matrix')
-      print("submitted mixing matrix is wrong data type")
+      stop("submitted mixing matrix is wrong data type")
     else if (length(dim(.mixing_matrix)) != 2)  
-      print("submitted mixing matrix is not two-dimensional")
+      stop("submitted mixing matrix is not two-dimensional")
     else if (dim(.mixing_matrix)[1] != dim(.mixing_matrix)[2] )
-      print("submitted mixing is not square")
+      stop("submitted mixing is not square")
     else if (dim(.mixing_matrix)[1] != length(.strata_names)) 
-      print("mixing matrix does not sized to number of strata being implemented")
+      stop("mixing matrix does not sized to number of strata being implemented")
     self$combine_new_mixing_matrix_with_existing(.mixing_matrix, .stratification_name, .strata_names)
       
     },
@@ -1562,7 +1614,7 @@ StratifiedModel <- R6Class(
       }
     },
     
-    find_transition_indices_to_implement1 = function(back_one=0){
+    find_transition_indices_to_implement = function(back_one=0){
       # find all the indices of the transition flows that need to be stratified
       # separated out as very short method in order that it can over-ride the version in the unstratified EpiModel
       
@@ -1575,7 +1627,7 @@ StratifiedModel <- R6Class(
       return(c(which(self$transition_flows$implement == length(self$all_stratifications)-back_one)))
     },
     
-    find_death_indices_to_implement1 = function(back_one=0){
+    find_death_indices_to_implement = function(back_one=0){
       # find all the indices of the death flows that need to be stratified
       # separated out as very short method in order that it can over-ride the version in the unstratified EpiModel
       
@@ -1687,7 +1739,7 @@ StratifiedModel <- R6Class(
         if(grepl('infection',self$transition_flows[row, 'type']) & (self$transition_flows[row,'implement'] != 0))
           infection_flow_indices <- c(infection_flow_indices, row)
       }
-      print(infection_flow_indices)
+      
       self$transition_flows$force_index <- 1
       # loop through them and find the indices of the mixing matrix that will apply to that flow
       for (n_flow in infection_flow_indices){
@@ -1699,13 +1751,13 @@ StratifiedModel <- R6Class(
               self$transition_flows[n_flow, ]$force_index <- which(self$mixing_categories==force_group) + 1 #similar to ngroup
             if (found){
               print('mixing group found twice for transition flow number')
-              print(n_flow)
+              
             }
             found = TRUE
             next
           }
       }
-      print(self$transition_flows)
+      
     },
     
     prepare_all_infectiousness_multipliers = function(){
@@ -1722,7 +1774,7 @@ StratifiedModel <- R6Class(
         }
         n_comp = n_comp + 1
       }
-      print('check')
+      
     },
     
     find_infectious_indices = function(){
@@ -1770,7 +1822,7 @@ StratifiedModel <- R6Class(
            }
         }
       }
-      print(self$infectious_compartment)
+      
     },
     
     prepare_infectiousness_calculations = function(){
@@ -1870,7 +1922,7 @@ StratifiedModel <- R6Class(
           parameter_name <- self$add_adjusted_parameter(
             self$transition_flows$parameter[.n_flow], stratification_name, stratum, adjustment_requests)
           if (is.null(parameter_name)) {
-            parameter_name <- self$sort_absent_parameter_request(stratification_name, strata_names, stratum, stratify_from, stratify_to, .n_flow)
+            parameter_name <- self$sort_absent_parameter_request(stratification_name, strata_names, stratum, stratify_from, stratify_to, self$transition_flows$parameter[.n_flow])
           }
 
           # determine whether to and/or from compartments are stratified
@@ -1921,7 +1973,7 @@ StratifiedModel <- R6Class(
       }
     },
 
-    sort_absent_parameter_request = function (.stratification_name, .strata_names, .stratum, .stratify_from, .stratify_to, .n_flow) {
+    sort_absent_parameter_request = function (.stratification_name, .strata_names, .stratum, .stratify_from, .stratify_to, unstratified_name) {
       #   work out what to do if a specific parameter adjustment has not been requested
       #
       #   :param .stratification_name:
@@ -1940,31 +1992,169 @@ StratifiedModel <- R6Class(
 
       # default behaviour for parameters not requested is to split the parameter into equal parts from compartment not split but to compartment is
       if (!.stratify_from & .stratify_to) {
-        self$output_to_user(paste("\tsplitting existing parameter value", self$transition_flows$parameter[.n_flow], "into", length(.strata_names), "equal parts"))
-        parameter_name <- create_stratified_name(self$transition_flows$parameter[.n_flow], .stratification_name, .stratum)
+        self$output_to_user(paste("\tsplitting existing parameter value", unstratified_name, "into", length(.strata_names), "equal parts"))
+        parameter_name <- create_stratified_name(unstratified_name, .stratification_name, .stratum)
         self$parameters[parameter_name] <- 1 / length(.strata_names)
+        self$adaptation_functions[[parameter_name]] <- create_multiplicative_function(1.0/length(.strata_names))
+        return(parameter_name)
       }
 
       # otherwise if no request, retain the existing parameter
       else {
-        parameter_name <- self$transition_flows$parameter[.n_flow]
-        self$output_to_user(paste("\tretaining existing parameter value", parameter_name))
+        self$output_to_user(paste("\tretaining existing parameter value", unstratified_name))
+        return(unstratified_name)
       }
-      parameter_name
+      
     },
 
     prepare_stratified_parameter_calculations = function() {
       #   prior to integration commencing, work out what the components are of each parameter being implemented
 
       # create list of all the parameters that we need to find the list of adjustments for
-      parameters_to_adjust <- c(self$transition_flows$parameter[which(self$transition_flows$implement == length(self$strata))],
-                                self$death_flows$parameter[which(self$death_flows$implement == length(self$strata))],
-                                "universal_death_rate")
-      for (parameter in parameters_to_adjust) {
-        self$find_parameter_components(parameter)
+      parameters_to_adjust <- c()
+      
+      for (n_flow in seq(nrow(self$transition_flows))){
+          if(self$transition_flows$implement[n_flow] == length(self$strata) &
+                  !(self$transition_flows$parameter[n_flow] %in% parameters_to_adjust))
+            parameters_to_adjust <- c(parameters_to_adjust, self$transition_flows$parameter[n_flow])
+      }
+      for (n_flow in seq(nrow(self$death_flows))){
+        if(self$death_flows$implement[n_flow] == length(self$strata) &
+           !(self$death_flows$parameter[n_flow] %in% parameters_to_adjust))
+          parameters_to_adjust <- c(parameters_to_adjust, self$death_flows$parameter[n_flow])
+      }    
+        
+      
+       # and adjust
+      for (parameter in parameters_to_adjust){
+        self$parameter_components[parameter] = self$find_transition_components(parameter)
+        self$create_transition_functions(parameter, self$parameter_components[parameter])
+      }
+      
+      # similarly for all model compartments
+     for (compartment in self$compartment_names){
+       self$mortality_components[compartment] = self$find_mortality_components(compartment)
+        self$create_mortality_functions(compartment, self$mortality_components[compartment])
       }
     },
+    
+    find_mortality_components = function(.compartment){
+      # find the sub-parameters for population-wide natural mortality that are relevant to a particular compartment
+      # used in prepare_stratified_parameter_calculations for creating functions to find the mortality rate for each
+      # compartment
+      # similar to find_transition_components, except being applied by compartment rather than parameter
+      
+      # :param _compartment: str
+      # name of the compartment of interest
+      # :return: all_sub_parameters: list
+      # list of all the mortality-related sub-parameters for the compartment of interest
+      all_sub_parameters = c()
+      compartments_strata = find_name_components(.compartment)
+      compartments_strata = rev(compartments_strata)
+      compartments_strata = c(compartments_strata, "")
+      
+      # loop through each stratification and adapt if the parametr is available
+      for (stratum in compartments_strata){
+        if (stratum %in% self$available_death_rates)
+          all_sub_parameters = c(all_sub_parameters, paste('universal_death_rateX', stratum, sep=''))
+        if (paste('universal_death_rateX', stratum, sep='') %in% self$overwrite_parameters)
+          break
+      }
+      all_sub_parameters = rev(all_sub_parameters)
+      all_sub_parameters
+    },
 
+    create_mortality_functions = function(.compartment, .sub_parameter) {
+      # loop through all the components to the population-wide mortality and create the recursive functions
+      
+      # :param _compartment: str
+      # name of the compartment of interest
+      # :param _sub_parameters: list
+      # the names of the functions that need to update the upstream parameters
+      # :return:
+      
+      self$final_parameter_functions[paste('universal_death_rateX', .compartment, sep='')] =
+        self$adaptation_functions[.sub_parameter[[1]]]
+      for (component in tail(.sub_parameter, -1)){
+        # get the new function to act on the less stratified function (closer to the "tree-trunk")
+        if (!(component %in% self$parameters))
+          stop(paste("parameter component", component, " not found in parameters attribute"))
+        
+          
+
+        else if (typeof(self$parameters[component]) == 'double')
+          update_function = create_multiplicative_function(self$parameters[component])
+        else if (typeof(self$parameters[component]) == 'character')
+          update_function = create_time_variant_multiplicative_function(self$adaption_functions[component])
+        else
+          stop(paste("parameter component", component, "not in appropriate format"))
+        
+          
+        
+        # create the composite function
+        self$final_parameter_functions[paste('universal_death_rateX', .compartment, sep='')] = create_function_of_function(upadate_function, 
+                                          self$final_parameter_function[paste('universal_death_rateX', .compartment, sep='')] )
+      }
+    },
+    
+    find_transition_components = function(.parameter){
+      # finds each of the strings for the functions acting on the next function in the sequence
+      
+      # :param _parameter: str
+      # full name of the parameter of interest
+      
+      sub_parameters = c()
+      
+      # work backwards to allow stopping for overwriting requests, then reverse in preparation for function creation 
+      for(x_instance in extract_reversed_x_positions(.parameter)){
+        component = tail(.parameter, x_instance)
+        sub_parameters = c(sub_parameters, component )
+        if (component %in% self$overwrite_parameters)
+            break
+      }
+      sub_parameters = rev(sub_parameters)
+      sub_parameters
+    },
+    
+    create_transition_functions = function(.parameter, .sub_parameters){
+      # builds up each parameter to be implemented as a function, recursively creating an outer function that calls the
+      # inner function
+      
+      # :param _parameter: str
+      # full name of the parameter of interest
+      # :param _sub_parameters: list
+      # list of the strings representing the sub-parameters, including the base parameter as the stem and with all
+      # of the relevant strata in the stratification sequence following
+      
+      # start from base value as a function of time, even if the time argument is ignored
+      if((typeof(unlist(self$parameters[names(.sub_parameters[1])])) == 'double') | (typeof(unlist(self$parameters[names(.sub_parameters[1])])) == 'integer')){
+        #update_function = create_multiplicative_function(self$parameters[names(.sub_parameters[1])])
+        #self$final_parameter_functions[.parameter] = (function(time){return(create_multiplicative_function(self$parameters[names(.sub_parameters[1])]))})()
+         # (update_function,self$final_parameter_functions[.parameter])
+        self$final_parameter_functions[.parameter] = (function(time){self$parameters[names(.sub_parameters[1])]})()
+      }
+       
+      
+      else
+        c = self$adaptation_functions[.sub_parameters[1]]
+      
+      # then cycle through other applicable components and extend function recursively, only if component available
+      for (component in tail(.sub_parameters, -1)){
+        if (!(component %in% self$parameters)){
+          stop(paste("parameter component", component, " not found in parameters attribute"))
+        }
+          
+        else if (typeof(self$parameters[component]) == 'double')
+          update_function = create_multiplicative_function(self$parameters[component])
+        else{
+          stop(paste("parameter component", component, "not in appropriate format"))
+        }
+          
+          
+        }
+    },
+    
+    
     find_parameter_components = function(.parameter) {
       #   extract the components of the stratified parameter into a dictionary structure with values being a list of
       #   time-variant parameters, a list of constant parameters and the product of all the constant values applied
@@ -2063,16 +2253,9 @@ StratifiedModel <- R6Class(
       #       name of the parameter whose value is needed
       #   :param .time: numeric scalar value
       #       time in model integration
-      adjusted_parameter <- self$parameter_components[[.parameter]]$constant_value
-      for (time_variant in self$parameter_components[[.parameter]]$time_variants) {
-        adjusted_parameter <- adjusted_parameter * self$time_variants[[time_variant]](.time)
-      }
-
-      alternative_adjusted_parameter <- self$parameter_functions[[.parameter]]
-      # if (is.numeric(alternative_adjusted_parameter)){
-      #     print(alternative_adjusted_parameter)
-      #     print(adjusted_parameter)}
-      adjusted_parameter
+      #print('-----')
+      #print(.parameter)
+      return(self$final_parameter_functions[[.parameter]])
     },
 
     find_infectious_population = function(.compartment_values) {
@@ -2403,13 +2586,13 @@ sir_model$stratify("hiv", c("negative", "positive"), c(),
 
 sir_model$stratify("strain", c("sensitive", "resistant"),  c("infectious"), requested_proportions=c(), verbose = FALSE)
 age_mixing <- NULL
-#age_mixing <- diag(4)
+# #age_mixing <- diag(4)
 sir_model$stratify("age", c(1, 10, 3), c(),
-                     list(recovery=list("1"=0.5, "10"=0.8)),
-                           #recoveryXhiv_positive=list("1"=2, "3"=365/13*.5, "10"=1, overwrite=c("2")),
-                           #universal_death_rate=list("1"=1, "2"=2, "3"=3)),
-                           infectiousness_adjustments=c("1"=0.8),
-                           mixing_matrix = age_mixing, verbose=FALSE)
+                      list(recovery=list("1"=0.5, "10"=0.8)),
+                            #recoveryXhiv_positive=list("1"=2, "3"=365/13*.5, "10"=1, overwrite=c("2")),
+                            #universal_death_rate=list("1"=1, "2"=2, "3"=3)),
+                            infectiousness_adjustments=c("1"=0.8),
+                            mixing_matrix = age_mixing, verbose=FALSE)
 
 #sir_model$stratify("age", c(3, 2, 1), c(), verbose = TRUE)
 # sir_model$add_time_variant("recovery", create_arbitrary_time_variant_function)
@@ -2420,6 +2603,7 @@ interpreter <- ModelInterpreter$new(sir_model)
 # interpreter$create_flowchart()
 interpreter$plot_compartment("infectious")
 #print(sir_model$infectiousness_multipliers)
-print(interpreter$compartment_totals[["infectious"]])
+#print(interpreter$compartment_totals[["infectious"]])
+print(sir_model$parameters)
 
 
