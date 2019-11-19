@@ -11,13 +11,13 @@ from sqlalchemy import create_engine
 
 # Use conda to install graphviz,  instead of setting path  'conda install python-graphviz'
 # set path - sachin
-# os.environ["PATH"] += os.pathsep + 'C:/Users/swas0001/graphviz-2.38/release/bin'
+os.environ["PATH"] += os.pathsep + 'C:/Users/swas0001/graphviz-2.38/release/bin'
 
 # set path - james desktop
-# os.environ["PATH"] += os.pathsep + 'C:/Program Files (x86)/Graphviz2.38/bin'
+os.environ["PATH"] += os.pathsep + 'C:/Program Files (x86)/Graphviz2.38/bin'
 
 # set path - romain desktop
-# os.environ["PATH"] += os.pathsep + 'C:/Users/rrag0004/Models/graphviz-2.38/release/bin'
+os.environ["PATH"] += os.pathsep + 'C:/Users/rrag0004/Models/graphviz-2.38/release/bin'
 
 
 """
