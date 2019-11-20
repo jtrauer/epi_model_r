@@ -876,6 +876,10 @@ class EpiModel:
         else:
             raise ValueError("integration approach requested not available")
 
+        # check that all compartment values are >= 0
+        if numpy.any(self.outputs < 0.):
+            print("warning, compartment or compartments with negative values")
+
         self.output_to_user("integration complete")
 
     def apply_all_flow_types_to_odes(self, _ode_equations, _compartment_values, _time):
@@ -896,7 +900,6 @@ class EpiModel:
         _ode_equations = self.apply_compartment_death_flows(_ode_equations, _compartment_values, _time)
         _ode_equations = self.apply_universal_death_flow(_ode_equations, _compartment_values, _time)
         _ode_equations = self.apply_birth_rate(_ode_equations, _compartment_values, _time)
-        self.check_all_compartments_positive(_compartment_values)
         return _ode_equations
 
     def apply_transition_flows(self, _ode_equations, _compartment_values, _time):
@@ -1017,16 +1020,6 @@ class EpiModel:
         """
         return increment_list_by_index(_ode_equations, self.compartment_names.index(self.entry_compartment),
                                        self.find_total_births(_compartment_values, _time))
-
-    def check_all_compartments_positive(self, _compartment_values):
-        """
-        check that all compartment values have a positive value
-
-        :param _compartment_values:
-            see previous methods
-        """
-        if any([compartment < 0.0 for compartment in _compartment_values]):
-            print("warning, compartment or compartments with negative values")
 
     def find_total_births(self, _compartment_values, _time):
         """
