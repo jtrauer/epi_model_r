@@ -409,8 +409,7 @@ def store_database(outputs, table_name="outputs",  database_name="../databases/o
     """
     store outputs from the model in sql database for use in producing outputs later
     """
-
-    engine = create_engine("sqlite:///"+ database_name, echo=False)
+    engine = create_engine("sqlite:///" + database_name, echo=False)
     outputs.to_sql(table_name, con=engine, if_exists="append",  index=False)
 
 
@@ -830,10 +829,7 @@ class EpiModel:
         if self.integration_type == "odeint":
             def make_model_function(compartment_values, time):
                 self.update_tracked_quantities(compartment_values)
-                derived_output_df = pd.DataFrame.from_dict(self.derived_outputs)
-                derived_output_df['step'] = self.step
-                store_database(derived_output_df, table_name="derived_outputs")
-                self.step = self.step + 1
+                # self.store_derived_outputs_to_db()
                 return self.apply_all_flow_types_to_odes([0.0] * len(self.compartment_names), compartment_values, time)
 
             self.outputs = odeint(make_model_function, self.compartment_values, self.times, atol=1.e-3, rtol=1.e-3)
@@ -844,10 +840,7 @@ class EpiModel:
             # solve_ivp requires arguments to model function in the reverse order
             def make_model_function(time, compartment_values):
                 self.update_tracked_quantities(compartment_values)
-                derived_output_df = pd.DataFrame.from_dict(self.derived_outputs)
-                derived_output_df['step'] = self.step
-                store_database(derived_output_df, table_name="derived_outputs")
-                self.step = self.step + 1
+                # self.store_derived_outputs_to_db()
                 return self.apply_all_flow_types_to_odes([0.0] * len(self.compartment_names), compartment_values, time)
 
             # add a stopping condition, which was the original purpose of using this integration approach
@@ -872,6 +865,15 @@ class EpiModel:
             print("warning, compartment or compartments with negative values")
 
         self.output_to_user("integration complete")
+
+    def store_derived_outputs_to_db(self):
+        """
+        currently inactive code to store outputs to sql database as they are created
+        """
+        derived_output_df = pd.DataFrame.from_dict(self.derived_outputs)
+        derived_output_df["step"] = self.step
+        store_database(derived_output_df, table_name="derived_outputs")
+        self.step += 1
 
     def apply_all_flow_types_to_odes(self, _ode_equations, _compartment_values, _time):
         """
