@@ -923,10 +923,12 @@ class EpiModel:
                 _ode_equations, self.compartment_names.index(self.transition_flows.to[n_flow]), net_flow)
 
             # track any quantities dependent on flow rates
-            self.track_derived_outputs(n_flow, net_flow)
+            if _time not in self.derived_outputs["times"]:
+                self.track_derived_outputs(n_flow, net_flow)
 
         # add another element to the derived outputs vector
-        self.extend_derived_outputs(_time)
+        if _time not in self.derived_outputs["times"]:
+            self.extend_derived_outputs(_time)
 
         # return flow rates
         return _ode_equations
@@ -2439,5 +2441,5 @@ if __name__ == "__main__":
 
     # create_flowchart(sir_model)
     #
-    sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
+    # sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
 
