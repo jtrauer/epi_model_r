@@ -864,7 +864,16 @@ class EpiModel:
         if numpy.any(self.outputs < 0.):
             print("warning, compartment or compartments with negative values")
 
+        for output in self.output_connections:
+            transition_indices = self.find_output_transition_indices(output)
+
         self.output_to_user("integration complete")
+
+    def find_output_transition_indices(self, output):
+        return [row for row in range(len(self.transition_flows)) if
+                self.transition_flows.implement[row] == len(self.all_stratifications) and
+                find_stem(self.transition_flows.origin[row]) == self.output_connections[output]["origin"] and
+                find_stem(self.transition_flows.to[row]) == self.output_connections[output]["to"]]
 
     def store_derived_outputs_to_db(self):
         """
