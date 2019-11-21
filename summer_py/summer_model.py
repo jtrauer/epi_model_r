@@ -829,7 +829,6 @@ class EpiModel:
         if self.integration_type == "odeint":
             def make_model_function(compartment_values, time):
                 self.update_tracked_quantities(compartment_values)
-                # self.store_derived_outputs_to_db()
                 return self.apply_all_flow_types_to_odes([0.0] * len(self.compartment_names), compartment_values, time)
 
             self.outputs = odeint(make_model_function, self.compartment_values, self.times, atol=1.e-3, rtol=1.e-3)
@@ -840,7 +839,6 @@ class EpiModel:
             # solve_ivp requires arguments to model function in the reverse order
             def make_model_function(time, compartment_values):
                 self.update_tracked_quantities(compartment_values)
-                # self.store_derived_outputs_to_db()
                 return self.apply_all_flow_types_to_odes([0.0] * len(self.compartment_names), compartment_values, time)
 
             # add a stopping condition, which was the original purpose of using this integration approach
@@ -864,30 +862,8 @@ class EpiModel:
         if numpy.any(self.outputs < 0.):
             print("warning, compartment or compartments with negative values")
 
-        self.derived_outputs_shadow["times"] = self.times
-        for output in self.output_connections:
-            self.derived_outputs_shadow[output] = [0.0] * len(self.times)
-            transition_indices = self.find_output_transition_indices(output)
-            for n_time, time in enumerate(self.times):
-                self.compartment_values = self.outputs[n_time]
-                self.update_tracked_quantities(self.compartment_values)
-                for n_flow in transition_indices:
-                    parameter_value = self.get_parameter_value(self.transition_flows.parameter[n_flow], time)
-                    infectious_population = self.find_infectious_multiplier(n_flow)
-                    net_flow = parameter_value * self.customised_flow_functions[n_flow](self, n_flow) if \
-                        self.transition_flows.type[n_flow] == "customised_flows" else \
-                        parameter_value * \
-                        self.compartment_values[self.compartment_names.index(self.transition_flows.origin[n_flow])] * \
-                        infectious_population
-                    self.derived_outputs_shadow[output][n_time] += net_flow
-
         self.output_to_user("integration complete")
-
-    def find_output_transition_indices(self, output):
-        return [row for row in range(len(self.transition_flows)) if
-                self.transition_flows.implement[row] == len(self.all_stratifications) and
-                find_stem(self.transition_flows.origin[row]) == self.output_connections[output]["origin"] and
-                find_stem(self.transition_flows.to[row]) == self.output_connections[output]["to"]]
+        self.calculate_outputs_post_integration()
 
     def store_derived_outputs_to_db(self):
         """
@@ -925,23 +901,11 @@ class EpiModel:
         :parameters and return: see previous method apply_all_flow_types_to_odes
         """
         for n_flow in self.transition_indices_to_implement:
-
-            # find adjusted parameter value
-            parameter_value = self.get_parameter_value(self.transition_flows.parameter[n_flow], _time)
-
-            # find from compartment and the "infectious population" (which equals one for non-infection-related flows)
-            infectious_population = self.find_infectious_multiplier(n_flow)
-
-            # find the index of the origin or from compartment
-            from_compartment = self.compartment_names.index(self.transition_flows.origin[n_flow])
-
-            # implement flows according to whether customised or standard/infection-related
-            net_flow = parameter_value * self.customised_flow_functions[n_flow](self, n_flow) if \
-                self.transition_flows.type[n_flow] == "customised_flows" else \
-                parameter_value * _compartment_values[from_compartment] * infectious_population
+            net_flow = self.find_net_transition_flow(n_flow, _time, _compartment_values)
 
             # update equations
-            _ode_equations = increment_list_by_index(_ode_equations, from_compartment, -net_flow)
+            _ode_equations = increment_list_by_index(
+                _ode_equations, self.compartment_names.index(self.transition_flows.origin[n_flow]), -net_flow)
             _ode_equations = increment_list_by_index(
                 _ode_equations, self.compartment_names.index(self.transition_flows.to[n_flow]), net_flow)
 
@@ -955,6 +919,34 @@ class EpiModel:
 
         # return flow rates
         return _ode_equations
+
+    def find_net_transition_flow(self, n_flow, _time, _compartment_values):
+        """
+        common code to finding transition flows during and after integration packaged into single function
+
+        :param n_flow: int
+            row of interest in transition flow dataframe
+        :param _time: float
+            time step, which may be time during integration or post-integration time point of interest
+        :param _compartment_values: list
+            list of current compartment sizes
+        :return: float
+            net transition between the two compartments being considered
+        """
+
+        # find adjusted parameter value
+        parameter_value = self.get_parameter_value(self.transition_flows.parameter[n_flow], _time)
+
+        # find from compartment and the "infectious population" (which equals one for non-infection-related flows)
+        infectious_population = self.find_infectious_multiplier(n_flow)
+
+        # find the index of the origin or from compartment
+        from_compartment = self.compartment_names.index(self.transition_flows.origin[n_flow])
+
+        # implement flows according to whether customised or standard/infection-related
+        return parameter_value * self.customised_flow_functions[n_flow](self, n_flow) if \
+            self.transition_flows.type[n_flow] == "customised_flows" else \
+            parameter_value * _compartment_values[from_compartment] * infectious_population
 
     def track_derived_outputs(self, _n_flow, _net_flow):
         """
@@ -1123,6 +1115,52 @@ class EpiModel:
         """
         return self.time_variants[_parameter](time) if _parameter in self.time_variants \
             else self.parameters[_parameter]
+
+    """
+    post-integration collation of user-requested output values
+    """
+
+    def calculate_outputs_post_integration(self):
+        """
+        find outputs for each requested time point, rather than at the time points that the model integration steps
+            occurred at, which are arbitrary and determined by the integration routine used
+        """
+        self.derived_outputs_shadow["times"] = self.times
+        for output in self.output_connections:
+            self.derived_outputs_shadow[output] = [0.0] * len(self.times)
+            transition_indices = self.find_output_transition_indices(output)
+            for n_time, time in enumerate(self.times):
+                self.restore_past_state(time)
+                for n_flow in transition_indices:
+                    net_flow = self.find_net_transition_flow(n_flow, time, self.compartment_values)
+                    self.derived_outputs_shadow[output][n_time] += net_flow
+
+    def restore_past_state(self, time):
+        """
+        return compartment values and tracked quantities to the values current at a particular time during model
+            integration from the returned outputs structure
+        the model need not have been evaluated at this particular time point
+
+        :param time: float
+            time point to go back to
+        """
+        self.compartment_values = self.outputs[self.times.index(time)]
+        self.update_tracked_quantities(self.compartment_values)
+
+    def find_output_transition_indices(self, output):
+        """
+        find the transition indices that are relevant to a particular output evaluation request from the
+            output_connections dictionary created from the user's request
+
+        :param output: str
+            name of the output of interest
+        :return: list
+            integers referencing the transition flows relevant to this output connection
+        """
+        return [row for row in range(len(self.transition_flows)) if
+                self.transition_flows.implement[row] == len(self.all_stratifications) and
+                find_stem(self.transition_flows.origin[row]) == self.output_connections[output]["origin"] and
+                find_stem(self.transition_flows.to[row]) == self.output_connections[output]["to"]]
 
     """
     simple output methods, although most outputs will be managed outside of this module
@@ -2459,8 +2497,6 @@ if __name__ == "__main__":
     sir_model.run_model()
 
     create_flowchart(sir_model, name="sir_model_diagram")
-
-    sir_model.transition_flows.to_csv("temp.csv")
 
     # create_flowchart(sir_model)
     #
