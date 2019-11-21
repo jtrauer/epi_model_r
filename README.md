@@ -130,8 +130,12 @@ the compartment types requested.
 For outputs such as incidence and total mortality, a dictionary/list can be passed (output_connections) to request
 that specific model quantities emerging from the model are tracked during integration.
 The key/name of the quantity is the name of the indicator, while the value is a dictionary/list specifying the origin
-and destination ("to") compartment. For example, in an SIR model in Python, this would be specified as: {"incidence":
-{"origin": "susceptible", "to": "infectious"}}.
+and destination ("to") compartments as well as conditional strings that should appear in the origin and destination 
+compartment names. For example, in an SIR model stratified by HIV status in Python, this would be specified as: 
+{"incidence": {"origin": "susceptible", "to": "infectious"},
+ "incidence_hiv_positive": {"origin": "susceptible", "to": "infectious", "origin_condition": "hiv_positive", 
+							"to_condition": "hiv_positive"}
+}.
 
 Alternatively, user-defined functions can be tracked with any function used to track quantities within the model. These
 are submitted as dictionaries with keys to name the quantities and values to define the functions. 

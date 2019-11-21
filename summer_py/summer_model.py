@@ -471,6 +471,7 @@ class EpiModel:
     :attribute output_connections: dict
         keys are the names of the quantities to be tracked
         value is dict containing the origin and the destination ("to") compartments on which to base these calculations
+            as well as conditional strings that should appear in the origin and destination compartment names
     :attribute outputs: numpy array
         array containing all the evaluated compartment sizes
     :attribute parameters: dict
@@ -630,8 +631,9 @@ class EpiModel:
             self.output_to_user("requested integration times are not sorted, now sorting")
             self.times = sorted(self.times)
         for output in _output_connections:
-            if any(item not in ("origin", "to") for item in _output_connections[output]):
-                raise ValueError("output connections incorrect specified, need an 'origin' and possibly a 'to' key")
+            if any(item not in ("origin", "to", "origin_condition", "to_condition") for item in _output_connections[output]):
+                raise ValueError("output connections incorrect specified, need an 'origin' and possibly 'to'," 
+                                 "'origin_condition and 'to_condition' keys")
 
         # report on characteristics of inputs
         if _verbose:
@@ -736,8 +738,14 @@ class EpiModel:
         for output in self.output_connections:
             self.tracked_quantities[output] = 0.0
             self.derived_outputs[output] = []
+            # add empty string as conditions if no condition provided
+            for comp in ["origin", "to"]:
+                if comp + "_condition" not in self.output_connections[output].keys():
+                    self.output_connections[output][comp + "_condition"] = ""
         for output in self.derived_output_functions:
             self.derived_outputs[output] = []
+
+
 
         # parameters essential for later stratification, if requested
         self.parameters["entry_fractions"] = 1.0
@@ -960,7 +968,9 @@ class EpiModel:
         """
         for output_type in self.output_connections:
             if self.output_connections[output_type]["origin"] in self.transition_flows.origin[_n_flow] \
-                    and self.output_connections[output_type]["to"] in self.transition_flows.to[_n_flow]:
+                    and self.output_connections[output_type]["to"] in self.transition_flows.to[_n_flow]\
+                    and self.output_connections[output_type]["origin_condition"] in self.transition_flows.origin[_n_flow]\
+                    and self.output_connections[output_type]["to_condition"] in self.transition_flows.to[_n_flow]:
                 self.tracked_quantities[output_type] += _net_flow
 
     def extend_derived_outputs(self, _time):
@@ -1160,7 +1170,10 @@ class EpiModel:
         return [row for row in range(len(self.transition_flows)) if
                 self.transition_flows.implement[row] == len(self.all_stratifications) and
                 find_stem(self.transition_flows.origin[row]) == self.output_connections[output]["origin"] and
-                find_stem(self.transition_flows.to[row]) == self.output_connections[output]["to"]]
+                find_stem(self.transition_flows.to[row]) == self.output_connections[output]["to"] and
+                self.output_connections[output]["origin_condition"] in self.transition_flows.origin[row] and
+                self.output_connections[output]["to_condition"] in self.transition_flows.to[row]
+                ]
 
     """
     simple output methods, although most outputs will be managed outside of this module
@@ -2467,7 +2480,10 @@ if __name__ == "__main__":
         [{"type": "standard_flows", "parameter": "recovery", "origin": "infectious", "to": "recovered"},
          {"type": "infection_density", "parameter": "beta", "origin": "susceptible", "to": "infectious"},
          {"type": "compartment_death", "parameter": "infect_death", "origin": "infectious"}],
-        output_connections={"incidence": {"origin": "susceptible", "to": "infectious"}},
+        output_connections={
+            "incidence": {"origin": "susceptible", "to": "infectious"},
+            "incidence_hiv_positive": {"origin": "susceptible", "to": "infectious",
+                                       "origin_condition": "hiv_positive", "to_condition": "hiv_positive"}},
         verbose=False, integration_type="odeint", derived_output_functions={'population': get_total_popsize}
     )
     # sir_model.adaptation_functions["increment_by_one"] = create_additive_function(1.)
