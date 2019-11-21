@@ -541,8 +541,8 @@ class EpiModel:
         self.death_flows = pd.DataFrame(columns=("type", "parameter", "origin", "implement"))
 
         # attributes with specific format that are independent of user inputs
-        self.tracked_quantities, self.time_variants, self.all_stratifications, self.customised_flow_functions = \
-            ({} for _ in range(4))
+        self.tracked_quantities, self.time_variants, self.all_stratifications, self.customised_flow_functions,\
+            self.derived_outputs_shadow = ({} for _ in range(5))
         self.derived_outputs = {"times": []}
         self.compartment_values, self.compartment_names, self.infectious_indices = ([] for _ in range(3))
 
@@ -864,8 +864,22 @@ class EpiModel:
         if numpy.any(self.outputs < 0.):
             print("warning, compartment or compartments with negative values")
 
+        self.derived_outputs_shadow["times"] = self.times
         for output in self.output_connections:
+            self.derived_outputs_shadow[output] = [0.0] * len(self.times)
             transition_indices = self.find_output_transition_indices(output)
+            for n_time, time in enumerate(self.times):
+                self.compartment_values = self.outputs[n_time]
+                self.update_tracked_quantities(self.compartment_values)
+                for n_flow in transition_indices:
+                    parameter_value = self.get_parameter_value(self.transition_flows.parameter[n_flow], time)
+                    infectious_population = self.find_infectious_multiplier(n_flow)
+                    net_flow = parameter_value * self.customised_flow_functions[n_flow](self, n_flow) if \
+                        self.transition_flows.type[n_flow] == "customised_flows" else \
+                        parameter_value * \
+                        self.compartment_values[self.compartment_names.index(self.transition_flows.origin[n_flow])] * \
+                        infectious_population
+                    self.derived_outputs_shadow[output][n_time] += net_flow
 
         self.output_to_user("integration complete")
 
