@@ -479,9 +479,11 @@ class Outputs:
 
             for i, stratum in enumerate(all_groups[stratification]):
                 requested_output_for_stratum = requested_output + 'XamongX' + stratification + '_' + stratum
+                _label = self.translation_dict[stratification + '_' + stratum] if\
+                    stratification + '_' + stratum in self.translation_dict.keys() else stratification + '_' + stratum
                 axis.plot(times_to_plot, self.post_processing_list[sc_index].generated_outputs[requested_output_for_stratum],
-                                  color=self.colour_theme[i+1],
-                                  label= self.translation_dict[stratification + '_' + stratum])
+                          color=self.colour_theme[i+1],
+                          label=_label)
 
             self.tidy_x_axis(axis, start=1990., end=max(times_to_plot), max_dims=max_dims,
                                              x_label='time')
