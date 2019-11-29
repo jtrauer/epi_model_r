@@ -375,8 +375,8 @@ def create_flowchart(model_object, strata=None, name="flow_chart"):
                         "fontsize": "10", }}
 
     # colour dictionary for different nodes indicating different stages of infection
-    colour_dict = {"susceptible": "#F0FFFF", "early_latent": "#A64942", "late_latent": "#A64942",
-                   "infectious": "#FE5F55", "recovered": "#FFF1C1"}
+    default_colour_dict = {"susceptible": "#F0FFFF", "early_latent": "#A64942", "late_latent": "#A64942",
+                           "infectious": "#FE5F55", "recovered": "#FFF1C1"}
 
     def apply_styles(graph, _styles):
         graph.graph_attr.update(("graph" in _styles and _styles["graph"]) or {})
@@ -395,7 +395,8 @@ def create_flowchart(model_object, strata=None, name="flow_chart"):
 
     # inputs are sectioned according to the stem value so colours can be added to each type
     for label in new_labels:
-        node_color = colour_dict[find_name_components(label)[0]]
+        comp_name = find_name_components(label)[0]
+        node_color = default_colour_dict[comp_name] if comp_name in default_colour_dict.keys() else "#F0FFFF"
         model_object.flow_diagram.node(label, fillcolor=node_color)
 
     # build the graph edges
