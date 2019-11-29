@@ -12,7 +12,12 @@ def find_first_list_element_above(a_list, value):
     """
     if max(a_list) <= value:
         ValueError('The requested value is greater than max(a_list)')
-    return next(x[0] for x in enumerate(a_list) if x[1] > value)
+
+    for i, val in enumerate(a_list):
+        if val > value:
+            return i
+
+    # return next(x[0] for x in enumerate(a_list) if x[1] > value)
 
 
 class PostProcessing:
