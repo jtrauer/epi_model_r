@@ -1144,6 +1144,11 @@ class EpiModel:
                 for n_flow in transition_indices:
                     net_flow = self.find_net_transition_flow(n_flow, time, self.compartment_values)
                     self.derived_outputs_shadow[output][n_time] += net_flow
+        for output in self.derived_output_functions:
+            self.derived_outputs_shadow[output] = [0.0] * len(self.times)
+            for n_time, time in enumerate(self.times):
+                self.restore_past_state(time)
+                self.derived_outputs_shadow[output][n_time] = self.derived_output_functions[output](self)
 
     def restore_past_state(self, time):
         """
