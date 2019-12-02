@@ -672,14 +672,12 @@ class EpiModel:
         """
         make initial conditions sum to a certain user-requested value
         """
-        compartment = self.find_remainder_compartment()
-        remaining_population = self.starting_population - sum(self.compartment_values)
-        if remaining_population < 0.0:
-            raise ValueError("total of requested compartment values is greater than the requested starting population")
+        remainder_compartment = self.find_remainder_compartment()
+        remaining_population = self.find_remainder_population(remainder_compartment)
         self.output_to_user("requested that total population sum to %s" % self.starting_population)
         self.output_to_user("remaining population of %s allocated to %s compartment"
-                            % (remaining_population, compartment))
-        self.compartment_values[self.compartment_names.index(compartment)] = remaining_population
+                            % (remaining_population, remainder_compartment))
+        self.compartment_values[self.compartment_names.index(remainder_compartment)] = remaining_population
 
     def find_remainder_compartment(self):
         """
@@ -696,6 +694,25 @@ class EpiModel:
             raise ValueError("starting compartment to populate with initial values not found in available compartments")
         else:
             return self.starting_compartment
+
+    def find_remainder_population(self, _remainder_compartment):
+        """
+        start by calculating the unassigned starting population as the difference between the specified compartment
+            values and the requested starting population
+        if the remainder compartment has been specified by the user as needing some initial values, add these back on,
+            because they would have contributed to the calculation of the remainder, which they shouldn't do
+
+        :param _remainder_compartment: str
+            name of the compartment to assign the remaining population size to
+        :return: remaining_population: float
+            value of the population size to assign to the initial conditions remainder population compartment
+        """
+        remainder = self.starting_population - sum(self.compartment_values)
+        if _remainder_compartment in self.initial_conditions:
+            remainder += self.initial_conditions[_remainder_compartment]
+        if remainder < 0.0:
+            raise ValueError("total of requested compartment values is greater than the requested starting population")
+        return remainder
 
     def implement_flows(self, _requested_flows):
         """
