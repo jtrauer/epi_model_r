@@ -2127,6 +2127,13 @@ class StratifiedModel(EpiModel):
         self.transition_indices_to_implement = self.find_transition_indices_to_implement()
         self.death_indices_to_implement = self.find_death_indices_to_implement()
 
+        # ensure there is a universal death rate available even if the model hasn't been stratified at all
+        if len(self.all_stratifications) == 0 and isinstance(self.parameters["universal_death_rate"], (float, int)):
+            self.final_parameter_functions["universal_death_rate"] = \
+                lambda time: self.parameters["universal_death_rate"]
+        elif len(self.all_stratifications) == 0 and type(self.parameters["universal_death_rate"]) == str:
+            self.final_parameter_functions["universal_death_rate"] = self.adaptation_functions["universal_death_rate"]
+
     def prepare_stratified_parameter_calculations(self):
         """
         prior to integration commencing, work out what the components are of each parameter being implemented
@@ -2153,7 +2160,8 @@ class StratifiedModel(EpiModel):
         # similarly for all model compartments
         for compartment in self.compartment_names:
             self.mortality_components[compartment] = self.find_mortality_components(compartment)
-            self.create_mortality_functions(compartment, self.mortality_components[compartment])
+            if len(self.all_stratifications) > 0:
+                self.create_mortality_functions(compartment, self.mortality_components[compartment])
 
     def find_mortality_components(self, _compartment):
         """
@@ -2462,7 +2470,8 @@ class StratifiedModel(EpiModel):
         :return: float
             death rate
         """
-        return self.get_parameter_value("universal_death_rateX" + _compartment, _time)
+        return self.get_parameter_value("universal_death_rateX" + _compartment, _time) if \
+            len(self.all_stratifications) > 0 else self.get_parameter_value("universal_death_rate", _time)
 
     def apply_birth_rate(self, _ode_equations, _compartment_values, _time):
         """
@@ -2539,5 +2548,5 @@ if __name__ == "__main__":
 
     # create_flowchart(sir_model)
     #
-    # sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
+    sir_model.plot_compartment_size(['infectious', 'hiv_positive'])
 
