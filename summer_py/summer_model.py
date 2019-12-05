@@ -818,7 +818,8 @@ class EpiModel:
         :return: list
             booleans for whether each compartment is infectious or not
         """
-        return [find_stem(comp) in self.infectious_compartment for comp in self.compartment_names]
+        return convert_boolean_list_to_indices(
+            [find_stem(comp) in self.infectious_compartment for comp in self.compartment_names])
 
     def find_transition_indices_to_implement(self):
         """
@@ -1113,8 +1114,7 @@ class EpiModel:
         :param _compartment_values:
             as for preceding methods
         """
-        self.infectious_populations = sum([_compartment_values[compartment]
-                                           for compartment in convert_boolean_list_to_indices(self.infectious_indices)])
+        self.infectious_populations = sum([_compartment_values[compartment] for compartment in self.infectious_indices])
         self.infectious_denominators = sum(_compartment_values)
 
     def get_parameter_value(self, _parameter, _time):
@@ -2316,10 +2316,8 @@ class StratifiedModel(EpiModel):
         # then find the infectious compartment for each strain separately
         for strain in self.strains:
             self.infectious_indices[strain] = \
-                convert_boolean_list_to_indices(
-                    [create_stratum_name("strain", strain, joining_string="")
-                     in find_name_components(comp) and self.infectious_indices["all_strains"][i_comp]
-                     for i_comp, comp in enumerate(self.compartment_names)])
+                [create_stratum_name("strain", strain, joining_string="") in find_name_components(comp) and
+                 i_comp in self.infectious_indices["all_strains"] for i_comp, comp in enumerate(self.compartment_names)]
 
     def add_force_indices_to_transitions(self):
         """
