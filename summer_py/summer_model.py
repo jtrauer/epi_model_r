@@ -544,7 +544,7 @@ class EpiModel:
 
         # attributes with specific format that are independent of user inputs
         self.tracked_quantities, self.time_variants, self.all_stratifications, self.customised_flow_functions,\
-            self.derived_outputs_shadow = ({} for _ in range(5))
+            self.derived_outputs = ({} for _ in range(5))
         self.compartment_values, self.compartment_names, self.infectious_indices = ([] for _ in range(3))
 
         # ensure requests are fed in correctly
@@ -890,7 +890,7 @@ class EpiModel:
         """
         currently inactive code to store outputs to sql database as they are created
         """
-        derived_output_df = pd.DataFrame.from_dict(self.derived_outputs_shadow)
+        derived_output_df = pd.DataFrame.from_dict(self.derived_outputs)
         derived_output_df["step"] = self.step
         store_database(derived_output_df, table_name="derived_outputs")
         self.step += 1
@@ -1107,20 +1107,20 @@ class EpiModel:
         find outputs for each requested time point, rather than at the time points that the model integration steps
             occurred at, which are arbitrary and determined by the integration routine used
         """
-        self.derived_outputs_shadow["times"] = self.times
+        self.derived_outputs["times"] = self.times
         for output in self.output_connections:
-            self.derived_outputs_shadow[output] = [0.0] * len(self.times)
+            self.derived_outputs[output] = [0.0] * len(self.times)
             transition_indices = self.find_output_transition_indices(output)
             for n_time, time in enumerate(self.times):
                 self.restore_past_state(time)
                 for n_flow in transition_indices:
                     net_flow = self.find_net_transition_flow(n_flow, time, self.compartment_values)
-                    self.derived_outputs_shadow[output][n_time] += net_flow
+                    self.derived_outputs[output][n_time] += net_flow
         for output in self.derived_output_functions:
-            self.derived_outputs_shadow[output] = [0.0] * len(self.times)
+            self.derived_outputs[output] = [0.0] * len(self.times)
             for n_time, time in enumerate(self.times):
                 self.restore_past_state(time)
-                self.derived_outputs_shadow[output][n_time] = self.derived_output_functions[output](self)
+                self.derived_outputs[output][n_time] = self.derived_output_functions[output](self)
 
     def restore_past_state(self, time):
         """
