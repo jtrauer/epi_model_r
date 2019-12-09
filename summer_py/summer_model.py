@@ -544,8 +544,7 @@ class EpiModel:
 
         # attributes with specific format that are independent of user inputs
         self.tracked_quantities, self.time_variants, self.all_stratifications, self.customised_flow_functions,\
-            self.derived_outputs_shadow = ({} for _ in range(5))
-        self.derived_outputs = {"times": []}
+            self.derived_outputs = ({} for _ in range(5))
         self.compartment_values, self.compartment_names, self.infectious_indices = ([] for _ in range(3))
 
         # ensure requests are fed in correctly
@@ -754,16 +753,11 @@ class EpiModel:
 
         # for each derived quantity to be recorded, initialise derived outputs, and a tracked quantity if needed
         for output in self.output_connections:
-            self.tracked_quantities[output] = 0.0
-            self.derived_outputs[output] = []
-            # add empty string as conditions if no condition provided
             for comp in ["origin", "to"]:
+
+                # add empty string as conditions if no condition provided
                 if comp + "_condition" not in self.output_connections[output].keys():
                     self.output_connections[output][comp + "_condition"] = ""
-        for output in self.derived_output_functions:
-            self.derived_outputs[output] = []
-
-
 
         # parameters essential for later stratification, if requested
         self.parameters["entry_fractions"] = 1.0
@@ -936,14 +930,6 @@ class EpiModel:
             _ode_equations = increment_list_by_index(
                 _ode_equations, self.compartment_names.index(self.transition_flows.to[n_flow]), net_flow)
 
-            # track any quantities dependent on flow rates
-            if _time not in self.derived_outputs["times"]:
-                self.track_derived_outputs(n_flow, net_flow)
-
-        # add another element to the derived outputs vector
-        if _time not in self.derived_outputs["times"]:
-            self.extend_derived_outputs(_time)
-
         # return flow rates
         return _ode_equations
 
@@ -974,38 +960,6 @@ class EpiModel:
         return parameter_value * self.customised_flow_functions[n_flow](self, n_flow) if \
             self.transition_flows.type[n_flow] == "customised_flows" else \
             parameter_value * _compartment_values[from_compartment] * infectious_population
-
-    def track_derived_outputs(self, _n_flow, _net_flow):
-        """
-        calculate derived quantities to be tracked, which are stored as the self.derived_outputs dictionary for the
-            current working time step
-
-        :param _n_flow: int
-            row number of the flow being considered in the preceding method
-        :param _net_flow: float
-            previously calculated magnitude of the transition flow
-        """
-        for output_type in self.output_connections:
-            if self.output_connections[output_type]["origin"] in self.transition_flows.origin[_n_flow] \
-                    and self.output_connections[output_type]["to"] in self.transition_flows.to[_n_flow]\
-                    and self.output_connections[output_type]["origin_condition"] in self.transition_flows.origin[_n_flow]\
-                    and self.output_connections[output_type]["to_condition"] in self.transition_flows.to[_n_flow]:
-                self.tracked_quantities[output_type] += _net_flow
-
-    def extend_derived_outputs(self, _time):
-        """
-        add the derived quantities being tracked to the end of the tracking vector, taking the self.derived_outputs
-        dictionary for a single time point and updating the derived outputs dictionary of lists for all time points
-
-        :param _time: float
-            current time in integration process
-        """
-        self.derived_outputs["times"].append(_time)
-        for output_type in self.output_connections:
-            self.derived_outputs[output_type].append(self.tracked_quantities[output_type])
-
-        for output_type in self.derived_output_functions:
-            self.derived_outputs[output_type].append(self.derived_output_functions[output_type](self))
 
     def apply_compartment_death_flows(self, _ode_equations, _compartment_values, _time):
         """
@@ -1153,20 +1107,20 @@ class EpiModel:
         find outputs for each requested time point, rather than at the time points that the model integration steps
             occurred at, which are arbitrary and determined by the integration routine used
         """
-        self.derived_outputs_shadow["times"] = self.times
+        self.derived_outputs["times"] = self.times
         for output in self.output_connections:
-            self.derived_outputs_shadow[output] = [0.0] * len(self.times)
+            self.derived_outputs[output] = [0.0] * len(self.times)
             transition_indices = self.find_output_transition_indices(output)
             for n_time, time in enumerate(self.times):
                 self.restore_past_state(time)
                 for n_flow in transition_indices:
                     net_flow = self.find_net_transition_flow(n_flow, time, self.compartment_values)
-                    self.derived_outputs_shadow[output][n_time] += net_flow
+                    self.derived_outputs[output][n_time] += net_flow
         for output in self.derived_output_functions:
-            self.derived_outputs_shadow[output] = [0.0] * len(self.times)
+            self.derived_outputs[output] = [0.0] * len(self.times)
             for n_time, time in enumerate(self.times):
                 self.restore_past_state(time)
-                self.derived_outputs_shadow[output][n_time] = self.derived_output_functions[output](self)
+                self.derived_outputs[output][n_time] = self.derived_output_functions[output](self)
 
     def restore_past_state(self, time):
         """
