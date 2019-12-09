@@ -2270,8 +2270,10 @@ class StratifiedModel(EpiModel):
         # then find the infectious compartment for each strain separately
         for strain in self.strains:
             self.infectious_indices[strain] = \
-                [create_stratum_name("strain", strain, joining_string="") in find_name_components(comp) and
-                 i_comp in self.infectious_indices["all_strains"] for i_comp, comp in enumerate(self.compartment_names)]
+                convert_boolean_list_to_indices([create_stratum_name("strain", strain, joining_string="") in
+                                                 find_name_components(comp) and i_comp in
+                                                 self.infectious_indices["all_strains"] for i_comp, comp in
+                                                 enumerate(self.compartment_names)])
 
     def add_force_indices_to_transitions(self):
         """
