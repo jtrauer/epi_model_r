@@ -526,7 +526,7 @@ class EpiModel:
                  initial_conditions_to_total=True, infectious_compartment=("infectious",), birth_approach="no_birth",
                  verbose=False, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1,
                  starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint",
-                 output_connections={}, derived_output_functions={}):
+                 output_connections={}, derived_output_functions={}, ticker=False):
         """
         construction method to create a basic compartmental model
         includes checking that the arguments have been provided correctly by the user
@@ -552,7 +552,7 @@ class EpiModel:
             times, compartment_types, initial_conditions, parameters, requested_flows, initial_conditions_to_total,
             infectious_compartment, birth_approach, verbose, reporting_sigfigs, entry_compartment,
             starting_population, starting_compartment, equilibrium_stopping_tolerance, integration_type,
-            output_connections, derived_output_functions)
+            output_connections, derived_output_functions, ticker)
 
         # stop ide complaining about attributes being defined outside __init__, even though they aren't
         self.times, self.compartment_types, self.initial_conditions, self.parameters, self.requested_flows, \
@@ -560,8 +560,8 @@ class EpiModel:
             self.reporting_sigfigs, self.entry_compartment, self.starting_population, \
             self.starting_compartment, self.equilibrium_stopping_tolerance, self.outputs, self.integration_type, \
             self.output_connections, self.infectious_populations, self.infectious_denominators, \
-            self.derived_output_functions, self.transition_indices_to_implement, self.death_indices_to_implement = \
-            (None for _ in range(22))
+            self.derived_output_functions, self.transition_indices_to_implement, self.death_indices_to_implement,\
+            self.ticker = (None for _ in range(23))
 
         # for storing derived output in db
         self.step = 0
@@ -572,7 +572,7 @@ class EpiModel:
                  "infectious_compartment", "birth_approach", "verbose", "reporting_sigfigs", "entry_compartment",
                  "starting_population", "starting_compartment", "infectious_compartment",
                  "equilibrium_stopping_tolerance", "integration_type", "output_connections",
-                 "derived_output_functions"):
+                 "derived_output_functions", "ticker"):
             setattr(self, attribute, eval(attribute))
 
         # keep copy of the compartment types in case the compartment names are stratified later
@@ -591,7 +591,7 @@ class EpiModel:
             self, _times, _compartment_types, _initial_conditions, _parameters, _requested_flows,
             _initial_conditions_to_total, _infectious_compartment, _birth_approach, _verbose, _reporting_sigfigs,
             _entry_compartment, _starting_population, _starting_compartment, _equilibrium_stopping_tolerance,
-            _integration_type, _output_connections, _derived_output_functions):
+            _integration_type, _output_connections, _derived_output_functions, _ticker):
         """
         check all input data have been requested correctly
 
@@ -615,7 +615,7 @@ class EpiModel:
         for expected_string in ("_birth_approach", "_entry_compartment", "_starting_compartment", "_integration_type",):
             if not isinstance(eval(expected_string), str):
                 raise TypeError("expected string for %s" % expected_string)
-        for expected_boolean in ("_initial_conditions_to_total", "_verbose"):
+        for expected_boolean in ("_initial_conditions_to_total", "_verbose", "_ticker"):
             if not isinstance(eval(expected_boolean), bool):
                 raise TypeError("expected boolean for %s" % expected_boolean)
         for expected_dict in ("_derived_output_functions",):
@@ -909,6 +909,8 @@ class EpiModel:
         :return: ode equations as list
             updated ode equations in same format but with all flows implemented
         """
+        if self.ticker:
+            print("integrating at time: %s" % _time)
         _ode_equations = self.apply_transition_flows(_ode_equations, _compartment_values, _time)
         _ode_equations = self.apply_compartment_death_flows(_ode_equations, _compartment_values, _time)
         _ode_equations = self.apply_universal_death_flow(_ode_equations, _compartment_values, _time)
@@ -1312,7 +1314,7 @@ class StratifiedModel(EpiModel):
                  initial_conditions_to_total=True, infectious_compartment=("infectious",), birth_approach="no_birth",
                  verbose=False, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1,
                  starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint",
-                 output_connections={}, derived_output_functions={}):
+                 output_connections={}, derived_output_functions={}, ticker=False):
         """
         constructor mostly inherits from parent class, with a few additional attributes that are required for the
         stratified version
@@ -1326,7 +1328,7 @@ class StratifiedModel(EpiModel):
                           starting_population=starting_population, starting_compartment=starting_compartment,
                           equilibrium_stopping_tolerance=equilibrium_stopping_tolerance,
                           integration_type=integration_type, output_connections=output_connections,
-                          derived_output_functions=derived_output_functions)
+                          derived_output_functions=derived_output_functions, ticker=ticker)
 
         self.full_stratification_list, self.removed_compartments, self.overwrite_parameters, \
             self.compartment_types_to_stratify, self.infectious_denominators, self.strains, self.mixing_categories = \
@@ -2498,7 +2500,7 @@ if __name__ == "__main__":
 
     sir_model.run_model()
 
-    create_flowchart(sir_model, name="sir_model_diagram")
+    # create_flowchart(sir_model, name="sir_model_diagram")
 
     # create_flowchart(sir_model)
     #
