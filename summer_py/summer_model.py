@@ -2328,8 +2328,7 @@ class StratifiedModel(EpiModel):
             self.strain_mixing_elements[strain], self.strain_mixing_multipliers[strain] = {}, {}
             for category in ["all_population"] if self.mixing_matrix is None else self.mixing_categories:
                 self.strain_mixing_elements[strain][category] = \
-                    [index for index in mixing_indices[category]
-                     if index in convert_boolean_list_to_indices(self.infectious_indices[strain])]
+                    [index for index in mixing_indices[category] if index in self.infectious_indices[strain]]
                 self.strain_mixing_multipliers[strain][category] = \
                     [self.infectiousness_multipliers[i_comp]
                      for i_comp in self.strain_mixing_elements[strain][category]]
