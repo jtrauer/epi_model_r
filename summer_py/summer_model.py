@@ -1120,7 +1120,7 @@ class EpiModel:
             self.derived_outputs[output] = [0.0] * len(self.times)
             for n_time, time in enumerate(self.times):
                 self.restore_past_state(time)
-                self.derived_outputs[output][n_time] = self.derived_output_functions[output](self)
+                self.derived_outputs[output][n_time] = self.derived_output_functions[output](self, time)
 
     def restore_past_state(self, time):
         """
@@ -2455,7 +2455,7 @@ class StratifiedModel(EpiModel):
 
 if __name__ == "__main__":
 
-    def get_total_popsize(model):
+    def get_total_popsize(model, time):
         return sum(model.compartment_values)
 
     sir_model = StratifiedModel(
