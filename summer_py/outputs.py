@@ -419,9 +419,12 @@ class Outputs:
 
                         this_label = 'Scenario ' + str(scenario_number) if scenario_number > 0 else "Baseline"
 
+                        sc_color = self.colour_theme[scenario_number] if \
+                            scenario_number < len(self.colour_theme) else 'black'
+
                         axis.plot(times_to_plot,
                                   data_to_plot,
-                                  color=self.colour_theme[scenario_number],
+                                  color=sc_color,
                                   label=this_label)
 
                         y_max = max([y_max,
