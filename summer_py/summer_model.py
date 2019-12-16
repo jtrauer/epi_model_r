@@ -1346,7 +1346,7 @@ class StratifiedModel(EpiModel):
     def stratify(
             self, stratification_name, strata_request, compartment_types_to_stratify, requested_proportions,
             entry_proportions={}, adjustment_requests=(), infectiousness_adjustments={}, mixing_matrix=None,
-            verbose=True):
+            verbose=True, fix_props=()):
         """
         calls to initial preparation, checks and methods that stratify the various aspects of the model
 
@@ -2484,15 +2484,15 @@ if __name__ == "__main__":
                        mixing_matrix=hiv_mixing,
                        verbose=False)
 
-    sir_model.stratify("strain", ["sensitive", "resistant"], ["infectious"],
-                       adjustment_requests={"recoveryXhiv_negative": {"sensitive": 0.9},
-                                            "recovery": {"sensitive": 0.8}},
-                       requested_proportions={}, verbose=False)
-
-    age_mixing = None
-    sir_model.stratify("age", [1, 10, 3], [], {}, {"recovery": {"1": 0.5, "10": 0.8}},
-                       infectiousness_adjustments={"1": 0.8},
-                       mixing_matrix=age_mixing, verbose=False)
+    # sir_model.stratify("strain", ["sensitive", "resistant"], ["infectious"],
+    #                    adjustment_requests={"recoveryXhiv_negative": {"sensitive": 0.9},
+    #                                         "recovery": {"sensitive": 0.8}},
+    #                    requested_proportions={}, verbose=False)
+    #
+    # age_mixing = None
+    # sir_model.stratify("age", [1, 10, 3], [], {}, {"recovery": {"1": 0.5, "10": 0.8}},
+    #                    infectiousness_adjustments={"1": 0.8},
+    #                    mixing_matrix=age_mixing, verbose=False)
 
     sir_model.run_model()
 
