@@ -1329,8 +1329,8 @@ class StratifiedModel(EpiModel):
                           derived_output_functions=derived_output_functions)
 
         self.full_stratification_list, self.removed_compartments, self.overwrite_parameters, \
-            self.compartment_types_to_stratify, self.infectious_denominators, self.strains, self.mixing_categories = \
-            ([] for _ in range(7))
+            self.compartment_types_to_stratify, self.infectious_denominators, self.strains, self.mixing_categories,\
+            self.unstratified_compartment_names = ([] for _ in range(8))
         self.all_stratifications, self.infectiousness_adjustments, self.final_parameter_functions,\
             self.adaptation_functions, self.infectiousness_levels, self.infectious_indices, \
             self.infectious_compartments, self.infectiousness_multipliers, self.parameter_components, \
@@ -1380,6 +1380,9 @@ class StratifiedModel(EpiModel):
         if stratification_name == "age":
             self.set_ageing_rates(strata_names)
 
+        # retain copy of compartment names in their stratified form to refer back to during stratification process
+        self.unstratified_compartment_names = copy.copy(self.compartment_names)
+
         # stratify the compartments
         requested_proportions = self.prepare_starting_proportions(strata_names, requested_proportions)
         self.stratify_compartments(stratification_name, strata_names, requested_proportions)
@@ -1401,9 +1404,23 @@ class StratifiedModel(EpiModel):
         # prepare infectiousness levels attribute
         self.prepare_infectiousness_levels(stratification_name, strata_names, infectiousness_adjustments)
 
+        # self.link_strata_with_flows(stratification_name, strata_names)
+
     """
     stratification checking methods
     """
+
+    def link_strata_with_flows(self, _stratification_name, _strata_names):
+        for compartment in self.unstratified_compartment_names:
+            for n_stratum in range(len(_strata_names[:-1])):
+                self.transition_flows = self.transition_flows.append(
+                    {"type": "special",
+                     "parameter": "nothing",
+                     "origin": create_stratified_name(compartment, _stratification_name, _strata_names[n_stratum]),
+                     "to": create_stratified_name(compartment, _stratification_name, _strata_names[n_stratum + 1]),
+                     "implement": len(self.all_stratifications),
+                     "strain": float("nan")},
+                    ignore_index=True)
 
     def prepare_and_check_stratification(
             self, _stratification_name, _strata_names, _compartment_types_to_stratify, _adjustment_requests, _verbose):
@@ -1739,6 +1756,8 @@ class StratifiedModel(EpiModel):
                      "implement": len(self.all_stratifications),
                      "strain": strain},
                     ignore_index=True)
+
+                print(strain)
 
                 # update the customised flow function storage dictionary
                 if self.transition_flows.type[_n_flow] == 'customised_flows':
@@ -2484,11 +2503,11 @@ if __name__ == "__main__":
                        mixing_matrix=hiv_mixing,
                        verbose=False)
 
-    # sir_model.stratify("strain", ["sensitive", "resistant"], ["infectious"],
-    #                    adjustment_requests={"recoveryXhiv_negative": {"sensitive": 0.9},
-    #                                         "recovery": {"sensitive": 0.8}},
-    #                    requested_proportions={}, verbose=False)
-    #
+    sir_model.stratify("strain", ["sensitive", "resistant"], ["infectious"],
+                       adjustment_requests={"recoveryXhiv_negative": {"sensitive": 0.9},
+                                            "recovery": {"sensitive": 0.8}},
+                       requested_proportions={}, verbose=False)
+
     # age_mixing = None
     # sir_model.stratify("age", [1, 10, 3], [], {}, {"recovery": {"1": 0.5, "10": 0.8}},
     #                    infectiousness_adjustments={"1": 0.8},
