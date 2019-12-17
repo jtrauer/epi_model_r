@@ -1406,28 +1406,15 @@ class StratifiedModel(EpiModel):
 
         if fix_props:
             self.link_strata_with_flows(stratification_name, strata_names)
-            self.parameters["transition"] = 0.0
-
-        self.transition_flows.to_csv("temp.csv")
+            for n_stratum in range(len(strata_names[: -1])):
+                self.final_parameter_functions[
+                    create_stratified_name("transition", stratification_name, strata_names[n_stratum] + "_to_" +
+                                           strata_names[n_stratum + 1])] = \
+                    lambda time: 0.0
 
     """
     stratification checking methods
     """
-
-    def link_strata_with_flows(self, _stratification_name, _strata_names):
-        """
-        add in flows that transition people between the strata being implemented
-        """
-        for compartment in self.unstratified_compartment_names:
-            for n_stratum in range(len(_strata_names[:-1])):
-                self.transition_flows = self.transition_flows.append(
-                    {"type": "strata_transition",
-                     "parameter": "transition",
-                     "origin": create_stratified_name(compartment, _stratification_name, _strata_names[n_stratum]),
-                     "to": create_stratified_name(compartment, _stratification_name, _strata_names[n_stratum + 1]),
-                     "implement": len(self.all_stratifications),
-                     "strain": float("nan")},
-                    ignore_index=True)
 
     def prepare_and_check_stratification(
             self, _stratification_name, _strata_names, _compartment_types_to_stratify, _adjustment_requests, _verbose):
@@ -1754,7 +1741,8 @@ class StratifiedModel(EpiModel):
                     stratify_to else self.transition_flows.to[_n_flow]
 
                 # add the new flow
-                strain = stratum if _stratification_name == "strain" else self.transition_flows.strain[_n_flow]
+                strain = stratum if _stratification_name == "strain" and "_transition" not in \
+                    self.transition_flows.type[_n_flow] else self.transition_flows.strain[_n_flow]
                 self.transition_flows = self.transition_flows.append(
                     {"type": self.transition_flows.type[_n_flow],
                      "parameter": parameter_name,
@@ -1763,8 +1751,6 @@ class StratifiedModel(EpiModel):
                      "implement": len(self.all_stratifications),
                      "strain": strain},
                     ignore_index=True)
-
-                print(strain)
 
                 # update the customised flow function storage dictionary
                 if self.transition_flows.type[_n_flow] == 'customised_flows':
@@ -2094,6 +2080,23 @@ class StratifiedModel(EpiModel):
                 self.infectiousness_levels[create_stratum_name(_stratification_name, stratum, joining_string="")] = \
                     _infectiousness_adjustments[stratum]
 
+    def link_strata_with_flows(self, _stratification_name, _strata_names):
+        """
+        add in sequential series of flows between neighbouring strata that transition people between the strata being
+            implemented in this stratification stage
+        """
+        for compartment in self.unstratified_compartment_names:
+            for n_stratum in range(len(_strata_names[: -1])):
+                self.transition_flows = self.transition_flows.append(
+                    {"type": "strata_transition",
+                     "parameter": create_stratified_name("transition", _stratification_name, _strata_names[n_stratum] +
+                                                         "_to_" + _strata_names[n_stratum + 1]),
+                     "origin": create_stratified_name(compartment, _stratification_name, _strata_names[n_stratum]),
+                     "to": create_stratified_name(compartment, _stratification_name, _strata_names[n_stratum + 1]),
+                     "implement": len(self.all_stratifications),
+                     "strain": float("nan")},
+                    ignore_index=True)
+
     """
     pre-integration methods
     """
@@ -2123,7 +2126,12 @@ class StratifiedModel(EpiModel):
 
         # create list of all the parameters that we need to find the set of adjustment functions for
         parameters_to_adjust = []
-        for n_flow in range(self.transition_flows.shape[0]):
+
+        transition_flow_indices = \
+            [n_flow for n_flow, flow in enumerate(self.transition_flows.type)
+             if "transition" not in flow and self.transition_flows.implement[n_flow] == len(self.all_stratifications)]
+
+        for n_flow in transition_flow_indices:
             if self.transition_flows.implement[n_flow] == len(self.all_stratifications) and \
                     self.transition_flows.parameter[n_flow] not in parameters_to_adjust:
                 parameters_to_adjust.append(self.transition_flows.parameter[n_flow])
