@@ -913,7 +913,13 @@ class EpiModel:
         _ode_equations = self.apply_compartment_death_flows(_ode_equations, _compartment_values, _time)
         _ode_equations = self.apply_universal_death_flow(_ode_equations, _compartment_values, _time)
         _ode_equations = self.apply_birth_rate(_ode_equations, _compartment_values, _time)
+        _ode_equations = self.apply_change_rate(_ode_equations, _compartment_values, _time)
         return _ode_equations
+
+    def apply_change_rate(self, _ode_equations, _compartment_values, _time):
+
+        return _ode_equations
+
 
     def apply_transition_flows(self, _ode_equations, _compartment_values, _time):
         """
@@ -1334,7 +1340,7 @@ class StratifiedModel(EpiModel):
             self.adaptation_functions, self.infectiousness_levels, self.infectious_indices, \
             self.infectious_compartments, self.infectiousness_multipliers, self.parameter_components, \
             self.mortality_components, self.infectious_populations, self.strain_mixing_elements, \
-            self.strain_mixing_multipliers = ({} for _ in range(13))
+            self.strain_mixing_multipliers, self.strata_indices = ({} for _ in range(14))
         self.overwrite_character, self.overwrite_key = "W", "overwrite"
         self.heterogeneous_mixing, self.mixing_matrix, self.available_death_rates = False, None, [""]
 
@@ -1345,7 +1351,7 @@ class StratifiedModel(EpiModel):
     def stratify(
             self, stratification_name, strata_request, compartment_types_to_stratify, requested_proportions,
             entry_proportions={}, adjustment_requests=(), infectiousness_adjustments={}, mixing_matrix=None,
-            verbose=True, fix_props=None):
+            verbose=True, target_props=None):
         """
         calls to initial preparation, checks and methods that stratify the various aspects of the model
 
@@ -1403,7 +1409,9 @@ class StratifiedModel(EpiModel):
         # prepare infectiousness levels attribute
         self.prepare_infectiousness_levels(stratification_name, strata_names, infectiousness_adjustments)
 
-        if fix_props:
+        self.target_props = target_props
+
+        if target_props:
             self.link_strata_with_flows(stratification_name, strata_names)
             for n_stratum in range(len(strata_names[: -1])):
                 self.final_parameter_functions[
@@ -2117,6 +2125,16 @@ class StratifiedModel(EpiModel):
         elif len(self.all_stratifications) == 0 and type(self.parameters["universal_death_rate"]) == str:
             self.final_parameter_functions["universal_death_rate"] = self.adaptation_functions["universal_death_rate"]
 
+        self.find_strata_indices()
+
+    def find_strata_indices(self):
+        for stratif in self.all_stratifications:
+            for i_stratum, stratum in enumerate(self.all_stratifications[stratif]):
+                self.strata_indices[stratum] = \
+                    [i_comp for i_comp in range(len(self.compartment_names)) if
+                     create_stratum_name(stratif, self.all_stratifications[stratif][i_stratum], joining_string="") in
+                     find_name_components(self.compartment_names[i_comp])]
+
     def prepare_stratified_parameter_calculations(self):
         """
         prior to integration commencing, work out what the components are of each parameter being implemented
@@ -2492,6 +2510,11 @@ class StratifiedModel(EpiModel):
                 _ode_equations, self.compartment_names.index(compartment), total_births * entry_fraction)
         return _ode_equations
 
+    def apply_change_rate(self, _ode_equations, _compartment_values, _time):
+
+
+
+        return _ode_equations
 
 if __name__ == "__main__":
 
@@ -2517,19 +2540,21 @@ if __name__ == "__main__":
     # hiv_mixing = numpy.ones(4).reshape(2, 2)
     hiv_mixing = None
 
-    sir_model.stratify("hiv", ["negative", "positive"], [], {"negative": 0.6},
+    sir_model.stratify("hiv", ["negative", "positive", "something_else"], [], {"negative": 0.6},
                        {"recovery": {"negative": "increment_by_one", "positive": 0.5},
                         "infect_death": {"negative": 0.5},
                         "entry_fraction": {"negative": 0.6, "positive": 0.4}},
                        adjustment_requests={"recovery": {"negative": 0.7}},
                        infectiousness_adjustments={"positive": 0.5},
                        mixing_matrix=hiv_mixing,
-                       verbose=False, fix_props={"": ""})
+                       verbose=False, target_props={"negative": 1.0 / 3.0, "positive": 1.0 / 3.0, "something_else": 1.0 / 3.0})
 
     sir_model.stratify("strain", ["sensitive", "resistant"], ["infectious"],
                        adjustment_requests={"recoveryXhiv_negative": {"sensitive": 0.9},
                                             "recovery": {"sensitive": 0.8}},
                        requested_proportions={}, verbose=False)
+
+    sir_model.transition_flows.to_csv("temp.csv")
 
     # age_mixing = None
     # sir_model.stratify("age", [1, 10, 3], [], {}, {"recovery": {"1": 0.5, "10": 0.8}},
