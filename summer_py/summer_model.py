@@ -1346,7 +1346,7 @@ class StratifiedModel(EpiModel):
     def stratify(
             self, stratification_name, strata_request, compartment_types_to_stratify, requested_proportions,
             entry_proportions={}, adjustment_requests=(), infectiousness_adjustments={}, mixing_matrix=None,
-            verbose=True, fix_props=()):
+            verbose=True, fix_props=None):
         """
         calls to initial preparation, checks and methods that stratify the various aspects of the model
 
@@ -1404,18 +1404,25 @@ class StratifiedModel(EpiModel):
         # prepare infectiousness levels attribute
         self.prepare_infectiousness_levels(stratification_name, strata_names, infectiousness_adjustments)
 
-        # self.link_strata_with_flows(stratification_name, strata_names)
+        if fix_props:
+            self.link_strata_with_flows(stratification_name, strata_names)
+            self.parameters["transition"] = 0.0
+
+        self.transition_flows.to_csv("temp.csv")
 
     """
     stratification checking methods
     """
 
     def link_strata_with_flows(self, _stratification_name, _strata_names):
+        """
+        add in flows that transition people between the strata being implemented
+        """
         for compartment in self.unstratified_compartment_names:
             for n_stratum in range(len(_strata_names[:-1])):
                 self.transition_flows = self.transition_flows.append(
-                    {"type": "special",
-                     "parameter": "nothing",
+                    {"type": "strata_transition",
+                     "parameter": "transition",
                      "origin": create_stratified_name(compartment, _stratification_name, _strata_names[n_stratum]),
                      "to": create_stratified_name(compartment, _stratification_name, _strata_names[n_stratum + 1]),
                      "implement": len(self.all_stratifications),
@@ -2491,8 +2498,8 @@ if __name__ == "__main__":
     )
     # sir_model.adaptation_functions["increment_by_one"] = create_additive_function(1.)
 
-    hiv_mixing = numpy.ones(4).reshape(2, 2)
-    # hiv_mixing = None
+    # hiv_mixing = numpy.ones(4).reshape(2, 2)
+    hiv_mixing = None
 
     sir_model.stratify("hiv", ["negative", "positive"], [], {"negative": 0.6},
                        {"recovery": {"negative": "increment_by_one", "positive": 0.5},
@@ -2501,7 +2508,7 @@ if __name__ == "__main__":
                        adjustment_requests={"recovery": {"negative": 0.7}},
                        infectiousness_adjustments={"positive": 0.5},
                        mixing_matrix=hiv_mixing,
-                       verbose=False)
+                       verbose=False, fix_props={"": ""})
 
     sir_model.stratify("strain", ["sensitive", "resistant"], ["infectious"],
                        adjustment_requests={"recoveryXhiv_negative": {"sensitive": 0.9},
