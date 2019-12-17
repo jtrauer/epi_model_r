@@ -560,8 +560,8 @@ class EpiModel:
             self.reporting_sigfigs, self.entry_compartment, self.starting_population, \
             self.starting_compartment, self.equilibrium_stopping_tolerance, self.outputs, self.integration_type, \
             self.output_connections, self.infectious_populations, self.infectious_denominators, \
-            self.derived_output_functions, self.transition_indices_to_implement, self.death_indices_to_implement = \
-            (None for _ in range(22))
+            self.derived_output_functions, self.transition_indices_to_implement, self.death_indices_to_implement,\
+            self.change_indices_to_implement = (None for _ in range(23))
 
         # for storing derived output in db
         self.step = 0
@@ -1149,8 +1149,7 @@ class EpiModel:
                 find_stem(self.transition_flows.origin[row]) == self.output_connections[output]["origin"] and
                 find_stem(self.transition_flows.to[row]) == self.output_connections[output]["to"] and
                 self.output_connections[output]["origin_condition"] in self.transition_flows.origin[row] and
-                self.output_connections[output]["to_condition"] in self.transition_flows.to[row]
-                ]
+                self.output_connections[output]["to_condition"] in self.transition_flows.to[row]]
 
     """
     simple output methods, although most outputs will be managed outside of this module
@@ -1408,7 +1407,7 @@ class StratifiedModel(EpiModel):
             self.link_strata_with_flows(stratification_name, strata_names)
             for n_stratum in range(len(strata_names[: -1])):
                 self.final_parameter_functions[
-                    create_stratified_name("transition", stratification_name, strata_names[n_stratum] + "_to_" +
+                    create_stratified_name("change", stratification_name, strata_names[n_stratum] + "_to_" +
                                            strata_names[n_stratum + 1])] = \
                     lambda time: 0.0
 
@@ -1689,7 +1688,7 @@ class StratifiedModel(EpiModel):
             see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
         """
         self.output_to_user("\n-----\nstratifying transition flows and calculating associated parameters")
-        for n_flow in self.find_transition_indices_to_implement(back_one=1):
+        for n_flow in self.find_transition_indices_to_implement(back_one=1, include_change=True):
             self.add_stratified_flows(
                 n_flow, _stratification_name, _strata_names,
                 find_stem(self.transition_flows.origin[n_flow]) in self.compartment_types_to_stratify,
@@ -1741,7 +1740,7 @@ class StratifiedModel(EpiModel):
                     stratify_to else self.transition_flows.to[_n_flow]
 
                 # add the new flow
-                strain = stratum if _stratification_name == "strain" and "_transition" not in \
+                strain = stratum if _stratification_name == "strain" and "_change" not in \
                     self.transition_flows.type[_n_flow] else self.transition_flows.strain[_n_flow]
                 self.transition_flows = self.transition_flows.append(
                     {"type": self.transition_flows.type[_n_flow],
@@ -2088,8 +2087,8 @@ class StratifiedModel(EpiModel):
         for compartment in self.unstratified_compartment_names:
             for n_stratum in range(len(_strata_names[: -1])):
                 self.transition_flows = self.transition_flows.append(
-                    {"type": "strata_transition",
-                     "parameter": create_stratified_name("transition", _stratification_name, _strata_names[n_stratum] +
+                    {"type": "strata_change",
+                     "parameter": create_stratified_name("change", _stratification_name, _strata_names[n_stratum] +
                                                          "_to_" + _strata_names[n_stratum + 1]),
                      "origin": create_stratified_name(compartment, _stratification_name, _strata_names[n_stratum]),
                      "to": create_stratified_name(compartment, _stratification_name, _strata_names[n_stratum + 1]),
@@ -2109,6 +2108,7 @@ class StratifiedModel(EpiModel):
         self.prepare_infectiousness_calculations()
         self.transition_indices_to_implement = self.find_transition_indices_to_implement()
         self.death_indices_to_implement = self.find_death_indices_to_implement()
+        self.change_indices_to_implement = self.find_change_indices_to_implement()
 
         # ensure there is a universal death rate available even if the model hasn't been stratified at all
         if len(self.all_stratifications) == 0 and isinstance(self.parameters["universal_death_rate"], (float, int)):
@@ -2129,7 +2129,7 @@ class StratifiedModel(EpiModel):
 
         transition_flow_indices = \
             [n_flow for n_flow, flow in enumerate(self.transition_flows.type)
-             if "transition" not in flow and self.transition_flows.implement[n_flow] == len(self.all_stratifications)]
+             if "change" not in flow and self.transition_flows.implement[n_flow] == len(self.all_stratifications)]
 
         for n_flow in transition_flow_indices:
             if self.transition_flows.implement[n_flow] == len(self.all_stratifications) and \
@@ -2365,7 +2365,7 @@ class StratifiedModel(EpiModel):
                     [self.infectiousness_multipliers[i_comp]
                      for i_comp in self.strain_mixing_elements[strain][category]]
 
-    def find_transition_indices_to_implement(self, back_one=0):
+    def find_transition_indices_to_implement(self, back_one=0, include_change=False):
         """
         find all the indices of the transition flows that need to be stratified
         separated out as very short method in order that it can over-ride the version in the unstratified EpiModel
@@ -2376,7 +2376,15 @@ class StratifiedModel(EpiModel):
         :return: list
             list of indices of the flows that need to be stratified
         """
-        return self.transition_flows[self.transition_flows.implement == len(self.all_stratifications) - back_one].index
+        return [i_flow for i_flow in range(len(self.transition_flows)) if
+                (self.transition_flows.type[i_flow] != "strata_change" or include_change) and
+                self.transition_flows.implement[i_flow] == len(self.all_stratifications) - back_one]
+
+    def find_change_indices_to_implement(self, back_one=0):
+
+        return [i_flow for i_flow in range(len(self.transition_flows)) if
+                self.transition_flows.type[i_flow] == "strata_change" and
+                self.transition_flows.implement[i_flow] == len(self.all_stratifications) - back_one]
 
     def find_death_indices_to_implement(self, back_one=0):
         """
