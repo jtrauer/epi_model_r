@@ -967,7 +967,7 @@ class EpiModel:
         from_compartment = self.compartment_names.index(self.transition_flows.origin[n_flow])
 
         # implement flows according to whether customised or standard/infection-related
-        return parameter_value * self.customised_flow_functions[n_flow](self, n_flow) if \
+        return parameter_value * self.customised_flow_functions[n_flow](self, n_flow, _time, _compartment_values) if \
             self.transition_flows.type[n_flow] == "customised_flows" else \
             parameter_value * _compartment_values[from_compartment] * infectious_population
 
