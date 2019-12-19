@@ -960,6 +960,10 @@ class EpiModel:
         # find adjusted parameter value
         parameter_value = self.get_parameter_value(self.transition_flows.parameter[n_flow], _time)
 
+        # the flow is null if the parameter is null
+        if parameter_value == 0.:
+            return 0.
+
         # find from compartment and the "infectious population" (which equals one for non-infection-related flows)
         infectious_population = self.find_infectious_multiplier(n_flow)
 
