@@ -930,7 +930,6 @@ class EpiModel:
 
         return _ode_equations
 
-
     def apply_transition_flows(self, _ode_equations, _compartment_values, _time):
         """
         apply fixed or infection-related inter-compartmental transition flows to odes
@@ -1350,7 +1349,8 @@ class StratifiedModel(EpiModel):
             self.adaptation_functions, self.infectiousness_levels, self.infectious_indices, \
             self.infectious_compartments, self.infectiousness_multipliers, self.parameter_components, \
             self.mortality_components, self.infectious_populations, self.strain_mixing_elements, \
-            self.strain_mixing_multipliers, self.strata_indices, self.target_props = ({} for _ in range(15))
+            self.strain_mixing_multipliers, self.strata_indices, self.target_props, self.current_strata_props, \
+            self.cumulative_target_props = ({} for _ in range(17))
         self.overwrite_character, self.overwrite_key = "W", "overwrite"
         self.heterogeneous_mixing, self.mixing_matrix, self.available_death_rates = False, None, [""]
 
@@ -2522,53 +2522,53 @@ class StratifiedModel(EpiModel):
 
     def apply_change_rates(self, _ode_equations, _compartment_values, _time):
 
+        # period of time over which to correct the stratum proportions
+        time_parameter = .01
         self.find_current_strata_props(_compartment_values)
 
+        # find the cumulative proportions across the groups we are wanting to fix
         cumulative_strata_props = {}
-        cumulative_target_props = {}
         for stratification in self.current_strata_props:
             cumulative_strata_props[stratification] = create_cumulative_dict(self.current_strata_props[stratification])
-            cumulative_target_props[stratification] = create_cumulative_dict(self.target_props[stratification])
 
-        time_parameter = 1.0
-
+        # for each change flow being implemented
         for i_change in self.change_indices_to_implement:
-            change_string = find_name_components(self.transition_flows.parameter[i_change])[1:][0]
-            stratification = change_string[: change_string.find("_")]
-            change_string = change_string[change_string.find("_") + 1:]
-            origin_stratum = change_string.split("_to_")[0]
-            to_stratum = change_string.split("_to_")[1]
 
-            origin_stratum_greater = \
-                cumulative_strata_props[stratification][origin_stratum] > \
-                cumulative_target_props[stratification][origin_stratum]
+            # split out the components of the transition string, which follow the standard 6-character string "changeX"
+            stratification, origin_stratum, _, to_stratum = \
+                self.transition_flows.parameter[i_change][7:].split("_")
 
-            take_compartment = self.transition_flows.origin[i_change] if origin_stratum_greater else \
-                self.transition_flows.to[i_change]
-            take_stratum = origin_stratum if origin_stratum_greater else to_stratum
-            give_compartment = self.transition_flows.to[i_change] if origin_stratum_greater else \
-                self.transition_flows.origin[i_change]
-            give_stratum = to_stratum if origin_stratum_greater else origin_stratum
+            # work out which stratum and compartment we are going from and to
+            if cumulative_strata_props[stratification][origin_stratum] > \
+                    self.cumulative_target_props[stratification][origin_stratum]:
+                take_stratum, take_compartment, give_compartment = \
+                    origin_stratum, self.transition_flows.origin[i_change], self.transition_flows.to[i_change]
+            else:
+                take_stratum, take_compartment, give_compartment = \
+                    to_stratum, self.transition_flows.to[i_change], self.transition_flows.origin[i_change]
 
-            flow_rate = numpy.log(self.current_strata_props[stratification][origin_stratum] / self.target_props[stratification][origin_stratum]) / time_parameter
+            # find net flow
+            net_flow = numpy.log(self.current_strata_props[stratification][take_stratum] /
+                                 self.target_props[stratification][take_stratum]) / time_parameter * \
+                       _compartment_values[self.compartment_names.index(take_compartment)]
 
-            print("_______")
-            print("current cumulative prop %s is %s" % (origin_stratum, cumulative_strata_props[stratification][origin_stratum]))
-            print("target cumulative prop %s is %s" % (origin_stratum, cumulative_target_props[stratification][origin_stratum]))
-            print("is origin stratum greater: %s" % origin_stratum_greater)
-            print("take from %s" % take_compartment)
-            print("given to %s" % give_compartment)
-            print()
-
+            # update equations
+            _ode_equations = increment_list_by_index(
+                _ode_equations, self.compartment_names.index(take_compartment), -net_flow)
+            _ode_equations = increment_list_by_index(
+                _ode_equations, self.compartment_names.index(give_compartment), net_flow)
         return _ode_equations
 
     def find_current_strata_props(self, _compartment_values):
-        self.current_strata_props = {}
         for stratification in self.target_props:
             self.current_strata_props[stratification] = {}
             for stratum in self.strata_indices[stratification]:
                 self.current_strata_props[stratification][stratum] = \
-                    sum([_compartment_values[i] for i in self.strata_indices[stratification][stratum]])
+                    sum([_compartment_values[i] for i in self.strata_indices[stratification][stratum]]) / \
+                    sum(_compartment_values)
+            self.cumulative_target_props[stratification] = create_cumulative_dict(self.target_props[stratification])
+        print()
+
 
 if __name__ == "__main__":
 
@@ -2594,14 +2594,14 @@ if __name__ == "__main__":
     # hiv_mixing = numpy.ones(4).reshape(2, 2)
     hiv_mixing = None
 
-    sir_model.stratify("hiv", ["negative", "positive", "something_else"], [], {"negative": 0.6},
+    sir_model.stratify("hiv", ["negative", "positive"], [], {"negative": 0.6},
                        {"recovery": {"negative": "increment_by_one", "positive": 0.5},
                         "infect_death": {"negative": 0.5},
                         "entry_fraction": {"negative": 0.6, "positive": 0.4}},
                        adjustment_requests={"recovery": {"negative": 0.7}},
                        infectiousness_adjustments={"positive": 0.5},
                        mixing_matrix=hiv_mixing,
-                       verbose=False, target_props={"negative": 1.0 / 3.0, "positive": 1.0 / 3.0, "something_else": 1.0 / 3.0})
+                       verbose=False, target_props={"negative": 1.0 / 3.0, "positive": 1.0 / 3.0})
 
     sir_model.stratify("strain", ["sensitive", "resistant"], ["infectious"],
                        adjustment_requests={"recoveryXhiv_negative": {"sensitive": 0.9},
