@@ -927,7 +927,9 @@ class EpiModel:
         return _ode_equations
 
     def apply_change_rates(self, _ode_equations, _compartment_values, _time):
-
+        """
+        not relevant to unstratified model
+        """
         return _ode_equations
 
     def apply_transition_flows(self, _ode_equations, _compartment_values, _time):
@@ -1363,7 +1365,7 @@ class StratifiedModel(EpiModel):
     def stratify(
             self, stratification_name, strata_request, compartment_types_to_stratify, requested_proportions,
             entry_proportions={}, adjustment_requests=(), infectiousness_adjustments={}, mixing_matrix=None,
-            verbose=True, target_props=None):
+            target_props=None, verbose=True):
         """
         calls to initial preparation, checks and methods that stratify the various aspects of the model
 
@@ -1387,11 +1389,15 @@ class StratifiedModel(EpiModel):
             whether to report on progress
             note that this can be changed at this stage from what was requested at the original unstratified model
                 construction
+        :param target_props: dict
+            keys are the strata being implemented at this call to stratify
+            values are the desired proportions to target
         """
 
         # check inputs correctly specified
         strata_names, adjustment_requests = self.prepare_and_check_stratification(
-            stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests, verbose)
+            stratification_name, strata_request, compartment_types_to_stratify, adjustment_requests, target_props,
+            verbose)
 
         # work out ageing flows - comes first, so that the compartment names remain in the unstratified form
         if stratification_name == "age":
@@ -1421,18 +1427,30 @@ class StratifiedModel(EpiModel):
         # prepare infectiousness levels attribute
         self.prepare_infectiousness_levels(stratification_name, strata_names, infectiousness_adjustments)
 
+        # prepare strata equilibration target proportions
         if target_props:
-            self.target_props[stratification_name] = target_props
-            self.cumulative_target_props[stratification_name] = \
-                create_cumulative_dict(self.target_props[stratification_name])
-            self.link_strata_with_flows(stratification_name, strata_names)
+            self.prepare_target_props(target_props, stratification_name, strata_names)
+
+    def prepare_target_props(self, _target_props, _stratification_name, _strata_names):
+
+        # for stratum in self.strata_names[: -1]:
+        #     if stratum not in _target_props:
+        #         raise ValueError("one or more of first n-1 strata being applied not in the target prop request")
+        #     elif type(_target_props[stratum]) == float:
+
+
+        self.target_props[_stratification_name] = _target_props
+        self.cumulative_target_props[_stratification_name] = \
+            create_cumulative_dict(self.target_props[_stratification_name])
+        self.link_strata_with_flows(_stratification_name, _strata_names)
 
     """
     stratification checking methods
     """
 
     def prepare_and_check_stratification(
-            self, _stratification_name, _strata_names, _compartment_types_to_stratify, _adjustment_requests, _verbose):
+            self, _stratification_name, _strata_names, _compartment_types_to_stratify, _adjustment_requests,
+            _target_props, _verbose):
         """
         initial preparation and checks of user-submitted arguments
 
@@ -1446,6 +1464,9 @@ class StratifiedModel(EpiModel):
             see incorporate_alternative_overwrite_approach and check_parameter_adjustment_requests
         :param _verbose:
             see stratify
+        :param _target_props:
+            see stratify
+
         :return:
             _strata_names: list
                 revised version of user request after adaptation to class requirements
@@ -1471,6 +1492,13 @@ class StratifiedModel(EpiModel):
         if not isinstance(_stratification_name, str):
             _stratification_name = str(_stratification_name)
             self.output_to_user("converting stratification name %s to string" % _stratification_name)
+
+        # check target proportions correctly specified
+        if _target_props and not type(_target_props) == dict:
+            raise TypeError("target proportions not provided as dictionary")
+        elif type(_target_props) == dict and \
+                any([target_key not in _strata_names for target_key in _target_props.keys()]):
+            raise ValueError("requested target proportion strata not in requested strata")
 
         # ensure requested stratification hasn't previously been implemented
         if _stratification_name in self.all_stratifications.keys():
