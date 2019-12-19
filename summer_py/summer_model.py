@@ -923,7 +923,7 @@ class EpiModel:
         _ode_equations = self.apply_compartment_death_flows(_ode_equations, _compartment_values, _time)
         _ode_equations = self.apply_universal_death_flow(_ode_equations, _compartment_values, _time)
         _ode_equations = self.apply_birth_rate(_ode_equations, _compartment_values, _time)
-        _ode_equations = self.apply_change_rates(_ode_equations, _compartment_values, _time)
+        _ode_equations = self.apply_change_rates(_ode_equations, _compartment_values)
         return _ode_equations
 
     def apply_change_rates(self, _ode_equations, _compartment_values, _time):
@@ -1350,9 +1350,11 @@ class StratifiedModel(EpiModel):
             self.infectious_compartments, self.infectiousness_multipliers, self.parameter_components, \
             self.mortality_components, self.infectious_populations, self.strain_mixing_elements, \
             self.strain_mixing_multipliers, self.strata_indices, self.target_props, self.current_strata_props, \
-            self.cumulative_target_props = ({} for _ in range(17))
+            self.cumulative_target_props, self.cumulative_strata_props = ({} for _ in range(18))
         self.overwrite_character, self.overwrite_key = "W", "overwrite"
-        self.heterogeneous_mixing, self.mixing_matrix, self.available_death_rates = False, None, [""]
+        self.heterogeneous_mixing, self.mixing_matrix, self.available_death_rates, \
+            self.strata_equilibration_parameter = False, None, [""], 0.1
+
 
     """
     stratification methods
@@ -1421,12 +1423,9 @@ class StratifiedModel(EpiModel):
 
         if target_props:
             self.target_props[stratification_name] = target_props
+            self.cumulative_target_props[stratification_name] = \
+                create_cumulative_dict(self.target_props[stratification_name])
             self.link_strata_with_flows(stratification_name, strata_names)
-            for n_stratum in range(len(strata_names[: -1])):
-                self.final_parameter_functions[
-                    create_stratified_name("change", stratification_name, strata_names[n_stratum] + "_to_" +
-                                           strata_names[n_stratum + 1])] = \
-                    lambda time: 0.0
 
     """
     stratification checking methods
@@ -2520,16 +2519,10 @@ class StratifiedModel(EpiModel):
                 _ode_equations, self.compartment_names.index(compartment), total_births * entry_fraction)
         return _ode_equations
 
-    def apply_change_rates(self, _ode_equations, _compartment_values, _time):
+    def apply_change_rates(self, _ode_equations, _compartment_values):
 
-        # period of time over which to correct the stratum proportions
-        time_parameter = .01
+        # find the proportional distribution of the population across strata at the current time point
         self.find_current_strata_props(_compartment_values)
-
-        # find the cumulative proportions across the groups we are wanting to fix
-        cumulative_strata_props = {}
-        for stratification in self.current_strata_props:
-            cumulative_strata_props[stratification] = create_cumulative_dict(self.current_strata_props[stratification])
 
         # for each change flow being implemented
         for i_change in self.change_indices_to_implement:
@@ -2539,7 +2532,7 @@ class StratifiedModel(EpiModel):
                 self.transition_flows.parameter[i_change][7:].split("_")
 
             # work out which stratum and compartment we are going from and to
-            if cumulative_strata_props[stratification][origin_stratum] > \
+            if self.cumulative_strata_props[stratification][origin_stratum] > \
                     self.cumulative_target_props[stratification][origin_stratum]:
                 take_stratum, take_compartment, give_compartment = \
                     origin_stratum, self.transition_flows.origin[i_change], self.transition_flows.to[i_change]
@@ -2549,7 +2542,8 @@ class StratifiedModel(EpiModel):
 
             # find net flow
             net_flow = numpy.log(self.current_strata_props[stratification][take_stratum] /
-                                 self.target_props[stratification][take_stratum]) / time_parameter * \
+                                 self.target_props[stratification][take_stratum]) / \
+                       self.strata_equilibration_parameter * \
                        _compartment_values[self.compartment_names.index(take_compartment)]
 
             # update equations
@@ -2561,13 +2555,12 @@ class StratifiedModel(EpiModel):
 
     def find_current_strata_props(self, _compartment_values):
         for stratification in self.target_props:
-            self.current_strata_props[stratification] = {}
+            self.current_strata_props[stratification], self.cumulative_strata_props = {}, {}
             for stratum in self.strata_indices[stratification]:
                 self.current_strata_props[stratification][stratum] = \
                     sum([_compartment_values[i] for i in self.strata_indices[stratification][stratum]]) / \
                     sum(_compartment_values)
-            self.cumulative_target_props[stratification] = create_cumulative_dict(self.target_props[stratification])
-        print()
+            self.cumulative_strata_props[stratification] = create_cumulative_dict(self.target_props[stratification])
 
 
 if __name__ == "__main__":
@@ -2601,7 +2594,7 @@ if __name__ == "__main__":
                        adjustment_requests={"recovery": {"negative": 0.7}},
                        infectiousness_adjustments={"positive": 0.5},
                        mixing_matrix=hiv_mixing,
-                       verbose=False, target_props={"negative": 1.0 / 3.0, "positive": 1.0 / 3.0})
+                       verbose=False, target_props={"negative": 1.0 / 3.0, "positive": 2.0 / 3.0})
 
     sir_model.stratify("strain", ["sensitive", "resistant"], ["infectious"],
                        adjustment_requests={"recoveryXhiv_negative": {"sensitive": 0.9},
