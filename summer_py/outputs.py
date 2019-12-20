@@ -495,13 +495,24 @@ class Outputs:
                             requested_output not in self.post_processing_list[sc_index].requested_times.keys() else \
                             self.post_processing_list[sc_index].requested_times[requested_output]
 
+            times_to_plot_baseline = self.post_processing_list[0].model.times if \
+                            requested_output not in self.post_processing_list[sc_index].requested_times.keys() else \
+                            self.post_processing_list[0].requested_times[requested_output]
+
             for i, stratum in enumerate(all_groups[stratification]):
                 requested_output_for_stratum = requested_output + 'XamongX' + stratification + '_' + stratum
                 _label = self.translation_dict[stratification + '_' + stratum] if\
                     stratification + '_' + stratum in self.translation_dict.keys() else stratification + '_' + stratum
+
+                # plot baseline run in addition to scenario run
+                if sc_index > 0:
+                    axis.plot(times_to_plot_baseline, self.post_processing_list[0].generated_outputs[requested_output_for_stratum],
+                          color=self.colour_theme[0],label='baseline')
+
                 axis.plot(times_to_plot, self.post_processing_list[sc_index].generated_outputs[requested_output_for_stratum],
                           color=self.colour_theme[i+1],
                           label=_label)
+
 
             self.tidy_x_axis(axis, start=1990., end=max(times_to_plot), max_dims=max_dims,
                                              x_label='time')
