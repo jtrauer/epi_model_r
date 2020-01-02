@@ -923,7 +923,7 @@ class EpiModel:
         _ode_equations = self.apply_compartment_death_flows(_ode_equations, _compartment_values, _time)
         _ode_equations = self.apply_universal_death_flow(_ode_equations, _compartment_values, _time)
         _ode_equations = self.apply_birth_rate(_ode_equations, _compartment_values, _time)
-        _ode_equations = self.apply_change_rates(_ode_equations, _compartment_values)
+        _ode_equations = self.apply_change_rates(_ode_equations, _compartment_values, _time)
         return _ode_equations
 
     def apply_change_rates(self, _ode_equations, _compartment_values, _time):
@@ -1355,7 +1355,7 @@ class StratifiedModel(EpiModel):
             self.cumulative_target_props, self.cumulative_strata_props = ({} for _ in range(18))
         self.overwrite_character, self.overwrite_key = "W", "overwrite"
         self.heterogeneous_mixing, self.mixing_matrix, self.available_death_rates, \
-            self.strata_equilibration_parameter = False, None, [""], 0.1
+            self.strata_equilibration_parameter = False, None, [""], 0.01
 
 
     """
@@ -1433,15 +1433,18 @@ class StratifiedModel(EpiModel):
 
     def prepare_target_props(self, _target_props, _stratification_name, _strata_names):
 
-        # for stratum in self.strata_names[: -1]:
-        #     if stratum not in _target_props:
-        #         raise ValueError("one or more of first n-1 strata being applied not in the target prop request")
-        #     elif type(_target_props[stratum]) == float:
+        self.target_props[_stratification_name] = {}
+        for stratum in _strata_names[: -1]:
+            if stratum not in _target_props:
+                raise ValueError("one or more of first n-1 strata being applied not in the target prop request")
+            elif isinstance(_target_props[stratum], (float, int, str)):
+                self.target_props[_stratification_name][stratum] = _target_props[stratum]
+            if type(_target_props[stratum]) == str and _target_props[stratum] not in self.time_variants:
+                raise ValueError("function for prevalence of %s not found" % stratum)
+        if _strata_names[-1] in self.target_props:
+            self.output_to_user("target proportion requested for stratum %s, but as last stratum" % _strata_names[-1] +
+                                " in request, this will be ignored and assigned the remainder to ensure sum to one")
 
-
-        self.target_props[_stratification_name] = _target_props
-        self.cumulative_target_props[_stratification_name] = \
-            create_cumulative_dict(self.target_props[_stratification_name])
         self.link_strata_with_flows(_stratification_name, _strata_names)
 
     """
@@ -2133,7 +2136,7 @@ class StratifiedModel(EpiModel):
                 self.transition_flows = self.transition_flows.append(
                     {"type": "strata_change",
                      "parameter": create_stratified_name("change", _stratification_name, _strata_names[n_stratum] +
-                                                         "_to_" + _strata_names[n_stratum + 1]),
+                                                         "T" + _strata_names[n_stratum + 1]),
                      "origin": create_stratified_name(compartment, _stratification_name, _strata_names[n_stratum]),
                      "to": create_stratified_name(compartment, _stratification_name, _strata_names[n_stratum + 1]),
                      "implement": len(self.all_stratifications),
@@ -2547,17 +2550,20 @@ class StratifiedModel(EpiModel):
                 _ode_equations, self.compartment_names.index(compartment), total_births * entry_fraction)
         return _ode_equations
 
-    def apply_change_rates(self, _ode_equations, _compartment_values):
+    def apply_change_rates(self, _ode_equations, _compartment_values, _time):
+
+        # find the distribution of the population across strata to be targeted
+        self.find_target_strata_props(_time)
 
         # find the proportional distribution of the population across strata at the current time point
-        self.find_current_strata_props(_compartment_values)
+        self.find_current_strata_props(_compartment_values, _time)
 
         # for each change flow being implemented
         for i_change in self.change_indices_to_implement:
 
             # split out the components of the transition string, which follow the standard 6-character string "changeX"
-            stratification, origin_stratum, _, to_stratum = \
-                self.transition_flows.parameter[i_change][7:].split("_")
+            stratification, strata_names = self.transition_flows.parameter[i_change][7:].split("_")
+            origin_stratum, to_stratum = strata_names.split("T")
 
             # work out which stratum and compartment we are going from and to
             if self.cumulative_strata_props[stratification][origin_stratum] > \
@@ -2569,10 +2575,11 @@ class StratifiedModel(EpiModel):
                     to_stratum, self.transition_flows.to[i_change], self.transition_flows.origin[i_change]
 
             # find net flow
-            net_flow = numpy.log(self.current_strata_props[stratification][take_stratum] /
-                                 self.target_props[stratification][take_stratum]) / \
-                       self.strata_equilibration_parameter * \
-                       _compartment_values[self.compartment_names.index(take_compartment)]
+            net_flow = \
+                numpy.log(self.cumulative_strata_props[stratification][take_stratum] /
+                          self.cumulative_target_props[stratification][take_stratum]) / \
+                self.strata_equilibration_parameter * \
+                _compartment_values[self.compartment_names.index(take_compartment)]
 
             # update equations
             _ode_equations = increment_list_by_index(
@@ -2581,14 +2588,43 @@ class StratifiedModel(EpiModel):
                 _ode_equations, self.compartment_names.index(give_compartment), net_flow)
         return _ode_equations
 
-    def find_current_strata_props(self, _compartment_values):
+    def find_target_strata_props(self, _time):
+
+        # find target values
+        target_prop_values = {}
+
+        # for each applicable stratification, considering all strata except for the last one
+        for stratification in self.target_props:
+            target_prop_values[stratification] = {}
+            for stratum in self.target_props[stratification]:
+                if type(self.target_props[stratification][stratum]) == float:
+                    target_prop_values[stratification][stratum] = self.target_props[stratification][stratum]
+                elif type(self.target_props[stratification][stratum]) == str:
+                    target_prop_values[stratification][stratum] = \
+                        self.time_variants[self.target_props[stratification][stratum]](_time)
+            self.cumulative_target_props[stratification] = create_cumulative_dict(target_prop_values[stratification])
+
+            # check that requests (including function outputs) don't exceed one
+            if sum(target_prop_values[stratification].values()) > 1.0:
+                raise ValueError("total of prevalence values for first n-1 strata of %s sum to more than one"
+                                 % stratification)
+            elif any(target_prop_values[stratification].values()) < 0.0:
+                raise ValueError("prevalence request of less than zero time %s" % _time)
+
+            # add in a cumulative value of one for the last stratum
+            self.cumulative_target_props[stratification][self.all_stratifications[stratification][-1]] = 1.0
+
+    def find_current_strata_props(self, _compartment_values, _time):
+
+        # find current values of prevalence for the stratification for which prevalence values targeted
         for stratification in self.target_props:
             self.current_strata_props[stratification], self.cumulative_strata_props = {}, {}
             for stratum in self.strata_indices[stratification]:
                 self.current_strata_props[stratification][stratum] = \
                     sum([_compartment_values[i] for i in self.strata_indices[stratification][stratum]]) / \
                     sum(_compartment_values)
-            self.cumulative_strata_props[stratification] = create_cumulative_dict(self.target_props[stratification])
+            self.cumulative_strata_props[stratification] = \
+                create_cumulative_dict(self.current_strata_props[stratification])
 
 
 if __name__ == "__main__":
@@ -2615,14 +2651,17 @@ if __name__ == "__main__":
     # hiv_mixing = numpy.ones(4).reshape(2, 2)
     hiv_mixing = None
 
-    sir_model.stratify("hiv", ["negative", "positive"], [], {"negative": 0.6},
+    temp_function = lambda time: 0.4
+    sir_model.time_variants["temp_function"] = temp_function
+
+    sir_model.stratify("hiv", ["negative", "positive", "somethingelse"], [], {"negative": 0.6},
                        {"recovery": {"negative": "increment_by_one", "positive": 0.5},
                         "infect_death": {"negative": 0.5},
                         "entry_fraction": {"negative": 0.6, "positive": 0.4}},
                        adjustment_requests={"recovery": {"negative": 0.7}},
                        infectiousness_adjustments={"positive": 0.5},
                        mixing_matrix=hiv_mixing,
-                       verbose=False, target_props={"negative": 1.0 / 3.0, "positive": 2.0 / 3.0})
+                       verbose=False, target_props={"negative": "temp_function", "positive": 0.2})
 
     sir_model.stratify("strain", ["sensitive", "resistant"], ["infectious"],
                        adjustment_requests={"recoveryXhiv_negative": {"sensitive": 0.9},
@@ -2635,6 +2674,8 @@ if __name__ == "__main__":
     # sir_model.stratify("age", [1, 10, 3], [], {}, {"recovery": {"1": 0.5, "10": 0.8}},
     #                    infectiousness_adjustments={"1": 0.8},
     #                    mixing_matrix=age_mixing, verbose=False)
+
+    # sir_model.transition_flows.to_csv("transitions.csv")
 
     sir_model.run_model()
 
