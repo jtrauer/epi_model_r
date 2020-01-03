@@ -2761,7 +2761,6 @@ class StratifiedModel(EpiModel):
                      i_comp in self.strata_indices[_stratification][stratum]]) / \
                 sum([_compartment_values[i_comp] for i_comp in restriction_compartments])
 
-        print(current_strata_props)
         return create_cumulative_dict(current_strata_props)
 
 
