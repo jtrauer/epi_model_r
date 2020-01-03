@@ -536,7 +536,7 @@ class EpiModel:
                  initial_conditions_to_total=True, infectious_compartment=("infectious",), birth_approach="no_birth",
                  verbose=False, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1,
                  starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint",
-                 output_connections={}, derived_output_functions={}):
+                 output_connections={}, death_output_categories=(), derived_output_functions={}, ticker=False):
         """
         construction method to create a basic compartmental model
         includes checking that the arguments have been provided correctly by the user
@@ -553,8 +553,8 @@ class EpiModel:
         self.death_flows = pd.DataFrame(columns=("type", "parameter", "origin", "implement"))
 
         # attributes with specific format that are independent of user inputs
-        self.tracked_quantities, self.time_variants, self.all_stratifications, self.customised_flow_functions,\
-            self.derived_outputs = ({} for _ in range(5))
+        self.tracked_quantities, self.time_variants, self.all_stratifications, self.customised_flow_functions = \
+            ({} for _ in range(4))
         self.compartment_values, self.compartment_names, self.infectious_indices = ([] for _ in range(3))
 
         # ensure requests are fed in correctly
@@ -562,7 +562,7 @@ class EpiModel:
             times, compartment_types, initial_conditions, parameters, requested_flows, initial_conditions_to_total,
             infectious_compartment, birth_approach, verbose, reporting_sigfigs, entry_compartment,
             starting_population, starting_compartment, equilibrium_stopping_tolerance, integration_type,
-            output_connections, derived_output_functions)
+            output_connections, death_output_categories, derived_output_functions, ticker)
 
         # stop ide complaining about attributes being defined outside __init__, even though they aren't
         self.times, self.compartment_types, self.initial_conditions, self.parameters, self.requested_flows, \
@@ -570,8 +570,8 @@ class EpiModel:
             self.reporting_sigfigs, self.entry_compartment, self.starting_population, \
             self.starting_compartment, self.equilibrium_stopping_tolerance, self.outputs, self.integration_type, \
             self.output_connections, self.infectious_populations, self.infectious_denominators, \
-            self.derived_output_functions, self.transition_indices_to_implement, self.death_indices_to_implement,\
-            self.change_indices_to_implement = (None for _ in range(23))
+            self.derived_output_functions, self.transition_indices_to_implement, self.death_indices_to_implement, \
+            self.death_output_categories, self.ticker, self.change_indices_to_implement = (None for _ in range(25))
 
         # for storing derived output in db
         self.step = 0
@@ -581,8 +581,8 @@ class EpiModel:
                 ("times", "compartment_types", "initial_conditions", "parameters", "initial_conditions_to_total",
                  "infectious_compartment", "birth_approach", "verbose", "reporting_sigfigs", "entry_compartment",
                  "starting_population", "starting_compartment", "infectious_compartment",
-                 "equilibrium_stopping_tolerance", "integration_type", "output_connections",
-                 "derived_output_functions"):
+                 "equilibrium_stopping_tolerance", "integration_type", "output_connections", "death_output_categories",
+                 "derived_output_functions", "ticker"):
             setattr(self, attribute, eval(attribute))
 
         # keep copy of the compartment types in case the compartment names are stratified later
@@ -597,11 +597,14 @@ class EpiModel:
         # add any missing quantities that will be needed
         self.initialise_default_quantities()
 
+        # prepare dictionary structure for any derived outputs to be calculated post-integration
+        self.derived_outputs = {"times": self.times}
+
     def check_and_report_attributes(
             self, _times, _compartment_types, _initial_conditions, _parameters, _requested_flows,
             _initial_conditions_to_total, _infectious_compartment, _birth_approach, _verbose, _reporting_sigfigs,
             _entry_compartment, _starting_population, _starting_compartment, _equilibrium_stopping_tolerance,
-            _integration_type, _output_connections, _derived_output_functions):
+            _integration_type, _output_connections, _death_output_categories, _derived_output_functions, _ticker):
         """
         check all input data have been requested correctly
 
@@ -619,13 +622,13 @@ class EpiModel:
         for expected_list in ("_times", "_compartment_types", "_requested_flows"):
             if not isinstance(eval(expected_list), list):
                 raise TypeError("expected list for %s" % expected_list)
-        for expected_tuple in ("_infectious_compartment",):
+        for expected_tuple in ("_infectious_compartment", "_death_output_categories"):
             if not isinstance(eval(expected_tuple), tuple):
                 raise TypeError("expected tuple for %s" % expected_tuple)
         for expected_string in ("_birth_approach", "_entry_compartment", "_starting_compartment", "_integration_type",):
             if not isinstance(eval(expected_string), str):
                 raise TypeError("expected string for %s" % expected_string)
-        for expected_boolean in ("_initial_conditions_to_total", "_verbose"):
+        for expected_boolean in ("_initial_conditions_to_total", "_verbose", "_ticker"):
             if not isinstance(eval(expected_boolean), bool):
                 raise TypeError("expected boolean for %s" % expected_boolean)
         for expected_dict in ("_derived_output_functions",):
@@ -894,7 +897,12 @@ class EpiModel:
             print("warning, compartment or compartments with negative values")
 
         self.output_to_user("integration complete")
-        self.calculate_outputs_post_integration()
+
+        # collate outputs to be calculated post-integration that are not just compartment sizes
+        self.calculate_post_integration_connection_outputs()
+        self.calculate_post_integration_function_outputs()
+        for death_output in self.death_output_categories:
+            self.calculate_post_integration_death_outputs(death_output)
 
     def store_derived_outputs_to_db(self):
         """
@@ -919,6 +927,8 @@ class EpiModel:
         :return: ode equations as list
             updated ode equations in same format but with all flows implemented
         """
+        if self.ticker:
+            print("integrating at time: %s" % _time)
         _ode_equations = self.apply_transition_flows(_ode_equations, _compartment_values, _time)
         _ode_equations = self.apply_compartment_death_flows(_ode_equations, _compartment_values, _time)
         _ode_equations = self.apply_universal_death_flow(_ode_equations, _compartment_values, _time)
@@ -967,6 +977,10 @@ class EpiModel:
         # find adjusted parameter value
         parameter_value = self.get_parameter_value(self.transition_flows.parameter[n_flow], _time)
 
+        # the flow is null if the parameter is null
+        if parameter_value == 0.:
+            return 0.
+
         # find from compartment and the "infectious population" (which equals one for non-infection-related flows)
         infectious_population = self.find_infectious_multiplier(n_flow)
 
@@ -974,7 +988,7 @@ class EpiModel:
         from_compartment = self.compartment_names.index(self.transition_flows.origin[n_flow])
 
         # implement flows according to whether customised or standard/infection-related
-        return parameter_value * self.customised_flow_functions[n_flow](self, n_flow) if \
+        return parameter_value * self.customised_flow_functions[n_flow](self, n_flow, _time, _compartment_values) if \
             self.transition_flows.type[n_flow] == "customised_flows" else \
             parameter_value * _compartment_values[from_compartment] * infectious_population
 
@@ -985,13 +999,26 @@ class EpiModel:
         :parameters and return: see previous method apply_all_flow_types_to_odes
         """
         for n_flow in self.death_indices_to_implement:
-            parameter_value = self.get_parameter_value(self.death_flows.parameter[n_flow], _time)
-            from_compartment = self.compartment_names.index(self.death_flows.origin[n_flow])
-            net_flow = parameter_value * _compartment_values[from_compartment]
-            _ode_equations = increment_list_by_index(_ode_equations, from_compartment, -net_flow)
+            net_flow = self.find_net_infection_death_flow(n_flow, _time, _compartment_values)
+            _ode_equations = increment_list_by_index(
+                _ode_equations, self.compartment_names.index(self.death_flows.origin[n_flow]), -net_flow)
             if "total_deaths" in self.tracked_quantities:
                 self.tracked_quantities["total_deaths"] += net_flow
         return _ode_equations
+
+    def find_net_infection_death_flow(self, _n_flow, _time, _compartment_values):
+        """
+        find the net infection death flow rate for a particular compartment
+
+        :param _n_flow: int
+            row of interest in death flow dataframe
+        :param _time: float
+            time at which the death rate is being evaluated
+        :param _compartment_values: list
+            list of current compartment sizes
+        """
+        return self.get_parameter_value(self.death_flows.parameter[_n_flow], _time) * \
+            _compartment_values[self.compartment_names.index(self.death_flows.origin[_n_flow])]
 
     def apply_universal_death_flow(self, _ode_equations, _compartment_values, _time):
         """
@@ -1119,12 +1146,12 @@ class EpiModel:
     post-integration collation of user-requested output values
     """
 
-    def calculate_outputs_post_integration(self):
+    def calculate_post_integration_connection_outputs(self):
         """
-        find outputs for each requested time point, rather than at the time points that the model integration steps
-            occurred at, which are arbitrary and determined by the integration routine used
+        find outputs based on connections of transition flows for each requested time point, rather than at the time
+            points that the model integration steps occurred at, which are arbitrary and determined by the integration
+            routine used
         """
-        self.derived_outputs["times"] = self.times
         for output in self.output_connections:
             self.derived_outputs[output] = [0.0] * len(self.times)
             transition_indices = self.find_output_transition_indices(output)
@@ -1133,11 +1160,31 @@ class EpiModel:
                 for n_flow in transition_indices:
                     net_flow = self.find_net_transition_flow(n_flow, time, self.compartment_values)
                     self.derived_outputs[output][n_time] += net_flow
+
+    def calculate_post_integration_death_outputs(self, death_output):
+        """
+        find outputs based on connections of transition flows for each requested time point, rather than at the time
+            points that the model integration steps occurred at, which are arbitrary and determined by the integration
+            routine used
+        """
+        category_name = "infection_deathsXall" if death_output == () else "infection_deathsX" + "X".join(death_output)
+        self.derived_outputs[category_name] = [0.0] * len(self.times)
+        death_indices = self.find_output_death_indices(death_output)
+        for n_time, time in enumerate(self.times):
+            self.restore_past_state(time)
+            for n_flow in death_indices:
+                net_flow = self.find_net_infection_death_flow(n_flow, time, self.compartment_values)
+                self.derived_outputs[category_name][n_time] += net_flow
+
+    def calculate_post_integration_function_outputs(self):
+        """
+        similar to previous method, find outputs that are based on model functions
+        """
         for output in self.derived_output_functions:
             self.derived_outputs[output] = [0.0] * len(self.times)
             for n_time, time in enumerate(self.times):
                 self.restore_past_state(time)
-                self.derived_outputs[output][n_time] = self.derived_output_functions[output](self)
+                self.derived_outputs[output][n_time] = self.derived_output_functions[output](self, time)
 
     def restore_past_state(self, time):
         """
@@ -1167,6 +1214,16 @@ class EpiModel:
                 find_stem(self.transition_flows.to[row]) == self.output_connections[output]["to"] and
                 self.output_connections[output]["origin_condition"] in self.transition_flows.origin[row] and
                 self.output_connections[output]["to_condition"] in self.transition_flows.to[row]]
+
+    def find_output_death_indices(self, _death_output):
+        """
+        find all rows of the death dataframe that are relevant to calculating the total number of infection-related
+            deaths
+        """
+        return [row for row in range(len(self.death_flows)) if
+                self.death_flows.implement[row] == len(self.all_stratifications) and
+                all([restriction in find_name_components(self.death_flows.origin[row])
+                     for restriction in _death_output])]
 
     """
     simple output methods, although most outputs will be managed outside of this module
@@ -1328,7 +1385,7 @@ class StratifiedModel(EpiModel):
                  initial_conditions_to_total=True, infectious_compartment=("infectious",), birth_approach="no_birth",
                  verbose=False, reporting_sigfigs=4, entry_compartment="susceptible", starting_population=1,
                  starting_compartment="", equilibrium_stopping_tolerance=1e-6, integration_type="odeint",
-                 output_connections={}, derived_output_functions={}):
+                 output_connections={}, death_output_categories=(), derived_output_functions={}, ticker=False):
         """
         constructor mostly inherits from parent class, with a few additional attributes that are required for the
         stratified version
@@ -1342,7 +1399,8 @@ class StratifiedModel(EpiModel):
                           starting_population=starting_population, starting_compartment=starting_compartment,
                           equilibrium_stopping_tolerance=equilibrium_stopping_tolerance,
                           integration_type=integration_type, output_connections=output_connections,
-                          derived_output_functions=derived_output_functions)
+                          death_output_categories=death_output_categories,
+                          derived_output_functions=derived_output_functions, ticker=ticker)
 
         self.full_stratification_list, self.removed_compartments, self.overwrite_parameters, \
             self.compartment_types_to_stratify, self.infectious_denominators, self.strains, self.mixing_categories,\
@@ -2392,8 +2450,10 @@ class StratifiedModel(EpiModel):
         # then find the infectious compartment for each strain separately
         for strain in self.strains:
             self.infectious_indices[strain] = \
-                [create_stratum_name("strain", strain, joining_string="") in find_name_components(comp) and
-                 i_comp in self.infectious_indices["all_strains"] for i_comp, comp in enumerate(self.compartment_names)]
+                convert_boolean_list_to_indices([create_stratum_name("strain", strain, joining_string="") in
+                                                 find_name_components(comp) and i_comp in
+                                                 self.infectious_indices["all_strains"] for i_comp, comp in
+                                                 enumerate(self.compartment_names)])
 
     def add_force_indices_to_transitions(self):
         """
@@ -2707,7 +2767,7 @@ class StratifiedModel(EpiModel):
 
 if __name__ == "__main__":
 
-    def get_total_popsize(model):
+    def get_total_popsize(model, time):
         return sum(model.compartment_values)
 
     sir_model = StratifiedModel(
@@ -2722,7 +2782,8 @@ if __name__ == "__main__":
             "incidence": {"origin": "susceptible", "to": "infectious"},
             "incidence_hiv_positive": {"origin": "susceptible", "to": "infectious",
                                        "origin_condition": "hiv_positive", "to_condition": "hiv_positive"}},
-        verbose=False, integration_type="odeint", derived_output_functions={'population': get_total_popsize}
+        verbose=False, integration_type="odeint", derived_output_functions={'population': get_total_popsize},
+        death_output_categories=((), ("hiv_positive",))
     )
     # sir_model.adaptation_functions["increment_by_one"] = create_additive_function(1.)
 
@@ -2755,7 +2816,7 @@ if __name__ == "__main__":
 
     sir_model.run_model()
 
-    create_flowchart(sir_model, name="sir_model_diagram")
+    # create_flowchart(sir_model, name="sir_model_diagram")
 
     # create_flowchart(sir_model)
     #
