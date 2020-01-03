@@ -1429,28 +1429,7 @@ class StratifiedModel(EpiModel):
 
         # prepare strata equilibration target proportions
         if target_props:
-            self.prepare_target_props(target_props, stratification_name, strata_names)
-
-    def prepare_target_props(self, _target_props, _stratification_name, _strata_names):
-
-        self.target_props[_stratification_name] = {}
-        for restriction in _target_props:
-            self.target_props[_stratification_name][restriction] = {}
-
-            for stratum in _strata_names[: -1]:
-                if stratum not in _target_props[restriction]:
-                    raise ValueError("one or more of first n-1 strata being applied not in the target prop request")
-                elif isinstance(_target_props[restriction][stratum], (float, int, str)):
-                    self.target_props[_stratification_name][restriction][stratum] = _target_props[restriction][stratum]
-                if type(_target_props[restriction][stratum]) == str and \
-                        _target_props[restriction][stratum] not in self.time_variants:
-                    raise ValueError("function for prevalence of %s not found" % stratum)
-            if _strata_names[-1] in self.target_props:
-                self.output_to_user(
-                    "target proportion requested for stratum %s, but as last stratum" % _strata_names[-1] +
-                    " in request, this will be ignored and assigned the remainder to ensure sum to one")
-
-            self.link_strata_with_flows(_stratification_name, _strata_names, restriction)
+            self.prepare_and_check_target_props(target_props, stratification_name, strata_names)
 
     """
     stratification checking methods
@@ -2133,18 +2112,61 @@ class StratifiedModel(EpiModel):
                 self.infectiousness_levels[create_stratum_name(_stratification_name, stratum, joining_string="")] = \
                     _infectiousness_adjustments[stratum]
 
+    def prepare_and_check_target_props(self, _target_props, _stratification_name, _strata_names):
+        """
+        create the dictionary of dictionaries that contains the target values for equlibration
+
+        :parameters:
+            _target_props: dict
+                user submitted dictionary with keys the restrictions by previously implemented strata that apply
+            _stratification_name: str
+                name of stratification process currently being implemented
+            _strata_names: list
+                list of the names of the strata being implemented under the current stratification process
+        """
+        self.target_props[_stratification_name] = {}
+        for restriction in _target_props:
+            self.target_props[_stratification_name][restriction] = {}
+
+            # only need parameter values for the first n-1 strata, as the last one will be the remainder
+            for stratum in _strata_names[: -1]:
+                if stratum not in _target_props[restriction]:
+                    raise ValueError("one or more of first n-1 strata being applied not in the target prop request")
+                elif isinstance(_target_props[restriction][stratum], (float, int, str)):
+                    self.target_props[_stratification_name][restriction][stratum] = _target_props[restriction][stratum]
+                else:
+                    raise ValueError("target proportions specified with incorrect format for value")
+                if type(_target_props[restriction][stratum]) == str and \
+                        _target_props[restriction][stratum] not in self.time_variants:
+                    raise ValueError("function for prevalence of %s not found" % stratum)
+            if _strata_names[-1] in self.target_props:
+                self.output_to_user(
+                    "target proportion requested for stratum %s, but as last stratum" % _strata_names[-1] +
+                    " in request, this will be ignored and assigned the remainder to ensure sum to one")
+
+            # add the necessary flows to the transition data frame
+            self.link_strata_with_flows(_stratification_name, _strata_names, restriction)
+
     def link_strata_with_flows(self, _stratification_name, _strata_names, _restriction):
         """
         add in sequential series of flows between neighbouring strata that transition people between the strata being
             implemented in this stratification stage
+
+        :parameters:
+            _stratification_name: str
+                name of stratification currently being implemented
+            _strata_names: list
+                list of the strata being implemented in this stratification process
+            _restriction: str
+                name of previously implemented stratum that this equilibration flow applies to, if any, otherwise "all"
         """
         for compartment in self.unstratified_compartment_names:
             if _restriction in find_name_components(compartment) or _restriction == "all":
                 for n_stratum in range(len(_strata_names[: -1])):
                     self.transition_flows = self.transition_flows.append(
                         {"type": "strata_change",
-                         "parameter": "changeX" + _restriction + "X" + _stratification_name + "X" +
-                                      _strata_names[n_stratum] + "_" + _strata_names[n_stratum + 1],
+                         "parameter": _stratification_name + "X" + _restriction + "X" + _strata_names[n_stratum] +
+                         "_" + _strata_names[n_stratum + 1],
                          "origin": create_stratified_name(compartment, _stratification_name, _strata_names[n_stratum]),
                          "to": create_stratified_name(compartment, _stratification_name, _strata_names[n_stratum + 1]),
                          "implement": len(self.all_stratifications),
@@ -2436,9 +2458,12 @@ class StratifiedModel(EpiModel):
         find all the indices of the transition flows that need to be stratified
         separated out as very short method in order that it can over-ride the version in the unstratified EpiModel
 
-        :param back_one: int
-            number to subtract from self.all_stratification, which will be one if this method is being called after the
-                stratification has been added
+        :parameters:
+            back_one: int
+                number to subtract from self.all_stratification, which will be one if this method is being called after the
+                    stratification has been added
+            include_change: bool
+                whether to include the strata_change transition flows
         :return: list
             list of indices of the flows that need to be stratified
         """
@@ -2447,7 +2472,13 @@ class StratifiedModel(EpiModel):
                 self.transition_flows.implement[i_flow] == len(self.all_stratifications) - back_one]
 
     def find_change_indices_to_implement(self, back_one=0):
+        """
+        find the indices of the equilibration flows to be applied in the transitions data frame
 
+        :parameters:
+            back_one: int
+             see find_transition_indices_to_implement
+        """
         return [i_flow for i_flow in range(len(self.transition_flows)) if
                 self.transition_flows.type[i_flow] == "strata_change" and
                 self.transition_flows.implement[i_flow] == len(self.all_stratifications) - back_one]
@@ -2559,21 +2590,32 @@ class StratifiedModel(EpiModel):
         return _ode_equations
 
     def apply_change_rates(self, _ode_equations, _compartment_values, _time):
+        """
+        apply the transition rates that relate to equilibrating prevalence values for a particular stratification
+
+        :parameters:
+            _ode_equations: list
+                working ode equations, to which transitions are being applied
+            _compartment_values: list
+                working compartment values
+            _time: float
+                current integration time value
+        """
 
         # for each change flow being implemented
         for i_change in self.change_indices_to_implement:
 
             # split out the components of the transition string, which follow the standard 6-character string "change"
-            _, restriction, stratification, transition = find_name_components(self.transition_flows.parameter[i_change])
+            stratification, restriction, transition = find_name_components(self.transition_flows.parameter[i_change])
             origin_stratum, to_stratum = transition.split("_")
 
             # find the distribution of the population across strata to be targeted
             _cumulative_target_props = self.find_target_strata_props(_time, restriction, stratification)
 
             # find the proportional distribution of the population across strata at the current time point
-            _cumulative_strata_props = self.find_current_strata_props(_compartment_values, restriction, stratification)
+            _cumulative_strata_props = self.find_current_strata_props(_compartment_values, stratification, restriction)
 
-            # work out which stratum and compartment we are going from and to
+            # work out which stratum and compartment transitions should be going from and to
             if _cumulative_strata_props[origin_stratum] > _cumulative_target_props[origin_stratum]:
                 take_stratum, take_compartment, give_compartment = \
                     origin_stratum, self.transition_flows.origin[i_change], self.transition_flows.to[i_change]
@@ -2595,6 +2637,19 @@ class StratifiedModel(EpiModel):
         return _ode_equations
 
     def find_target_strata_props(self, _time, _restriction, _stratification):
+        """
+        calculate the requested distribution of the population over the stratification that needs to be equilibrated
+            over
+
+        :parameters:
+            _time: float
+                current time value in integration
+            _stratification: str
+                name of the stratification over which the distribution of population is to be calculated
+            _restriction: str
+                name of the restriction stratification and the stratum joined with "_", if this is being applied
+                if this is submitted as "all", the equilibration will be applied across all other strata
+        """
 
         # for each applicable stratification, find target value for all strata, except the last one
         target_prop_values = {}
@@ -2616,7 +2671,20 @@ class StratifiedModel(EpiModel):
         cumulative_target_props.update({self.all_stratifications[_stratification][-1]: 1.0})
         return cumulative_target_props
 
-    def find_current_strata_props(self, _compartment_values, _restriction, _stratification):
+    def find_current_strata_props(self, _compartment_values, _stratification, _restriction):
+        """
+        find the current distribution of the population across a particular stratification, which may or may not be
+            restricted to a stratum of a previously implemented stratification process
+
+        :parameters:
+            _compartment_values: list
+                current compartment values achieved during integration
+            _stratification: str
+                name of the stratification over which the distribution of population is to be calculated
+            _restriction: str
+                name of the restriction stratification and the stratum joined with "_", if this is being applied
+                if this is submitted as "all", the equilibration will be applied across all other strata
+        """
 
         # find the compartment indices applicable to the cross-stratification of interest (which may be all of them)
         if _restriction == "all":
@@ -2632,6 +2700,8 @@ class StratifiedModel(EpiModel):
                 sum([_compartment_values[i_comp] for i_comp in restriction_compartments if
                      i_comp in self.strata_indices[_stratification][stratum]]) / \
                 sum([_compartment_values[i_comp] for i_comp in restriction_compartments])
+
+        print(current_strata_props)
         return create_cumulative_dict(current_strata_props)
 
 
@@ -2674,7 +2744,7 @@ if __name__ == "__main__":
                        adjustment_requests={"recovery": {"negative": 0.7}},
                        infectiousness_adjustments={"positive": 0.5},
                        mixing_matrix=hiv_mixing,
-                       verbose=False, target_props={"all": {"negative": "temp_function"}})
+                       verbose=False, target_props={"all": {"negative": 0.5}})
 
     # sir_model.stratify("strain", ["sensitive", "resistant"], ["infectious"],
     #                    adjustment_requests={"recoveryXhiv_negative": {"sensitive": 0.9},
