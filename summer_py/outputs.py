@@ -521,6 +521,8 @@ class Outputs:
         self.tidy_y_axis(axis, quantity='', max_dims=1, y_label=y_label, max_value=y_max)
 
     def plot_outputs_by_stratum(self, requested_output='prevXinfectious', sc_index=0):
+        if not hasattr(self.post_processing_list[sc_index].model, 'all_stratifications'):
+            return
         all_groups = self.post_processing_list[sc_index].model.all_stratifications
         for stratification in all_groups.keys():
             fig, axes, max_dims, n_rows, n_cols = initialise_figures_axes(1)
