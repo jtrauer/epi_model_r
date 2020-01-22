@@ -173,7 +173,7 @@ def add_title_to_plot(fig, n_panels, content):
 
 class Outputs:
     def __init__(self, post_processing_list, targets_to_plot={}, out_dir='outputs', translation_dict={},
-                 multiplot_only=False):
+                 multiplot_only=False, mcmc_weights=None):
         """
         :param post_processing: an object of class post_processing associated with a run model
         :param out_dir: the name of the directory where to write the outputs
@@ -185,7 +185,6 @@ class Outputs:
         self.multiplot_only = multiplot_only
         self.scenario_names = {}
 
-        self.create_out_directories()
         self.colour_theme \
             = [(0., 0., 0.),
                (57./255., 106./255., 177./255.),
@@ -212,21 +211,28 @@ class Outputs:
                (.5, .5, .5),
                (.0, .0, .0)]
 
+        self.mcmc_weights = mcmc_weights
+        self.mcmc_mode = not self.mcmc_weights is None
+        self.multiplot_only = True is self.mcmc_mode
+
+        self.create_out_directories()
+
     def create_out_directories(self):
         if not os.path.exists(self.out_dir):
             os.mkdir(self.out_dir)
+
 
         for scenario_index in range(len(self.post_processing_list)):
             scenario_number = self.post_processing_list[scenario_index].scenario_number
             scenario_name = 'Baseline' if scenario_number == 0 else "Scenario " + str(scenario_number)
             self.scenario_names[scenario_number] =scenario_name
 
-            if not self.multiplot_only:
+            if not self.multiplot_only and not self.mcmc_mode:
                 scenario_out_dir = os.path.join(self.out_dir, scenario_name)
                 if not os.path.exists(scenario_out_dir):
                     os.mkdir(scenario_out_dir)
 
-        if len(self.scenario_names) > 1:
+        if len(self.scenario_names) > 1 or self.mcmc_mode:
             multi_out_dir = os.path.join(self.out_dir, 'multi_plots')
             if not os.path.exists(multi_out_dir):
                 os.mkdir(multi_out_dir)
@@ -378,10 +384,21 @@ class Outputs:
 
                 y_max = - 1.e9
 
+                if self.mcmc_mode:
+                    mcmc_array = None  # initialise
+
                 for scenario_index, scenario_number in enumerate(self.scenario_names.keys()):
                     data_to_plot = self.post_processing_list[scenario_index].generated_outputs[requested_output] if\
                         requested_output not in self.post_processing_list[scenario_index].derived_outputs else\
                         self.post_processing_list[scenario_index].derived_outputs[requested_output]
+
+                    if self.mcmc_mode:
+                        this_series_array = numpy.array([data_to_plot])
+                        if mcmc_array is None:
+                            mcmc_array = copy.copy(this_series_array)
+                        else:
+                            mcmc_array = numpy.concatenate((mcmc_array, this_series_array), axis=0)
+
                     if not multi_plot or scenario_index == 0:
                         fig, axes, max_dims, n_rows, n_cols = initialise_figures_axes(1)
                         axis = find_panel_grid_indices([axes], 0, n_rows, n_cols)
@@ -420,7 +437,7 @@ class Outputs:
                         this_label = 'Scenario ' + str(scenario_number) if scenario_number > 0 else "Baseline"
 
                         sc_color = self.colour_theme[scenario_number] if \
-                            scenario_number < len(self.colour_theme) else 'black'
+                            scenario_number < len(self.colour_theme) and not self.mcmc_mode else 'black'
 
                         axis.plot(times_to_plot,
                                   data_to_plot,
@@ -445,7 +462,8 @@ class Outputs:
                     if not multi_plot or scenario_index == len(self.scenario_names) - 1:
                         if multi_plot:
                             dir_name = 'multi_plots'
-                            axis.legend(bbox_to_anchor=(1., 1))
+                            if not self.mcmc_mode:
+                                axis.legend(bbox_to_anchor=(1., 1))
                         else:
                             dir_name = self.scenario_names[scenario_number]
                             if scenario_index > 0:
@@ -453,6 +471,23 @@ class Outputs:
 
                         file_name = os.path.join(dir_name, output_name)
                         self.finish_off_figure(fig, filename=file_name, title_text=output_name)
+
+                if self.mcmc_mode:
+                    percentiles = numpy.percentile(mcmc_array, [2.5, 50, 97.5], axis=0)
+                    fig, axes, max_dims, n_rows, n_cols = initialise_figures_axes(1)
+                    axis = find_panel_grid_indices([axes], 0, n_rows, n_cols)
+                    output_name = requested_output
+                    for perc_index in range(3):
+                        axis.plot(times_to_plot, percentiles[perc_index],
+                                  color='black', linestyle='-' if perc_index == 1 else '--')
+
+                    y_max = percentiles.max()
+                    self.tidy_x_axis(axis, start=min(times_to_plot), end=max(times_to_plot), max_dims=max_dims,
+                                             x_label='time')
+                    self.tidy_y_axis(axis, quantity='', max_dims=max_dims, y_label=output_name, max_value=y_max)
+                    dir_name = 'multi_plots'
+                    file_name = os.path.join(dir_name, output_name + '_ci')
+                    self.finish_off_figure(fig, filename=file_name, title_text=output_name)
 
     def plot_stacked_epi_outputs(self, axis, times_to_plot, current_data, fraction=True):
         # plot patches and proxy by category
