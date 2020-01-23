@@ -173,7 +173,7 @@ def add_title_to_plot(fig, n_panels, content):
 
 class Outputs:
     def __init__(self, post_processing_list, targets_to_plot={}, out_dir='outputs', translation_dict={},
-                 multiplot_only=False, mcmc_weights=None):
+                 multiplot_only=False, mcmc_weights=None, plot_start_time=1990):
         """
         :param post_processing: an object of class post_processing associated with a run model
         :param out_dir: the name of the directory where to write the outputs
@@ -184,6 +184,7 @@ class Outputs:
         self.translation_dict = translation_dict
         self.multiplot_only = multiplot_only
         self.scenario_names = {}
+        self.plot_start_time = plot_start_time
 
         self.colour_theme \
             = [(0., 0., 0.),
@@ -361,7 +362,6 @@ class Outputs:
         """
         main method to run the plotting of all the outputs requested in the post-processing object
         """
-
         outputs_to_plot = self.post_processing_list[0].requested_outputs if \
             self.post_processing_list[0].derived_outputs is None else\
             self.post_processing_list[0].requested_outputs + list(self.post_processing_list[0].derived_outputs.keys())
@@ -444,10 +444,13 @@ class Outputs:
                                   color=sc_color,
                                   label=this_label)
 
-                        y_max = max([y_max,
+                        if requested_output in self.post_processing_list[scenario_index].ymax:
+                            y_max = self.post_processing_list[scenario_index].ymax[requested_output]
+                        else:
+                            y_max = max([y_max,
                                     max(data_to_plot)])
                         if scenario_index == 0 or not multi_plot:
-                            self.tidy_x_axis(axis, start=min(times_to_plot), end=max(times_to_plot), max_dims=max_dims,
+                            self.tidy_x_axis(axis, start=self.plot_start_time, end=max(times_to_plot), max_dims=max_dims,
                                              x_label='time')
 
                         if not multi_plot or scenario_index == len(self.scenario_names) - 1:
@@ -481,8 +484,11 @@ class Outputs:
                         axis.plot(times_to_plot, percentiles[perc_index],
                                   color='black', linestyle='-' if perc_index == 1 else '--')
 
-                    y_max = percentiles.max()
-                    self.tidy_x_axis(axis, start=min(times_to_plot), end=max(times_to_plot), max_dims=max_dims,
+                    if requested_output in self.post_processing_list[scenario_index].ymax:
+                        y_max = self.post_processing_list[scenario_index].ymax[requested_output]
+                    else:
+                        y_max = percentiles.max()
+                    self.tidy_x_axis(axis, start=self.plot_start_time, end=max(times_to_plot), max_dims=max_dims,
                                              x_label='time')
                     self.tidy_y_axis(axis, quantity='', max_dims=max_dims, y_label=output_name, max_value=y_max)
                     dir_name = 'multi_plots'
@@ -517,7 +523,7 @@ class Outputs:
             y_label = 'population size'
             y_max = max(populations)
 
-        self.tidy_x_axis(axis, start=min(times_to_plot), end=max(times_to_plot), max_dims=1, x_label='time')
+        self.tidy_x_axis(axis, start=self.plot_start_time, end=max(times_to_plot), max_dims=1, x_label='time')
         self.tidy_y_axis(axis, quantity='', max_dims=1, y_label=y_label, max_value=y_max)
 
     def plot_outputs_by_stratum(self, requested_output='prevXinfectious', sc_index=0):
@@ -551,7 +557,7 @@ class Outputs:
                           label=_label)
 
 
-            self.tidy_x_axis(axis, start=1990., end=max(times_to_plot), max_dims=max_dims,
+            self.tidy_x_axis(axis, start=self.plot_start_time, end=max(times_to_plot), max_dims=max_dims,
                                              x_label='time')
             self.tidy_y_axis(axis, quantity='', max_dims=max_dims, y_label=requested_output + 'Xamong')
 
