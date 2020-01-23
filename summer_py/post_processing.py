@@ -36,13 +36,13 @@ class PostProcessing:
     the values.
     :attribute generated_outputs: dictionary storing the newly generated outputs.
     """
-    def __init__(self, model, requested_outputs, scenario_number=0, requested_times={}, multipliers={}, y_max={}):
+    def __init__(self, model, requested_outputs, scenario_number=0, requested_times={}, multipliers={}, ymax={}):
         self.model = model
         self.requested_outputs = requested_outputs
         self.scenario_number = scenario_number
         self.requested_times = requested_times
         self.multipliers = multipliers
-        self.y_max = y_max
+        self.ymax = ymax
         self.derived_outputs = model.derived_outputs if hasattr(model, 'derived_outputs') else {}
 
         self.operations_to_perform = {}
