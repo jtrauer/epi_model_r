@@ -2677,15 +2677,18 @@ class StratifiedModel(EpiModel):
 
             # work out which stratum and compartment transitions should be going from and to
             if _cumulative_strata_props[origin_stratum] > _cumulative_target_props[origin_stratum]:
-                take_stratum, take_compartment, give_compartment = \
-                    origin_stratum, self.transition_flows.origin[i_change], self.transition_flows.to[i_change]
-            else:
-                take_stratum, take_compartment, give_compartment = \
-                    to_stratum, self.transition_flows.to[i_change], self.transition_flows.origin[i_change]
+                take_compartment, give_compartment, numerator, denominator = \
+                    self.transition_flows.origin[i_change], self.transition_flows.to[i_change],\
+                    _cumulative_strata_props[origin_stratum], _cumulative_target_props[origin_stratum]
 
-            # find net flow
+            else:
+                take_compartment, give_compartment, numerator, denominator = \
+                    self.transition_flows.to[i_change], self.transition_flows.origin[i_change], \
+                    1.0 - _cumulative_strata_props[origin_stratum], 1.0 - _cumulative_target_props[origin_stratum]
+
+            # calculate net flow
             net_flow = \
-                numpy.log(_cumulative_strata_props[take_stratum] / _cumulative_target_props[take_stratum]) / \
+                numpy.log(numerator / denominator) / \
                 self.parameters["strata_equilibration_parameter"] * \
                 _compartment_values[self.compartment_names.index(take_compartment)]
 
