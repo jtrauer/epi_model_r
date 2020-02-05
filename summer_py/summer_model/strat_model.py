@@ -1323,6 +1323,7 @@ class StratifiedModel(EpiModel):
             ]
 
         self.find_strata_indices()
+        self.prepare_lookup_tables()
 
     def find_strata_indices(self):
         for stratif in self.all_stratifications:
@@ -1740,17 +1741,21 @@ class StratifiedModel(EpiModel):
             the total infectious quantity, whether that is the number or proportion of infectious persons
             needs to return as one for flows that are not transmission dynamic infectiousness flows
         """
-        if "infection" not in self.transition_flows.type[n_flow]:
+        flow_type = self.transition_flows_dict['type'][n_flow]
+        strain = self.transition_flows_dict['strain'][n_flow]
+        force_index = self.transition_flows_dict['force_index'][n_flow]
+
+        if "infection" not in flow_type:
             return 1.0
-        strain = "all_strains" if not self.strains else self.transition_flows.strain[n_flow]
+        strain = "all_strains" if not self.strains else strain
         mixing_elements = (
             [1.0]
             if self.mixing_matrix is None
-            else list(self.mixing_matrix[self.transition_flows.force_index[n_flow], :])
+            else list(self.mixing_matrix[force_index, :])
         )
         denominator = (
             1.0
-            if "_density" in self.transition_flows.type[n_flow]
+            if "_density" in flow_type
             else self.infectious_denominators
         )
         return (

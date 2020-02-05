@@ -537,6 +537,23 @@ class EpiModel:
         self.infectious_indices = self.find_all_infectious_indices()
         self.transition_indices_to_implement = self.find_transition_indices_to_implement()
         self.death_indices_to_implement = self.find_death_indices_to_implement()
+        self.prepare_lookup_tables()
+
+    def prepare_lookup_tables(self):
+        """
+        Copy highly accessed data into hash tables (dict) to speed up searching for it.
+
+        This method does not create any new data or change any existing data structures,
+        it just copies it into a new data structure that is faster to search.
+        """
+        # Copy transition flows into dictionary data structure.
+        self.transition_flows_dict = self.transition_flows.to_dict()
+
+        # Same with death flows
+        self.death_flows_dict = self.death_flows.to_dict()
+
+        # Create mapping from compartment name to index.
+        self.compartment_idx_lookup = {name: idx for idx, name in enumerate(self.compartment_names)}
 
     def find_all_infectious_indices(self):
         """
@@ -684,19 +701,16 @@ class EpiModel:
         :parameters and return: see previous method apply_all_flow_types_to_odes
         """
         for n_flow in self.transition_indices_to_implement:
+            # Find the net flow between compartments
             net_flow = self.find_net_transition_flow(n_flow, _time, _compartment_values)
 
-            # update equations
-            _ode_equations = increment_list_by_index(
-                _ode_equations,
-                self.compartment_names.index(self.transition_flows.origin[n_flow]),
-                -net_flow,
-            )
-            _ode_equations = increment_list_by_index(
-                _ode_equations,
-                self.compartment_names.index(self.transition_flows.to[n_flow]),
-                net_flow,
-            )
+            # Update equations with transition flows between compartments
+            origin_name = self.transition_flows_dict["origin"][n_flow]
+            target_name = self.transition_flows_dict["to"][n_flow]
+            origin_idx = self.compartment_idx_lookup[origin_name]
+            target_idx = self.compartment_idx_lookup[target_name]
+            _ode_equations[origin_idx] -= net_flow
+            _ode_equations[target_idx] += net_flow
 
         # return flow rates
         return _ode_equations
@@ -716,7 +730,8 @@ class EpiModel:
         """
 
         # find adjusted parameter value
-        parameter_value = self.get_parameter_value(self.transition_flows.parameter[n_flow], _time)
+        parameter = self.transition_flows_dict["parameter"][n_flow]
+        parameter_value = self.get_parameter_value(parameter, _time)
 
         # the flow is null if the parameter is null
         if parameter_value == 0.0:
@@ -726,15 +741,17 @@ class EpiModel:
         infectious_population = self.find_infectious_multiplier(n_flow)
 
         # find the index of the origin or from compartment
-        from_compartment = self.compartment_names.index(self.transition_flows.origin[n_flow])
+        origin_name = self.transition_flows_dict["origin"][n_flow]
+        origin_idx = self.compartment_idx_lookup[origin_name]
 
         # implement flows according to whether customised or standard/infection-related
-        return (
-            parameter_value
-            * self.customised_flow_functions[n_flow](self, n_flow, _time, _compartment_values)
-            if self.transition_flows.type[n_flow] == "customised_flows"
-            else parameter_value * _compartment_values[from_compartment] * infectious_population
-        )
+        flow_type = self.transition_flows_dict["type"][n_flow]
+        is_customised_flow = flow_type == "customised_flows"
+        if is_customised_flow:
+            custom_flow_func = self.customised_flow_functions[n_flow]
+            return parameter_value * custom_flow_func(self, n_flow, _time, _compartment_values)
+        else:
+            return parameter_value * _compartment_values[origin_idx] * infectious_population
 
     def apply_compartment_death_flows(self, _ode_equations, _compartment_values, _time):
         """
@@ -744,13 +761,12 @@ class EpiModel:
         """
         for n_flow in self.death_indices_to_implement:
             net_flow = self.find_net_infection_death_flow(n_flow, _time, _compartment_values)
-            _ode_equations = increment_list_by_index(
-                _ode_equations,
-                self.compartment_names.index(self.death_flows.origin[n_flow]),
-                -net_flow,
-            )
+            origin_name = self.death_flows_dict['origin'][n_flow]
+            origin_idx = self.compartment_idx_lookup[origin_name]
+            _ode_equations[origin_idx] -= net_flow
             if "total_deaths" in self.tracked_quantities:
                 self.tracked_quantities["total_deaths"] += net_flow
+
         return _ode_equations
 
     def find_net_infection_death_flow(self, _n_flow, _time, _compartment_values):
@@ -764,10 +780,12 @@ class EpiModel:
         :param _compartment_values: list
             list of current compartment sizes
         """
-        return (
-            self.get_parameter_value(self.death_flows.parameter[_n_flow], _time)
-            * _compartment_values[self.compartment_names.index(self.death_flows.origin[_n_flow])]
-        )
+        origin_name = self.death_flows_dict['origin'][_n_flow]
+        origin_idx = self.compartment_idx_lookup[origin_name]
+
+        parameter = self.death_flows_dict['parameter'][_n_flow]
+        parameter_value = self.get_parameter_value(parameter, _time)
+        return parameter_value * _compartment_values[origin_idx]
 
     def apply_universal_death_flow(self, _ode_equations, _compartment_values, _time):
         """
@@ -843,9 +861,10 @@ class EpiModel:
             the total infectious quantity, whether that be the number or proportion of infectious persons
             needs to return as one for flows that are not transmission dynamic infectiousness flows
         """
-        if self.transition_flows.type[n_flow] == "infection_density":
+        flow_type = self.transition_flows_dict["type"][n_flow]
+        if flow_type == "infection_density":
             return self.infectious_populations
-        elif self.transition_flows.type[n_flow] == "infection_frequency":
+        elif flow_type == "infection_frequency":
             return self.infectious_populations / self.infectious_denominators
         else:
             return 1.0
