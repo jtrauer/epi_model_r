@@ -761,7 +761,7 @@ class EpiModel:
         """
         for n_flow in self.death_indices_to_implement:
             net_flow = self.find_net_infection_death_flow(n_flow, _time, _compartment_values)
-            origin_name = self.death_flows_dict['origin'][n_flow]
+            origin_name = self.death_flows_dict["origin"][n_flow]
             origin_idx = self.compartment_idx_lookup[origin_name]
             _ode_equations[origin_idx] -= net_flow
             if "total_deaths" in self.tracked_quantities:
@@ -780,10 +780,10 @@ class EpiModel:
         :param _compartment_values: list
             list of current compartment sizes
         """
-        origin_name = self.death_flows_dict['origin'][_n_flow]
+        origin_name = self.death_flows_dict["origin"][_n_flow]
         origin_idx = self.compartment_idx_lookup[origin_name]
 
-        parameter = self.death_flows_dict['parameter'][_n_flow]
+        parameter = self.death_flows_dict["parameter"][_n_flow]
         parameter_value = self.get_parameter_value(parameter, _time)
         return parameter_value * _compartment_values[origin_idx]
 
@@ -994,17 +994,25 @@ class EpiModel:
         :return: list
             integers referencing the transition flows relevant to this output connection
         """
-        return [
-            row
-            for row in range(len(self.transition_flows))
-            if self.transition_flows.implement[row] == len(self.all_stratifications)
-            and find_stem(self.transition_flows.origin[row])
-            == self.output_connections[output]["origin"]
-            and find_stem(self.transition_flows.to[row]) == self.output_connections[output]["to"]
-            and self.output_connections[output]["origin_condition"]
-            in self.transition_flows.origin[row]
-            and self.output_connections[output]["to_condition"] in self.transition_flows.to[row]
-        ]
+
+        def condition(idx):
+            implement = self.transition_flows_dict["implement"][idx]
+            origin = self.transition_flows_dict["origin"][idx]
+            target = self.transition_flows_dict["to"][idx]
+            check_implement = implement == len(self.all_stratifications)
+            check_origin_stem = find_stem(origin) == self.output_connections[output]["origin"]
+            check_target_stem = find_stem(target) == self.output_connections[output]["to"]
+            check_origin_condition = self.output_connections[output]["origin_condition"] in origin
+            check_target_condition = self.output_connections[output]["to_condition"] in target
+            return (
+                check_implement
+                and check_origin_stem
+                and check_target_stem
+                and check_origin_condition
+                and check_target_condition
+            )
+
+        return [i for i in range(len(self.transition_flows)) if condition(i)]
 
     def find_output_death_indices(self, _death_output):
         """
