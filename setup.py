@@ -1,5 +1,5 @@
 import os
-from setuptools import setup
+from setuptools import setup, find_packages
 
 # Read package installation requirements from 'requirements.txt'
 file_dir = os.path.dirname(os.path.abspath(__file__))
@@ -13,7 +13,7 @@ with open(reqs_path) as f:
 setup(
     name="summer_py",
     version="1.1.0",
-    packages=["summer_py",],
+    packages=find_packages("."),
     url="https://github.com/jtrauer/summer_py",
     license="MIT",
     author="James Trauer",

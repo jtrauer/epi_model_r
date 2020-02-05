@@ -4,8 +4,8 @@ import numpy
 import os
 import copy
 
-import summer_py.summer_model as sm
-import summer_py.post_processing as post_proc
+from . import summer_model as sm
+from . import post_processing as post_proc
 
 
 def find_subplot_grid(n_plots):

@@ -1,5 +1,6 @@
-import summer_py.summer_model as sm
 from numpy import linspace
+
+from . import summer_model as sm
 
 
 def find_first_list_element_above(a_list, value):
