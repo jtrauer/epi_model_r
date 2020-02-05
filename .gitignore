@@ -9,7 +9,7 @@ summerTest.Rproj
 # Python lang
 env/
 venv/
-# *.pyc
+*.pyc
 .pytest_cache
 
 # Code editors
