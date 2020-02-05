@@ -1,0 +1,6 @@
+# Package requirements
+scipy==1.1.0
+graphviz>=0.4.10
+SQLAlchemy>=1.1.18
+numpy>=1.14.1
+pandas==0.24.2
