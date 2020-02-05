@@ -1,5 +1,6 @@
 import copy
 import itertools
+from functools import lru_cache
 
 import numpy
 
@@ -1690,6 +1691,9 @@ class StratifiedModel(EpiModel):
     methods to be called during the process of model running
     """
 
+    # Cache return values to prevent wasteful re-computation - cache size is huge.
+    # Floating point return type is 8 bytes, meaning 2**17 values is ~1MB of memory.
+    @lru_cache(maxsize=2**17)
     def get_parameter_value(self, _parameter, _time):
         """
         returns a parameter value by calling the function represented by its string within the parameter_functions
@@ -1741,23 +1745,17 @@ class StratifiedModel(EpiModel):
             the total infectious quantity, whether that is the number or proportion of infectious persons
             needs to return as one for flows that are not transmission dynamic infectiousness flows
         """
-        flow_type = self.transition_flows_dict['type'][n_flow]
-        strain = self.transition_flows_dict['strain'][n_flow]
-        force_index = self.transition_flows_dict['force_index'][n_flow]
+        flow_type = self.transition_flows_dict["type"][n_flow]
+        strain = self.transition_flows_dict["strain"][n_flow]
+        force_index = self.transition_flows_dict["force_index"][n_flow]
 
         if "infection" not in flow_type:
             return 1.0
         strain = "all_strains" if not self.strains else strain
         mixing_elements = (
-            [1.0]
-            if self.mixing_matrix is None
-            else list(self.mixing_matrix[force_index, :])
+            [1.0] if self.mixing_matrix is None else list(self.mixing_matrix[force_index, :])
         )
-        denominator = (
-            1.0
-            if "_density" in flow_type
-            else self.infectious_denominators
-        )
+        denominator = 1.0 if "_density" in flow_type else self.infectious_denominators
         return (
             sum(element_list_multiplication(self.infectious_populations[strain], mixing_elements))
             / denominator
