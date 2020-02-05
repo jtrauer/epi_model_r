@@ -11,7 +11,7 @@ def find_first_list_element_above(a_list, value):
         value: The value that the element must be greater than
     """
     if max(a_list) <= value:
-        ValueError('The requested value is greater than max(a_list)')
+        ValueError("The requested value is greater than max(a_list)")
 
     for i, val in enumerate(a_list):
         if val > value:
@@ -36,14 +36,23 @@ class PostProcessing:
     the values.
     :attribute generated_outputs: dictionary storing the newly generated outputs.
     """
-    def __init__(self, model, requested_outputs, scenario_number=0, requested_times={}, multipliers={}, ymax={}):
+
+    def __init__(
+        self,
+        model,
+        requested_outputs,
+        scenario_number=0,
+        requested_times={},
+        multipliers={},
+        ymax={},
+    ):
         self.model = model
         self.requested_outputs = requested_outputs
         self.scenario_number = scenario_number
         self.requested_times = requested_times
         self.multipliers = multipliers
         self.ymax = ymax
-        self.derived_outputs = model.derived_outputs if hasattr(model, 'derived_outputs') else {}
+        self.derived_outputs = model.derived_outputs if hasattr(model, "derived_outputs") else {}
 
         self.operations_to_perform = {}
         self.generated_outputs = {}
@@ -70,11 +79,17 @@ class PostProcessing:
             if output[0:22] == "distribution_of_strata":
                 stratification_of_interest = output.split("X")[1]
                 if stratification_of_interest not in self.model.all_stratifications.keys():
-                    print("Warning: Requested stratification '" + stratification_of_interest +
-                          "' is not among the model stratifications. Will be ignored for output processing")
+                    print(
+                        "Warning: Requested stratification '"
+                        + stratification_of_interest
+                        + "' is not among the model stratifications. Will be ignored for output processing"
+                    )
                     indices_to_be_removed.append(i)
-        self.requested_outputs = [self.requested_outputs[i] for i in range(len(self.requested_outputs))
-                                  if i not in indices_to_be_removed]
+        self.requested_outputs = [
+            self.requested_outputs[i]
+            for i in range(len(self.requested_outputs))
+            if i not in indices_to_be_removed
+        ]
 
     def interpret_requested_outputs(self):
         """
@@ -95,11 +110,13 @@ class PostProcessing:
         for output in self.requested_outputs:
             self.operations_to_perform[output] = {}
             if output[0:4] == "prev":
-                self.operations_to_perform[output]['operation'] = 'division'
+                self.operations_to_perform[output]["operation"] = "division"
 
                 # work out the conditions to be satisfied regarding demographic stratification
                 string_post_among = output.split("among")[1]
-                population_categories = string_post_among.split("X")[1:]  # e.g. ['age_0', 'age_5', 'bcg_vaccinated']
+                population_categories = string_post_among.split("X")[
+                    1:
+                ]  # e.g. ['age_0', 'age_5', 'bcg_vaccinated']
                 conditions = {}  # e.g. {'age': ['age_0', 'age_5'], 'bcg': ['bcg_vaccinated']}
                 for category in population_categories:
                     stratification = category.split("_")[0]
@@ -113,32 +130,42 @@ class PostProcessing:
                 infection_status = [x for x in infection_status_raw if len(x) > 0]
 
                 # list all relevant compartments that should be included into the numerator or the denominator
-                self.operations_to_perform[output]['numerator_indices'] = []
-                self.operations_to_perform[output]['denominator_extra_indices'] = []  # to be added to the numerator ones to form the whole denominator
+                self.operations_to_perform[output]["numerator_indices"] = []
+                self.operations_to_perform[output][
+                    "denominator_extra_indices"
+                ] = []  # to be added to the numerator ones to form the whole denominator
                 for j, compartment in enumerate(self.model.compartment_names):
                     is_relevant = True
                     name_components = sm.find_name_components(compartment)
                     for condition in conditions.keys():  # for each stratification
-                        if not any(category in name_components for category in conditions[condition]):
+                        if not any(
+                            category in name_components for category in conditions[condition]
+                        ):
                             is_relevant = False
                             break
                     if is_relevant:
                         if all(category in compartment for category in infection_status):
-                            self.operations_to_perform[output]['numerator_indices'].append(j)
+                            self.operations_to_perform[output]["numerator_indices"].append(j)
                         else:
-                            self.operations_to_perform[output]['denominator_extra_indices'].append(j)
+                            self.operations_to_perform[output]["denominator_extra_indices"].append(
+                                j
+                            )
             elif output[0:22] == "distribution_of_strata":
-                self.operations_to_perform[output]['operation'] = 'sum_across_compartments'
-                self.operations_to_perform[output]['compartment_indices'] = {}  # dictionary keyed with the stratum names
+                self.operations_to_perform[output]["operation"] = "sum_across_compartments"
+                self.operations_to_perform[output][
+                    "compartment_indices"
+                ] = {}  # dictionary keyed with the stratum names
 
                 stratification_of_interest = output.split("X")[1]
                 for stratum_name in self.model.all_stratifications[stratification_of_interest]:
-                    self.operations_to_perform[output]['compartment_indices'][stratum_name] = []
-                    keyword = stratification_of_interest + '_' + stratum_name
+                    self.operations_to_perform[output]["compartment_indices"][stratum_name] = []
+                    keyword = stratification_of_interest + "_" + stratum_name
                     for j, compartment_name in enumerate(self.model.compartment_names):
                         name_components = sm.find_name_components(compartment_name)
                         if keyword in name_components:
-                            self.operations_to_perform[output]['compartment_indices'][stratum_name].append(j)
+                            self.operations_to_perform[output]["compartment_indices"][
+                                stratum_name
+                            ].append(j)
             else:
                 raise ValueError("only prevalence outputs are supported for the moment")
 
@@ -156,7 +183,9 @@ class PostProcessing:
             else:
                 requested_time_indices = range(len(self.model.times))
 
-            self.generated_outputs[output] = self.calculate_output_for_selected_times(output, requested_time_indices)
+            self.generated_outputs[output] = self.calculate_output_for_selected_times(
+                output, requested_time_indices
+            )
 
     def calculate_output_for_selected_times(self, output, time_indices):
         """
@@ -167,12 +196,15 @@ class PostProcessing:
         :return: the calculated value of the requested output at the requested time index
         """
 
-        if self.operations_to_perform[output]['operation'] == 'division':
+        if self.operations_to_perform[output]["operation"] == "division":
             out = []
             for i in time_indices:
-                numerator = self.model.outputs[i, self.operations_to_perform[output]['numerator_indices']].sum()
-                extra_for_denominator =\
-                    self.model.outputs[i, self.operations_to_perform[output]['denominator_extra_indices']].sum()
+                numerator = self.model.outputs[
+                    i, self.operations_to_perform[output]["numerator_indices"]
+                ].sum()
+                extra_for_denominator = self.model.outputs[
+                    i, self.operations_to_perform[output]["denominator_extra_indices"]
+                ].sum()
                 if numerator + extra_for_denominator == 0:
                     q = 0
                 else:
@@ -181,16 +213,20 @@ class PostProcessing:
                     q *= self.multipliers[output]
                 out.append(q)
 
-        elif self.operations_to_perform[output]['operation'] == 'sum_across_compartments':
+        elif self.operations_to_perform[output]["operation"] == "sum_across_compartments":
             out = {}
-            for stratum in self.operations_to_perform[output]['compartment_indices'].keys():
+            for stratum in self.operations_to_perform[output]["compartment_indices"].keys():
                 out[stratum] = []
                 for i in time_indices:
                     out[stratum].append(
-                        self.model.outputs[i, self.operations_to_perform[output]['compartment_indices'][stratum]].sum()
+                        self.model.outputs[
+                            i, self.operations_to_perform[output]["compartment_indices"][stratum]
+                        ].sum()
                     )
         else:
-            ValueError("Operation" + self.operations_to_perform[output]['operation'] + " is not supported")
+            ValueError(
+                "Operation" + self.operations_to_perform[output]["operation"] + " is not supported"
+            )
 
         return out
 
@@ -224,33 +260,64 @@ if __name__ == "__main__":
         ["susceptible", "infectious", "recovered"],
         {"infectious": 0.001},
         {"beta": 400, "recovery": 365 / 13, "infect_death": 1},
-        [{"type": "standard_flows", "parameter": "recovery", "origin": "infectious", "to": "recovered"},
-         {"type": "infection_frequency", "parameter": "beta", "origin": "susceptible", "to": "infectious"},
-         {"type": "compartment_death", "parameter": "infect_death", "origin": "infectious"}],
+        [
+            {
+                "type": "standard_flows",
+                "parameter": "recovery",
+                "origin": "infectious",
+                "to": "recovered",
+            },
+            {
+                "type": "infection_frequency",
+                "parameter": "beta",
+                "origin": "susceptible",
+                "to": "infectious",
+            },
+            {"type": "compartment_death", "parameter": "infect_death", "origin": "infectious"},
+        ],
         output_connections={"incidence": {"origin": "susceptible", "to": "infectious"}},
-        verbose=False, integration_type="solve_ivp")
+        verbose=False,
+        integration_type="solve_ivp",
+    )
 
-    sir_model.stratify("strain", ["sensitive", "resistant"], ["infectious"], requested_proportions={}, verbose=False)
+    sir_model.stratify(
+        "strain",
+        ["sensitive", "resistant"],
+        ["infectious"],
+        requested_proportions={},
+        verbose=False,
+    )
 
     age_mixing = None
-    sir_model.stratify("age", [1, 10, 3], [], {}, {"recovery": {"1": 0.5, "10": 0.8}},
-                       infectiousness_adjustments={"1": 0.8},
-                       mixing_matrix=age_mixing, verbose=False)
+    sir_model.stratify(
+        "age",
+        [1, 10, 3],
+        [],
+        {},
+        {"recovery": {"1": 0.5, "10": 0.8}},
+        infectiousness_adjustments={"1": 0.8},
+        mixing_matrix=age_mixing,
+        verbose=False,
+    )
 
     sir_model.run_model()
 
     # request some outputs
-    req_outputs = ['prevXinfectiousXamongXage_10Xstrain_sensitive',
-                   'prevXinfectiousXamong',
-                   'distribution_of_strataXstrain'
-                   ]
-    req_times = {'prevXinfectiousXamongXage_10Xstrain_sensitive': [0., 30./365]}
+    req_outputs = [
+        "prevXinfectiousXamongXage_10Xstrain_sensitive",
+        "prevXinfectiousXamong",
+        "distribution_of_strataXstrain",
+    ]
+    req_times = {"prevXinfectiousXamongXage_10Xstrain_sensitive": [0.0, 30.0 / 365]}
 
-    req_multipliers = {'prevXinfectiousXamongXage_10Xstrain_sensitive': 1.e5, 'prevXinfectiousXamong': 1.e5}
+    req_multipliers = {
+        "prevXinfectiousXamongXage_10Xstrain_sensitive": 1.0e5,
+        "prevXinfectiousXamong": 1.0e5,
+    }
 
     pp = PostProcessing(sir_model, req_outputs, req_times, req_multipliers)
 
     print(pp.generated_outputs)
 
-    some_output = pp.give_output_for_given_time('prevXinfectiousXamong', 35./365)
+    some_output = pp.give_output_for_given_time("prevXinfectiousXamong", 35.0 / 365)
     print(some_output)

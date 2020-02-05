@@ -83,4 +83,3 @@ def create_function_of_function(outer_function, inner_function):
             through if necessary
     """
     return lambda time: outer_function(inner_function(time), time)
-

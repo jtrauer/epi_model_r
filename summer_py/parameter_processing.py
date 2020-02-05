@@ -21,7 +21,9 @@ def change_parameter_unit(parameter_dict, multiplier):
     :return: dict
         dictionary with values multiplied by the multiplier argument
     """
-    return {param_key: param_value * multiplier for param_key, param_value in parameter_dict.items()}
+    return {
+        param_key: param_value * multiplier for param_key, param_value in parameter_dict.items()
+    }
 
 
 def add_w_to_param_names(parameter_dict):
@@ -60,12 +62,19 @@ def get_parameter_dict_from_function(input_function, breakpoints, upper_value=10
     revised_breakpoints.append(upper_value)
     param_values = []
     for n_breakpoint in range(len(revised_breakpoints) - 1):
-        param_values.append(get_average_value_of_function(
-            input_function, revised_breakpoints[n_breakpoint], revised_breakpoints[n_breakpoint + 1]))
+        param_values.append(
+            get_average_value_of_function(
+                input_function,
+                revised_breakpoints[n_breakpoint],
+                revised_breakpoints[n_breakpoint + 1],
+            )
+        )
     return {str(key): value for key, value in zip(revised_breakpoints, param_values)}
 
 
-def substratify_parameter(parameter_to_stratify, stratum_to_split, param_value_dict, breakpoints, stratification="age"):
+def substratify_parameter(
+    parameter_to_stratify, stratum_to_split, param_value_dict, breakpoints, stratification="age"
+):
     """
     produce dictionary revise a stratum of a parameter that has been split at a higher level from dictionary of the
         values for each stratum of the higher level of the split
@@ -84,9 +93,14 @@ def substratify_parameter(parameter_to_stratify, stratum_to_split, param_value_d
         dictionary with keys being upstream stratified parameter to split and keys dictionaries with their keys the
             current stratum of interest and values the parameter multiplier
     """
-    return {parameter_to_stratify + "X" + stratification + "_" + str(age_group):
-                {stratum_to_split: param_value_dict[str(age_group)]}
-            for age_group in add_zero_to_age_breakpoints(breakpoints)}
+    return {
+        parameter_to_stratify
+        + "X"
+        + stratification
+        + "_"
+        + str(age_group): {stratum_to_split: param_value_dict[str(age_group)]}
+        for age_group in add_zero_to_age_breakpoints(breakpoints)
+    }
 
 
 """
@@ -104,8 +118,13 @@ def get_parameter_dict_from_function(input_function, breakpoints, upper_value=10
     revised_breakpoints.append(upper_value)
     param_values = []
     for n_breakpoint in range(len(revised_breakpoints) - 1):
-        param_values.append(get_average_value_of_function(
-            input_function, revised_breakpoints[n_breakpoint], revised_breakpoints[n_breakpoint + 1]))
+        param_values.append(
+            get_average_value_of_function(
+                input_function,
+                revised_breakpoints[n_breakpoint],
+                revised_breakpoints[n_breakpoint + 1],
+            )
+        )
     return {str(key): value for key, value in zip(revised_breakpoints, param_values)}
 
 
@@ -150,6 +169,7 @@ def sinusoidal_scaling_function(start_time, baseline_value, end_time, final_valu
     :return:
         function scaling from the starting value to the final value
     """
+
     def sinusoidal_function(time):
         if not isinstance(time, float):
             raise ValueError("value provided to scaling function not a float")
@@ -158,9 +178,9 @@ def sinusoidal_scaling_function(start_time, baseline_value, end_time, final_valu
         elif time < start_time:
             return baseline_value
         elif start_time <= time <= end_time:
-            return baseline_value + \
-                   (final_value - baseline_value) * \
-                   (0.5 - 0.5 * numpy.cos((time - start_time) * numpy.pi / (end_time - start_time)))
+            return baseline_value + (final_value - baseline_value) * (
+                0.5 - 0.5 * numpy.cos((time - start_time) * numpy.pi / (end_time - start_time))
+            )
         else:
             return final_value
 

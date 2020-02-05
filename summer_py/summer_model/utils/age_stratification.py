@@ -30,4 +30,3 @@ def split_age_parameter(age_breakpoints, parameter):
     """
     age_breakpoints = ["0"] + age_breakpoints if "0" not in age_breakpoints else age_breakpoints
     return {parameter: {str(age_group): 1.0 for age_group in age_breakpoints}}
-
