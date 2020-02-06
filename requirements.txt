@@ -1,0 +1,7 @@
+# Package requirements
+scipy==1.1.0
+# Use conda to install graphviz with "conda install python-graphviz" instead of manually setting path
+graphviz>=0.4.10
+numpy>=1.14.1
+pandas==0.24.2
+matplotlib>=1.4.2

@@ -1,14 +1,29 @@
+# R lang
 .Rproj.user
 .Rhistory
 .RData
 .Ruserdata
 summer.rxproj
-for
-.suo
-.idea*
-*.pdf
-*.csv
-*.pyc
-*.png
 summerTest.Rproj
 
+# Python lang
+env/
+venv/
+*.pyc
+.pytest_cache
+
+# Code editors
+.idea
+.vscode
+
+# Secrets
+*.secret.*
+
+# Documents, images
+*.pdf
+*.csv
+*.png
+
+# Misc
+for
+.suo
