@@ -16,6 +16,7 @@ todo - test
 import pytest
 import numpy as np
 
+from summer_py.summer_model.utils.validation import ValidationException
 from summer_py.summer_model import EpiModel, StratifiedModel
 from summer_py.constants import Compartment, Flow, BirthApproach, Stratification, IntegrationType
 
@@ -54,80 +55,51 @@ def test_model_compartment_init__with_no_remainder__expect_correct_allocation(Mo
     assert model.compartment_values == [30, 70]
 
 
-@pytest.mark.parametrize("ModelClass", [EpiModel, StratifiedModel])
-def test_model_input_validation__with_bad_input_types__expect_error(ModelClass):
+bad_inputs = [
+    {"starting_population": "this should be an integer"},
+    {"equilibrium_stopping_tolerance": "this should be a float"},
+    {"times": "this should be a list"},
+    {"birth_approach": 0},  # Should be a string
+    {"verbose": "this should be a bool"},
+    {"derived_output_functions": "this should be a dict"},
+    # Infectious compartment not in compartment types
+    {"infectious_compartment": ("D",)},
+    # Invalid birth approach
+    {"birth_approach": "not_a_valid_approach"},
+    # Times out of order (seems kind of arbitrary?)
+    {"times": [2, 34, 5, 1]},
+    # Output connections has wrong keys
+    {"output_connections": {"foo": {"bar": 1}}},
+    # Initial condition compartment not in compartment types
+    {
+        "compartment_types": [Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS],
+        "initial_conditions": {"this is wrong": 20},
+    },
+    # Initial condition population exceeds starting pop.
+    {"initial_conditions": {Compartment.SUSCEPTIBLE: 99999}, "starting_population": 100,},
+]
+test_params = []
+for bad_input in bad_inputs:
+    for model_class in [EpiModel, StratifiedModel]:
+        test_params.append([model_class, bad_input])
+
+
+@pytest.mark.parametrize("ModelClass,bad_input", test_params)
+def test_model_input_validation__with_bad_inputs__expect_error(ModelClass, bad_input):
     """
     Ensure bad input types raises a type error.
     """
-    bad_inputs = [
-        {"starting_population": "this should be an integer"},
-        {"equilibrium_stopping_tolerance": "this should be a float"},
-        {"times": "this should be a list"},
-        {"birth_approach": 0},  # Should be a string
-        {"initial_conditions_to_total": "this should be a bool"},
-        {"derived_output_functions": "this should be a dict"},
-    ]
-    for bad_input in bad_inputs:
-        with pytest.raises(TypeError):
-            ModelClass(
-                times=_get_integration_times(2000, 2005, 1),
-                compartment_types=[Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS],
-                initial_conditions={Compartment.SUSCEPTIBLE: 20},
-                parameters={},
-                requested_flows=[],
-                starting_population=100,
-                **bad_input,
-            )
-
-
-@pytest.mark.parametrize("ModelClass", [EpiModel, StratifiedModel])
-def test_model_input_validation__with_bad_inputs__expect_error(ModelClass):
-    """
-    Ensure bad input values raises a value error.
-    """
-    times = _get_integration_times(2000, 2005, 1)
-    bad_inputs = [
-        # Infectious compartment not in compartment types
-        {"infectious_compartment": ("D",), "times": times},
-        # Invalid birth approach
-        {"birth_approach": "not_a_valid_approach", "times": times},
-        # Times out of order (seems kind of arbitrary?)
-        {"times": [2, 34, 5, 1]},
-        # Output connections has wrong keys
-        {"output_connections": {"foo": {"bar": 1}}, "times": times},
-    ]
-    for bad_input in bad_inputs:
-        with pytest.raises(ValueError):
-            ModelClass(
-                compartment_types=[Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS],
-                initial_conditions={Compartment.SUSCEPTIBLE: 20},
-                parameters={},
-                requested_flows=[],
-                starting_population=100,
-                **bad_input,
-            )
-
-    # Initial condition compartment not in compartment types
-    with pytest.raises(ValueError):
-        ModelClass(
-            compartment_types=[Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS],
-            initial_conditions={"this is wrong": 20},
-            parameters={},
-            requested_flows=[],
-            starting_population=100,
-            **bad_input,
-        )
-
-    # Initial condition population exceeds starting pop.
-    with pytest.raises(ValueError):
-        ModelClass(
-            compartment_types=[Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS],
-            initial_conditions={Compartment.SUSCEPTIBLE: 99999},
-            parameters={},
-            requested_flows=[],
-            starting_population=100,
-            **bad_input,
-        )
+    inputs = {
+        "times": _get_integration_times(2000, 2005, 1),
+        "compartment_types": [Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS],
+        "initial_conditions": {Compartment.SUSCEPTIBLE: 20},
+        "parameters": {},
+        "requested_flows": [],
+        "starting_population": 100,
+        **bad_input,
+    }
+    with pytest.raises(ValidationException):
+        ModelClass(**inputs)
 
 
 def _get_integration_times(start_year: int, end_year: int, time_step: int):

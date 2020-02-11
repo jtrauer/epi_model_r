@@ -6,6 +6,7 @@ import pandas as pd
 from scipy.integrate import odeint, solve_ivp
 
 from ..constants import Compartment, Flow, BirthApproach, Stratification, IntegrationType
+from .utils.validation import validate_model
 from .utils import (
     convert_boolean_list_to_indices,
     find_name_components,
@@ -190,14 +191,9 @@ class EpiModel:
         self.times = times
         self.verbose = verbose
 
-        # Validate input data
-        self.valiate_inputs()
-
-        # set initial conditions and implement flows
-        self.set_initial_compartment_values()
-
-        # implement unstratified flows
-        self.implement_flows(requested_flows)
+        validate_model(self)
+        self.setup_initial_compartment_values()
+        self.setup_flows()
 
         # add any missing quantities that will be needed
         self.initialise_default_quantities()
@@ -205,57 +201,7 @@ class EpiModel:
         # prepare dictionary structure for any derived outputs to be calculated post-integration
         self.derived_outputs = {"times": self.times}
 
-    def valiate_inputs(self):
-        """
-        Validate model input paramters.
-        """
-        # Check user-controlled attribute types.
-        attr_types = [
-            (int, ("reporting_sigfigs", "starting_population")),
-            (float, ("equilibrium_stopping_tolerance",)),
-            (list, ("times", "compartment_types", "requested_flows")),
-            (tuple, ("infectious_compartment", "death_output_categories")),
-            (str, ("birth_approach", "entry_compartment", "integration_type"),),
-            (bool, ("verbose", "ticker")),
-            (dict, ("derived_output_functions",)),
-        ]
-        for var_type, varnames in attr_types:
-            for varname in varnames:
-                val = getattr(self, varname)
-                val_type = type(val)
-                if not val_type is var_type:
-                    raise TypeError(f"Expected {var_type} for {varname}, got {val_type}: {val}")
-
-        # Check other model requirements.
-        if sum(self.initial_conditions.values()) > self.starting_population:
-            raise ValueError("Initial condition population exceeds total starting population.")
-
-        if not all([c in self.compartment_types for c in self.initial_conditions.keys()]):
-            raise ValueError(
-                "Initial condition compartment name is not one of the listed compartment types"
-            )
-
-        if not all([c in self.compartment_types for c in self.infectious_compartment]):
-            raise ValueError(
-                "Infectious compartment name is not one of the listed compartment types"
-            )
-
-        if self.birth_approach not in (
-            BirthApproach.ADD_CRUDE,
-            BirthApproach.REPLACE_DEATHS,
-            BirthApproach.NO_BIRTH,
-        ):
-            raise ValueError("Requested birth approach unavailable")
-
-        if sorted(self.times) != self.times:
-            raise ValueError("Integration times are not in order")
-
-        output_keys = ("origin", "to", "origin_condition", "to_condition")
-        for output in self.output_connections.values():
-            if any(item not in output_keys for item in output):
-                raise ValueError(f"Output connections incorrect specified, must have {output_keys}")
-
-    def set_initial_compartment_values(self):
+    def setup_initial_compartment_values(self):
         """
         Populate model compartments with the values set in `initial conditions`.
         """
@@ -268,31 +214,22 @@ class EpiModel:
             if comp_name == self.entry_compartment:
                 self.compartment_values[idx] += pop_remainder
 
-    def implement_flows(self, _requested_flows):
+    def setup_flows(self):
         """
-        add all flows to create data frames from input lists
-
-        :param _requested_flows: dict
-            unchanged from argument to __init__
+        Load user-specified flows into dataframes.
         """
-        for flow in _requested_flows:
-
-            # check flow requested correctly
-            if (
-                flow["parameter"] not in self.parameters
-                and flow["parameter"] not in self.time_variants
-            ):
-                raise ValueError("flow parameter not found in parameter list")
-            if flow["origin"] not in self.compartment_types:
-                raise ValueError("from compartment name not found in compartment types")
-            if "to" in flow and flow["to"] not in self.compartment_types:
-                raise ValueError("to compartment name not found in compartment types")
-
-            # add flow to appropriate data frame
-            if flow["type"] == "compartment_death":
-                self.add_death_flow(flow)
+        for flow in self.requested_flows:
+            flow["implement"] = flow.get("implement", len(self.all_stratifications))
+            if flow["type"] == Flow.COMPARTMENT_DEATH:
+                # Add a death flow
+                self.death_flows = self.death_flows.append(flow, ignore_index=True)
             else:
-                self.add_transition_flow(flow)
+                # Add a transition flow
+                flow_data = {key: value for key, value in flow.items() if key != "function"}
+                self.transition_flows = self.transition_flows.append(flow_data, ignore_index=True)
+                if flow["type"] == Flow.CUSTOM:
+                    idx = self.transition_flows.shape[0] - 1
+                    self.customised_flow_functions[idx] = flow["function"]
 
     def initialise_default_quantities(self):
         """
@@ -322,43 +259,6 @@ class EpiModel:
 
         # parameters essential for later stratification, if requested
         self.parameters["entry_fractions"] = 1.0
-
-    def add_transition_flow(self, _flow):
-        """
-        add a flow (row) to the data frame storing the transition flows
-
-        :param _flow: dict
-            user-submitted flow with keys that must match existing format
-        """
-
-        # implement value starts at zero for unstratified that can be progressively incremented during stratification
-        _flow["implement"] = (
-            len(self.all_stratifications) if "implement" not in _flow else _flow["implement"]
-        )
-        self.transition_flows = self.transition_flows.append(
-            {key: value for key, value in _flow.items() if key != "function"}, ignore_index=True
-        )
-
-        # record the associated function if the flow being considered is a customised flow
-        if _flow["type"] == "customised_flows":
-            if "function" not in _flow.keys():
-                raise ValueError(
-                    "a customised flow requires a function to be specified in user request dictionary"
-                )
-            elif not callable(_flow["function"]):
-                raise ValueError("value of 'function' key must be a function")
-            self.customised_flow_functions[self.transition_flows.shape[0] - 1] = _flow["function"]
-
-    def add_death_flow(self, _flow):
-        """
-        same as previous method, but for compartment-specific death flows
-
-        :param _flow: as for previous method
-        """
-        _flow["implement"] = (
-            len(self.all_stratifications) if "implement" not in _flow else _flow["implement"]
-        )
-        self.death_flows = self.death_flows.append(_flow, ignore_index=True)
 
     """
     pre-integration methods
@@ -899,3 +799,4 @@ class EpiModel:
             self.times, multiplier * self.get_total_compartment_size(compartment_tags)
         )
         matplotlib.pyplot.show()
+
