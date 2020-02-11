@@ -15,7 +15,7 @@ def test_strat_model__with_age__expect_ageing():
     """
     pop = 1000
     model = StratifiedModel(
-        times=get_integration_times(2000, 2005, 1),
+        times=_get_integration_times(2000, 2005, 1),
         compartment_types=[Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS],
         initial_conditions={Compartment.SUSCEPTIBLE: pop},
         parameters={},
@@ -51,7 +51,7 @@ def test_strat_model__with_age_and_starting_proportion__expect_ageing():
     """
     pop = 1000
     model = StratifiedModel(
-        times=get_integration_times(2000, 2005, 1),
+        times=_get_integration_times(2000, 2005, 1),
         compartment_types=[Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS],
         initial_conditions={Compartment.SUSCEPTIBLE: pop},
         parameters={},
@@ -87,7 +87,7 @@ def test_strat_model__with_locations__expect_no_change():
     """
     pop = 1000
     model = StratifiedModel(
-        times=get_integration_times(2000, 2005, 1),
+        times=_get_integration_times(2000, 2005, 1),
         compartment_types=[Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS],
         initial_conditions={Compartment.SUSCEPTIBLE: pop},
         parameters={},
@@ -123,7 +123,7 @@ def test_strat_model__with_locations_and_mixing__expect_varied_transmission():
     """
     pop = 1000
     model = StratifiedModel(
-        times=get_integration_times(2000, 2005, 1),
+        times=_get_integration_times(2000, 2005, 1),
         compartment_types=[Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS],
         initial_conditions={Compartment.INFECTIOUS: 100},
         parameters={"contact_rate": 3},
@@ -169,7 +169,7 @@ def test_strat_model__with_locations_and_mixing__expect_varied_transmission():
     assert (actual_output == np.array(expected_output)).all()
 
 
-def get_integration_times(start_year: int, end_year: int, time_step: int):
+def _get_integration_times(start_year: int, end_year: int, time_step: int):
     """
     Get a list of timesteps from start_year to end_year, spaced by time_step.
     """

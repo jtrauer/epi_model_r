@@ -5,6 +5,7 @@ import numpy
 import pandas as pd
 from scipy.integrate import odeint, solve_ivp
 
+from ..constants import Compartment, Flow, BirthApproach, Stratification, IntegrationType
 from .utils import (
     convert_boolean_list_to_indices,
     find_name_components,
@@ -62,9 +63,6 @@ class EpiModel:
     :attribute initial_conditions: dict
         keys are compartment types, values are starting population values for each compartment
         note that not all compartment_types must be included as keys in requests
-    :attribute initial_conditions_to_total: bool
-        whether to sum the initial conditions up to a certain total if this value hasn't yet been reached through the
-            initial_conditions argument
     :attribute integration_type: str
         integration approach for numeric solution to odes
         currently must be odeint or solveivp, but will likely be extended as this module is developed
@@ -85,7 +83,7 @@ class EpiModel:
     :attribute starting_compartment: str
         optional name of the compartment to add population recruitment to
     :attribute starting_population: numeric (int or float)
-        value for the total starting population to be supplemented to if initial_conditions_to_total requested
+        value for the total starting population
     :attribute time_variants: dict
         keys parameter names, values functions with independent variable being time and returning parameter value
     :attribute times: list
@@ -128,16 +126,14 @@ class EpiModel:
         initial_conditions,
         parameters,
         requested_flows,
-        initial_conditions_to_total=True,
-        infectious_compartment=("infectious",),
-        birth_approach="no_birth",
+        infectious_compartment=(Compartment.INFECTIOUS,),
+        birth_approach=BirthApproach.NO_BIRTH,
         verbose=False,
         reporting_sigfigs=4,
-        entry_compartment="susceptible",
+        entry_compartment=Compartment.SUSCEPTIBLE,
         starting_population=1,
-        starting_compartment="",
         equilibrium_stopping_tolerance=1e-6,
-        integration_type="odeint",
+        integration_type=IntegrationType.ODE_INT,
         output_connections={},
         death_output_categories=(),
         derived_output_functions={},
@@ -158,102 +154,47 @@ class EpiModel:
             columns=("type", "parameter", "origin", "to", "implement", "strain", "force_index")
         )
         self.death_flows = pd.DataFrame(columns=("type", "parameter", "origin", "implement"))
+        self.step = 0  # For storing derived output in db
+        self.tracked_quantities = {}
+        self.time_variants = {}
+        self.all_stratifications = {}
+        self.customised_flow_functions = {}
+        self.compartment_values = []
+        self.compartment_names = []
+        self.infectious_indices = []
+        self.change_indices_to_implement = None
+        self.death_indices_to_implement = None
+        self.infectious_denominators = None
+        self.infectious_populations = None
+        self.outputs = None
+        self.transition_indices_to_implement = None
 
-        # attributes with specific format that are independent of user inputs
-        (
-            self.tracked_quantities,
-            self.time_variants,
-            self.all_stratifications,
-            self.customised_flow_functions,
-        ) = ({} for _ in range(4))
-        self.compartment_values, self.compartment_names, self.infectious_indices = (
-            [] for _ in range(3)
-        )
+        self.requested_flows = requested_flows
+        self.birth_approach = birth_approach
+        self.compartment_types = compartment_types
+        self.compartment_names = list(
+            self.compartment_types
+        )  # Copy in case the compartment names are stratified later.
+        self.death_output_categories = death_output_categories
+        self.derived_output_functions = derived_output_functions
+        self.entry_compartment = entry_compartment
+        self.equilibrium_stopping_tolerance = equilibrium_stopping_tolerance
+        self.infectious_compartment = infectious_compartment
+        self.initial_conditions = initial_conditions
+        self.integration_type = integration_type
+        self.output_connections = output_connections
+        self.parameters = parameters
+        self.reporting_sigfigs = reporting_sigfigs
+        self.starting_population = starting_population
+        self.ticker = ticker
+        self.times = times
+        self.verbose = verbose
 
-        # ensure requests are fed in correctly
-        self.check_and_report_attributes(
-            times,
-            compartment_types,
-            initial_conditions,
-            parameters,
-            requested_flows,
-            initial_conditions_to_total,
-            infectious_compartment,
-            birth_approach,
-            verbose,
-            reporting_sigfigs,
-            entry_compartment,
-            starting_population,
-            starting_compartment,
-            equilibrium_stopping_tolerance,
-            integration_type,
-            output_connections,
-            death_output_categories,
-            derived_output_functions,
-            ticker,
-        )
-
-        # stop ide complaining about attributes being defined outside __init__, even though they aren't
-        (
-            self.times,
-            self.compartment_types,
-            self.initial_conditions,
-            self.parameters,
-            self.requested_flows,
-            self.initial_conditions_to_total,
-            self.infectious_compartment,
-            self.birth_approach,
-            self.verbose,
-            self.reporting_sigfigs,
-            self.entry_compartment,
-            self.starting_population,
-            self.starting_compartment,
-            self.equilibrium_stopping_tolerance,
-            self.outputs,
-            self.integration_type,
-            self.output_connections,
-            self.infectious_populations,
-            self.infectious_denominators,
-            self.derived_output_functions,
-            self.transition_indices_to_implement,
-            self.death_indices_to_implement,
-            self.death_output_categories,
-            self.ticker,
-            self.change_indices_to_implement,
-        ) = (None for _ in range(25))
-
-        # for storing derived output in db
-        self.step = 0
-
-        # convert input arguments to model attributes
-        for attribute in (
-            "times",
-            "compartment_types",
-            "initial_conditions",
-            "parameters",
-            "initial_conditions_to_total",
-            "infectious_compartment",
-            "birth_approach",
-            "verbose",
-            "reporting_sigfigs",
-            "entry_compartment",
-            "starting_population",
-            "starting_compartment",
-            "infectious_compartment",
-            "equilibrium_stopping_tolerance",
-            "integration_type",
-            "output_connections",
-            "death_output_categories",
-            "derived_output_functions",
-            "ticker",
-        ):
-            setattr(self, attribute, eval(attribute))
-
-        # keep copy of the compartment types in case the compartment names are stratified later
-        self.compartment_names = copy.copy(self.compartment_types)
+        # Validate input data
+        self.valiate_inputs()
 
         # set initial conditions and implement flows
-        self.set_initial_conditions(initial_conditions_to_total)
+        self.set_initial_compartment_values()
 
         # implement unstratified flows
         self.implement_flows(requested_flows)
@@ -264,174 +205,68 @@ class EpiModel:
         # prepare dictionary structure for any derived outputs to be calculated post-integration
         self.derived_outputs = {"times": self.times}
 
-    def check_and_report_attributes(
-        self,
-        _times,
-        _compartment_types,
-        _initial_conditions,
-        _parameters,
-        _requested_flows,
-        _initial_conditions_to_total,
-        _infectious_compartment,
-        _birth_approach,
-        _verbose,
-        _reporting_sigfigs,
-        _entry_compartment,
-        _starting_population,
-        _starting_compartment,
-        _equilibrium_stopping_tolerance,
-        _integration_type,
-        _output_connections,
-        _death_output_categories,
-        _derived_output_functions,
-        _ticker,
-    ):
+    def valiate_inputs(self):
         """
-        check all input data have been requested correctly
-
-        :parameters: all parameters have come directly from the construction (__init__) method unchanged and have been
-            renamed with a preceding _ character to indicate different scope
+        Validate model input paramters.
         """
+        # Check user-controlled attribute types.
+        attr_types = [
+            (int, ("reporting_sigfigs", "starting_population")),
+            (float, ("equilibrium_stopping_tolerance",)),
+            (list, ("times", "compartment_types", "requested_flows")),
+            (tuple, ("infectious_compartment", "death_output_categories")),
+            (str, ("birth_approach", "entry_compartment", "integration_type"),),
+            (bool, ("verbose", "ticker")),
+            (dict, ("derived_output_functions",)),
+        ]
+        for var_type, varnames in attr_types:
+            for varname in varnames:
+                val = getattr(self, varname)
+                val_type = type(val)
+                if not val_type is var_type:
+                    raise TypeError(f"Expected {var_type} for {varname}, got {val_type}: {val}")
 
-        # check variables are of the expected type
-        for expected_numeric_variable in ("_reporting_sigfigs", "_starting_population"):
-            if not isinstance(eval(expected_numeric_variable), int):
-                raise TypeError("expected integer for %s" % expected_numeric_variable)
-        for expected_float_variable in ("_equilibrium_stopping_tolerance",):
-            if not isinstance(eval(expected_float_variable), float):
-                raise TypeError("expected float for %s" % expected_float_variable)
-        for expected_list in ("_times", "_compartment_types", "_requested_flows"):
-            if not isinstance(eval(expected_list), list):
-                raise TypeError("expected list for %s" % expected_list)
-        for expected_tuple in ("_infectious_compartment", "_death_output_categories"):
-            if not isinstance(eval(expected_tuple), tuple):
-                raise TypeError("expected tuple for %s" % expected_tuple)
-        for expected_string in (
-            "_birth_approach",
-            "_entry_compartment",
-            "_starting_compartment",
-            "_integration_type",
+        # Check other model requirements.
+        if sum(self.initial_conditions.values()) > self.starting_population:
+            raise ValueError("Initial condition population exceeds total starting population.")
+
+        if not all([c in self.compartment_types for c in self.initial_conditions.keys()]):
+            raise ValueError(
+                "Initial condition compartment name is not one of the listed compartment types"
+            )
+
+        if not all([c in self.compartment_types for c in self.infectious_compartment]):
+            raise ValueError(
+                "Infectious compartment name is not one of the listed compartment types"
+            )
+
+        if self.birth_approach not in (
+            BirthApproach.ADD_CRUDE,
+            BirthApproach.REPLACE_DEATHS,
+            BirthApproach.NO_BIRTH,
         ):
-            if not isinstance(eval(expected_string), str):
-                raise TypeError("expected string for %s" % expected_string)
-        for expected_boolean in ("_initial_conditions_to_total", "_verbose", "_ticker"):
-            if not isinstance(eval(expected_boolean), bool):
-                raise TypeError("expected boolean for %s" % expected_boolean)
-        for expected_dict in ("_derived_output_functions",):
-            if not isinstance(eval(expected_dict), dict):
-                raise TypeError("expected dictionary for %s" % expected_dict)
+            raise ValueError("Requested birth approach unavailable")
 
-        # check some specific requirements
-        if any(_infectious_compartment) not in _compartment_types:
-            ValueError("infectious compartment name is not one of the listed compartment types")
-        if _birth_approach not in ("add_crude_birth_rate", "replace_deaths", "no_births"):
-            ValueError("requested birth approach unavailable")
-        if sorted(_times) != _times:
-            self.output_to_user("requested integration times are not sorted, now sorting")
-            self.times = sorted(self.times)
-        for output in _output_connections:
-            if any(
-                item not in ("origin", "to", "origin_condition", "to_condition")
-                for item in _output_connections[output]
-            ):
-                raise ValueError(
-                    "output connections incorrect specified, need an 'origin' and possibly 'to',"
-                    "'origin_condition and 'to_condition' keys"
-                )
+        if sorted(self.times) != self.times:
+            raise ValueError("Integration times are not in order")
 
-        # report on characteristics of inputs
-        if _verbose:
-            print(
-                "integration times are from %s to %s (time units are always arbitrary)"
-                % (round(_times[0], _reporting_sigfigs), round(_times[-1], _reporting_sigfigs))
-            )
-            print("unstratified, unprocessed initial conditions requested are:")
-            for compartment in _initial_conditions:
-                print("\t%s: %s" % (compartment, _initial_conditions[compartment]))
-            print("infectious compartment(s) are '%s'" % _infectious_compartment)
-            print("birth approach is %s" % _birth_approach)
+        output_keys = ("origin", "to", "origin_condition", "to_condition")
+        for output in self.output_connections.values():
+            if any(item not in output_keys for item in output):
+                raise ValueError(f"Output connections incorrect specified, must have {output_keys}")
 
-    def set_initial_conditions(self, _initial_conditions_to_total):
+    def set_initial_compartment_values(self):
         """
-        set starting compartment values according to user request
-
-        :param _initial_conditions_to_total: bool
-            unchanged from argument to __init__
+        Populate model compartments with the values set in `initial conditions`.
         """
+        self.compartment_values = [0 for _ in self.compartment_names]
+        pop_remainder = self.starting_population - sum(self.initial_conditions.values())
+        for idx, comp_name in enumerate(self.compartment_names):
+            if comp_name in self.initial_conditions:
+                self.compartment_values[idx] = self.initial_conditions[comp_name]
 
-        # first set all compartments to zero
-        self.compartment_values = [0.0] * len(self.compartment_names)
-
-        # set starting values of (unstratified) compartments to requested value
-        for comp in self.initial_conditions:
-            if comp in self.compartment_types:
-                self.compartment_values[
-                    self.compartment_names.index(comp)
-                ] = self.initial_conditions[comp]
-            else:
-                raise ValueError(
-                    "compartment %s requested in initial conditions not found in model compartment types"
-                )
-
-        # sum to a total value if requested
-        if _initial_conditions_to_total:
-            self.sum_initial_compartments_to_total()
-
-    def sum_initial_compartments_to_total(self):
-        """
-        make initial conditions sum to a certain user-requested value
-        """
-        remainder_compartment = self.find_remainder_compartment()
-        remaining_population = self.find_remainder_population(remainder_compartment)
-        self.output_to_user("requested that total population sum to %s" % self.starting_population)
-        self.output_to_user(
-            "remaining population of %s allocated to %s compartment"
-            % (remaining_population, remainder_compartment)
-        )
-        self.compartment_values[
-            self.compartment_names.index(remainder_compartment)
-        ] = remaining_population
-
-    def find_remainder_compartment(self):
-        """
-        find the compartment to put the remaining population that hasn't been assigned yet when summing to total
-
-        :return: str
-            name of the compartment to assign the remaining population size to
-        """
-        if len(self.starting_compartment) == 0:
-            self.output_to_user(
-                "no default starting compartment requested for unallocated population, "
-                + "so will be allocated to entry compartment %s" % self.entry_compartment
-            )
-            return self.entry_compartment
-        elif self.starting_compartment not in self.compartment_types:
-            raise ValueError(
-                "starting compartment to populate with initial values not found in available compartments"
-            )
-        else:
-            return self.starting_compartment
-
-    def find_remainder_population(self, _remainder_compartment):
-        """
-        start by calculating the unassigned starting population as the difference between the specified compartment
-            values and the requested starting population
-        if the remainder compartment has been specified by the user as needing some initial values, add these back on,
-            because they would have contributed to the calculation of the remainder, which they shouldn't do
-
-        :param _remainder_compartment: str
-            name of the compartment to assign the remaining population size to
-        :return: remaining_population: float
-            value of the population size to assign to the initial conditions remainder population compartment
-        """
-        remainder = self.starting_population - sum(self.compartment_values)
-        if _remainder_compartment in self.initial_conditions:
-            remainder += self.initial_conditions[_remainder_compartment]
-        if remainder < 0.0:
-            raise ValueError(
-                "total of requested compartment values is greater than the requested starting population"
-            )
-        return remainder
+            if comp_name == self.entry_compartment:
+                self.compartment_values[idx] += pop_remainder
 
     def implement_flows(self, _requested_flows):
         """

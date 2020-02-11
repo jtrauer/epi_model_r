@@ -18,7 +18,7 @@ def test_epi_model__with_static_dynamics__expect_no_change(ModelClass):
     # Set up a model with 100 people, all susceptible, no transmission possible.
     pop = 100
     model = ModelClass(
-        times=get_integration_times(2000, 2005, 1),
+        times=_get_integration_times(2000, 2005, 1),
         compartment_types=[Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS],
         initial_conditions={Compartment.SUSCEPTIBLE: pop},
         parameters={},
@@ -49,7 +49,7 @@ def test_epi_model__with_birth_rate__expect_pop_increase(ModelClass):
     # Add some babies at ~2 babies / 100 / year.
     pop = 100
     model = ModelClass(
-        times=get_integration_times(2000, 2005, 1),
+        times=_get_integration_times(2000, 2005, 1),
         compartment_types=[Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS],
         initial_conditions={Compartment.SUSCEPTIBLE: pop},
         parameters={"crude_birth_rate": 2e-2},
@@ -76,7 +76,7 @@ def test_epi_model__with_death_rate__expect_pop_decrease(ModelClass):
     # Add some dying at ~2 people / 100 / year.
     pop = 100
     model = ModelClass(
-        times=get_integration_times(2000, 2005, 1),
+        times=_get_integration_times(2000, 2005, 1),
         compartment_types=[Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS],
         initial_conditions={Compartment.SUSCEPTIBLE: pop},
         parameters={"universal_death_rate": 2e-2},
@@ -109,7 +109,7 @@ def test_epi_model__with_recovery_rate__expect_all_recover(ModelClass):
     # Add recovery dynamics.
     pop = 100
     model = ModelClass(
-        times=get_integration_times(2000, 2005, 1),
+        times=_get_integration_times(2000, 2005, 1),
         compartment_types=[Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS, Compartment.RECOVERED],
         initial_conditions={Compartment.INFECTIOUS: pop},
         parameters={"recovery": 1},
@@ -149,7 +149,7 @@ def test_epi_model__with_infect_death_rate__expect_infected_pop_decrease(ModelCl
     # Add some dying at ~2 people / 100 / year.
     pop = 100
     model = ModelClass(
-        times=get_integration_times(2000, 2005, 1),
+        times=_get_integration_times(2000, 2005, 1),
         compartment_types=[Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS],
         initial_conditions={Compartment.INFECTIOUS: 50},
         parameters={"infect_death": 2e-2},
@@ -186,7 +186,7 @@ def test_epi_model__with_no_infected__expect_no_change(ModelClass):
     # Set up a model with 100 people, all susceptible, transmission highly likely, but no one is infected.
     pop = 100
     model = ModelClass(
-        times=get_integration_times(2000, 2005, 1),
+        times=_get_integration_times(2000, 2005, 1),
         compartment_types=[Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS],
         initial_conditions={Compartment.SUSCEPTIBLE: pop},
         parameters={"contact_rate": 10},
@@ -223,7 +223,7 @@ def test_epi_model__with_infection_frequency__expect_all_infected(ModelClass):
     # Set up a model with 100 people, all susceptible execept 1 infected.
     pop = 100
     model = ModelClass(
-        times=get_integration_times(2000, 2005, 1),
+        times=_get_integration_times(2000, 2005, 1),
         compartment_types=[Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS],
         initial_conditions={Compartment.INFECTIOUS: 1},
         parameters={"contact_rate": 3},
@@ -255,7 +255,7 @@ def test_epi_model__with_infection_density__expect_all_infected(ModelClass):
     # Set up a model with 100 people, all susceptible execept 1 infected.
     pop = 100
     model = ModelClass(
-        times=get_integration_times(2000, 2005, 1),
+        times=_get_integration_times(2000, 2005, 1),
         compartment_types=[Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS],
         initial_conditions={Compartment.INFECTIOUS: 1},
         parameters={"contact_rate": 0.03},
@@ -291,7 +291,7 @@ def test_epi_model__with_complex_dynamics__expect_correct_outputs(ModelClass):
     """
     # Set up a model with 1000 people, 100 intially infected
     pop = 1000
-    times = get_integration_times(2000, 2005, 1)
+    times = _get_integration_times(2000, 2005, 1)
     compartments = [
         Compartment.SUSCEPTIBLE,
         Compartment.INFECTIOUS,
@@ -403,7 +403,7 @@ def test_epi_model__with_complex_dynamics__expect_correct_outputs(ModelClass):
     assert (actual_output == np.array(expected_output)).all()
 
 
-def get_integration_times(start_year: int, end_year: int, time_step: int):
+def _get_integration_times(start_year: int, end_year: int, time_step: int):
     """
     Get a list of timesteps from start_year to end_year, spaced by time_step.
     """
