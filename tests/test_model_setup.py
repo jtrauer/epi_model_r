@@ -1,17 +1,5 @@
 """
-words words words
-
-todo - test
-
-- init / setup overall (eg input attrs set)
-- test defaults
-- input validation
-- compartments setup
-- set initial conditons (set_initial_conditions)
-- flow setup (implement_flows)
-- "initialise_default_quantities" (initialise_default_quantities)
-
-
+Test that basic setup of the EpiModel and StratifiedModel works.
 """
 from unittest import mock
 from copy import deepcopy

@@ -385,6 +385,7 @@ class EpiModel:
 
         flow_rates = [0.0 for _ in self.compartment_names]
         flow_rates = self.apply_transition_flows(flow_rates, compartment_values, time)
+        # Apply deaths before births so that we can use 'total deaths' to calculate the birth rate, if required.
         flow_rates = self.apply_compartment_death_flows(flow_rates, compartment_values, time)
         flow_rates = self.apply_universal_death_flow(flow_rates, compartment_values, time)
         flow_rates = self.apply_birth_rate(flow_rates, compartment_values, time)
