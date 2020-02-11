@@ -14,6 +14,7 @@ todo - test
 
 """
 from unittest import mock
+from copy import deepcopy
 
 import pytest
 import numpy as np
@@ -23,6 +24,63 @@ from pandas.util.testing import assert_frame_equal
 from summer_py.summer_model.utils.validation import ValidationException
 from summer_py.summer_model import EpiModel, StratifiedModel
 from summer_py.constants import Compartment, Flow, BirthApproach, Stratification, IntegrationType
+
+
+@pytest.mark.parametrize(
+    "ModelClass,extra_default_kwargs",
+    [[EpiModel, {}], [StratifiedModel, {"strata_equilibration_parameter": 0.01}]],
+)
+def test_setup_default_parameters(ModelClass, extra_default_kwargs):
+    """
+    Ensure default params are set correctly on model setup.
+    """
+    base_kwargs = {
+        "times": _get_integration_times(2000, 2005, 1),
+        "compartment_types": [Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS],
+        "initial_conditions": {},
+        "parameters": {**extra_default_kwargs},
+        "requested_flows": [],
+        "starting_population": 100,
+    }
+
+    # Expect univseral death rate to be set by default
+    model = ModelClass(**deepcopy(base_kwargs))
+    assert model.parameters == {"universal_death_rate": 0, **extra_default_kwargs}
+
+    # Expect univseral death rate to be overidden
+    kwargs = {**deepcopy(base_kwargs), "parameters": {"universal_death_rate": 1234}}
+    model = ModelClass(**kwargs)
+    assert model.parameters == {"universal_death_rate": 1234, **extra_default_kwargs}
+
+    # Expect crude birth rate to be set
+    kwargs = {**deepcopy(base_kwargs), "birth_approach": BirthApproach.ADD_CRUDE}
+    model = ModelClass(**kwargs)
+    assert model.parameters == {
+        "universal_death_rate": 0,
+        "crude_birth_rate": 0,
+        **extra_default_kwargs,
+    }
+
+    # Expect crude birth rate to be overidden
+    kwargs = {
+        **deepcopy(base_kwargs),
+        "birth_approach": BirthApproach.ADD_CRUDE,
+        "parameters": {"crude_birth_rate": 123},
+    }
+    model = ModelClass(**kwargs)
+    assert model.parameters == {
+        "universal_death_rate": 0,
+        "crude_birth_rate": 123,
+        **extra_default_kwargs,
+    }
+
+    # Expect death rate to be tracked
+    kwargs = {**deepcopy(base_kwargs), "birth_approach": BirthApproach.REPLACE_DEATHS}
+    model = ModelClass(**kwargs)
+    assert model.parameters == {"universal_death_rate": 0, **extra_default_kwargs}
+    assert model.tracked_quantities == {
+        "total_deaths": 0,
+    }
 
 
 @pytest.mark.parametrize("ModelClass", [EpiModel, StratifiedModel])
@@ -115,30 +173,30 @@ def test_model_compartment_init__with_remainder__expect_correct_allocation(Model
     """
     model = ModelClass(
         times=_get_integration_times(2000, 2005, 1),
-        compartment_types=[Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS],
+        compartment_types=[Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS, "empty"],
         initial_conditions={Compartment.SUSCEPTIBLE: 10, Compartment.INFECTIOUS: 20},
         parameters={},
         requested_flows=[],
         starting_population=100,
     )
-    assert model.compartment_values == [80, 20]
+    assert model.compartment_values == [80, 20, 0]
 
 
 @pytest.mark.parametrize("ModelClass", [EpiModel, StratifiedModel])
 def test_model_compartment_init__with_no_remainder__expect_correct_allocation(ModelClass):
     """
     Ensure model compartments are set up correctly when there are no left over people
-    in the population from the intiial conditions setup.
+    in the population from the intitial conditions setup.
     """
     model = ModelClass(
         times=_get_integration_times(2000, 2005, 1),
-        compartment_types=[Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS],
+        compartment_types=[Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS, "empty"],
         initial_conditions={Compartment.SUSCEPTIBLE: 30, Compartment.INFECTIOUS: 70},
         parameters={},
         requested_flows=[],
         starting_population=100,
     )
-    assert model.compartment_values == [30, 70]
+    assert model.compartment_values == [30, 70, 0]
 
 
 bad_inputs = [
