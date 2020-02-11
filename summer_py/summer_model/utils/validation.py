@@ -61,10 +61,20 @@ def get_model_schema(model):
         },
         "requested_flows": {
             "type": "list",
+            "check_with": check_flows(model),
             "schema": {
                 "type": "dict",
                 "schema": {
-                    "type": {"type": "string"},
+                    "type": {
+                        "type": "string",
+                        "allowed": [
+                            Flow.CUSTOM,
+                            Flow.STANDARD,
+                            Flow.INFECTION_FREQUENCY,
+                            Flow.INFECTION_DENSITY,
+                            Flow.COMPARTMENT_DEATH,
+                        ],
+                    },
                     "parameter": {"type": "string"},
                     "origin": {"type": "string"},
                     "to": {"type": "string", "required": False},

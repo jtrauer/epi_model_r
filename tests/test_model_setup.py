@@ -13,12 +13,98 @@ todo - test
 
 
 """
+from unittest import mock
+
 import pytest
 import numpy as np
+import pandas as pd
+from pandas.util.testing import assert_frame_equal
 
 from summer_py.summer_model.utils.validation import ValidationException
 from summer_py.summer_model import EpiModel, StratifiedModel
 from summer_py.constants import Compartment, Flow, BirthApproach, Stratification, IntegrationType
+
+
+@pytest.mark.parametrize("ModelClass", [EpiModel, StratifiedModel])
+def test_model_flow_setup(ModelClass):
+    """
+    Ensure model flows are setup with:
+        - death flows
+        - transition flows
+        - transition flows wih custom functions
+    """
+    mock_func_1 = mock.Mock()
+    mock_func_2 = mock.Mock()
+    parameters = {
+        "infect_death": 1,
+        "recovery": 2,
+        "slip_on_banana_peel_rate": 3,
+        "divine_blessing": 4,
+        "cursed": 5,
+    }
+    requested_flows = [
+        # Try some death flows
+        {
+            "type": Flow.COMPARTMENT_DEATH,
+            "parameter": "infect_death",
+            "origin": Compartment.INFECTIOUS,
+        },
+        {
+            "type": Flow.COMPARTMENT_DEATH,
+            "parameter": "slip_on_banana_peel_rate",
+            "origin": Compartment.SUSCEPTIBLE,
+        },
+        # Try a standard flow
+        {
+            "type": Flow.STANDARD,
+            "parameter": "recovery",
+            "origin": Compartment.INFECTIOUS,
+            "to": Compartment.SUSCEPTIBLE,
+        },
+        # Try some custom flows
+        {
+            "type": Flow.CUSTOM,
+            "parameter": "divine_blessing",
+            "origin": Compartment.INFECTIOUS,
+            "to": Compartment.SUSCEPTIBLE,
+            "function": mock_func_1,
+        },
+        {
+            "type": Flow.CUSTOM,
+            "parameter": "cursed",
+            "origin": Compartment.SUSCEPTIBLE,
+            "to": Compartment.INFECTIOUS,
+            "function": mock_func_2,
+        },
+    ]
+    model = ModelClass(
+        times=_get_integration_times(2000, 2005, 1),
+        compartment_types=[Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS],
+        initial_conditions={Compartment.SUSCEPTIBLE: 10, Compartment.INFECTIOUS: 20},
+        parameters=parameters,
+        requested_flows=requested_flows,
+        starting_population=100,
+    )
+    # Check that death flows were set up properly
+    expected_columns = ["type", "parameter", "origin", "implement"]
+    expected_data = [
+        ["compartment_death", "infect_death", "infectious", 0],
+        ["compartment_death", "slip_on_banana_peel_rate", "susceptible", 0],
+    ]
+    expected_df = pd.DataFrame(expected_data, columns=expected_columns).astype(object)
+    assert_frame_equal(expected_df, model.death_flows)
+    # Check that transition flows were set up properly
+    expected_columns = ["type", "parameter", "origin", "to", "implement", "strain", "force_index"]
+    expected_data = [
+        ["standard_flows", "recovery", "infectious", "susceptible", 0, None, None],
+        ["customised_flows", "divine_blessing", "infectious", "susceptible", 0, None, None],
+        ["customised_flows", "cursed", "susceptible", "infectious", 0, None, None],
+    ]
+    expected_df = pd.DataFrame(expected_data, columns=expected_columns).astype(object)
+    assert_frame_equal(expected_df, model.transition_flows)
+    # Ensure custom functions were stored.
+    assert model.customised_flow_functions[1] == mock_func_1
+    assert model.customised_flow_functions[2] == mock_func_2
 
 
 @pytest.mark.parametrize("ModelClass", [EpiModel, StratifiedModel])
