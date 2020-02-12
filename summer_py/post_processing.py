@@ -82,7 +82,7 @@ class PostProcessing:
         - keywords are separated with the character 'X'
         - the first keyword indicates the type of measure (prev, inc, ...)
         - the keywords located after 'among' specify the population of interest for an output:
-          A compartment will be considered relevant if its name contains at least one of the strata strings for each of
+          A compartment will be considered relevant if its name contains any one of the strata strings for each of
           the stratification factors listed. With the example above, a compartment's name needs to contain
           ('age_0' OR 'age_5') AND 'bcg_vaccinated' to be considered.
         - the keywords located before 'among' (excluding the first keyword) specify the infection states relevant to the
@@ -91,83 +91,81 @@ class PostProcessing:
         """
         for output in self.requested_outputs:
             self.operations_to_perform[output] = {}
-            if output[0:4] == "prev":
-                self.operations_to_perform[output]["operation"] = "division"
+            if output.startswith("prev"):
+                string_pre_among, string_post_among = output.split("among")
 
-                # work out the conditions to be satisfied regarding demographic stratification
-                string_post_among = output.split("among")[1]
-                population_categories = string_post_among.split("X")[
-                    1:
-                ]  # e.g. ['age_0', 'age_5', 'bcg_vaccinated']
-                conditions = {}  # e.g. {'age': ['age_0', 'age_5'], 'bcg': ['bcg_vaccinated']}
-                for category in population_categories:
+                # collate all the stratification conditions to be satisfied
+                denominator_categories = string_post_among.split("X")[1:]
+                # e.g. ['age_0', 'age_5', 'bcg_vaccinated']
+                denominator_conditions = {}
+                for category in denominator_categories:
                     stratification = category.split("_")[0]
-                    if stratification not in conditions.keys():
-                        conditions[stratification] = []
-                    conditions[stratification].append(category)
+                    if stratification not in denominator_conditions.keys():
+                        denominator_conditions[stratification] = []
+                    denominator_conditions[stratification].append(category)
+                # e.g. {'age': ['age_0', 'age_5'], 'bcg': ['bcg_vaccinated']}
 
-                # work out the conditions to be satisfied regarding the infection status
-                string_pre_among = output.split("among")[0]
-                infection_status_raw = string_pre_among.split("X")[1:]
-                infection_status = [x for x in infection_status_raw if len(x) > 0]
+                # work out the conditions to be satisfied regarding the compartment of interest
+                numerator_conditions = string_pre_among.split("X")[1: -1]
 
                 # list all relevant compartments that should be included into the numerator or the denominator
                 self.operations_to_perform[output]["numerator_indices"] = []
-                self.operations_to_perform[output][
-                    "denominator_extra_indices"
-                ] = []  # to be added to the numerator ones to form the whole denominator
-                for j, compartment in enumerate(self.model.compartment_names):
-                    is_relevant = True
-                    name_components = find_name_components(compartment)
-                    for condition in conditions.keys():  # for each stratification
-                        if not any(
-                            category in name_components for category in conditions[condition]
-                        ):
-                            is_relevant = False
-                            break
-                    if is_relevant:
-                        if all(category in compartment for category in infection_status):
-                            self.operations_to_perform[output]["numerator_indices"].append(j)
-                        else:
-                            self.operations_to_perform[output]["denominator_extra_indices"].append(
-                                j
-                            )
-            elif output[0:22] == "distribution_of_strata":
-                self.operations_to_perform[output]["operation"] = "sum_across_compartments"
-                self.operations_to_perform[output][
-                    "compartment_indices"
-                ] = {}  # dictionary keyed with the stratum names
 
+                # indices to be added to the numerator ones to form the whole denominator
+                self.operations_to_perform[output]["denominator_extra_indices"] = []
+                for i_comp, compartment in enumerate(self.model.compartment_names):
+                    name_components = find_name_components(compartment)
+                    is_in_denominator = True
+
+                    # for each relevant stratification
+                    for condition in denominator_conditions.keys():
+                        if not any(category in name_components for category in denominator_conditions[condition]):
+                            is_in_denominator = False
+                            break
+
+                    if is_in_denominator:
+                        if all(category in compartment for category in numerator_conditions):
+                            self.operations_to_perform[output]["numerator_indices"].append(i_comp)
+                        else:
+                            self.operations_to_perform[output]["denominator_extra_indices"].append(i_comp)
+
+            # population distribution across a particular requested stratum
+            elif output.startswith("distribution_of_strata"):
+
+                # create dictionary keyed with the names of the strata within the stratification of interest
+                self.operations_to_perform[output]["compartment_indices"] = {}
                 stratification_of_interest = output.split("X")[1]
+
+                # populate with the indices of the compartment of interest
                 for stratum_name in self.model.all_stratifications[stratification_of_interest]:
                     self.operations_to_perform[output]["compartment_indices"][stratum_name] = []
-                    keyword = stratification_of_interest + "_" + stratum_name
-                    for j, compartment_name in enumerate(self.model.compartment_names):
-                        name_components = find_name_components(compartment_name)
-                        if keyword in name_components:
-                            self.operations_to_perform[output]["compartment_indices"][
-                                stratum_name
-                            ].append(j)
+                    for i_comp, compartment_name in enumerate(self.model.compartment_names):
+                        if stratification_of_interest + "_" + stratum_name in find_name_components(compartment_name):
+                            self.operations_to_perform[output]["compartment_indices"][stratum_name].append(i_comp)
             else:
-                raise ValueError("only prevalence outputs are supported for the moment")
+                raise ValueError("only prevalence and distribution outputs are currently supported")
 
     def generate_outputs(self):
         """
         main method that generates all the requested outputs.
-        'self.generated_outputs' will be populated during this process
+        'self.generated_outputs' is populated during this process
         """
         for output in self.requested_outputs:
-            if output in self.requested_times.keys():
-                requested_time_indices = []
-                for time in self.requested_times[output]:
-                    i = find_first_list_element_above(self.model.times, time)
-                    requested_time_indices.append(i)
-            else:
-                requested_time_indices = range(len(self.model.times))
+            self.generated_outputs[output] = \
+                self.calculate_output_for_selected_times(output, self.find_output_times(output))
 
-            self.generated_outputs[output] = self.calculate_output_for_selected_times(
-                output, requested_time_indices
-            )
+    def find_output_times(self, output):
+        """
+        find the times for which outputs are required using the user-request if available
+        """
+
+        # find model output times for user-requested times if a request submitted
+        if output in self.requested_times.keys():
+            return [find_first_list_element_above(self.model.times, time) for time in self.requested_times[output]]
+
+        # otherwise calculate outputs for all model output times
+        else:
+            return range(len(self.model.times))
 
     def calculate_output_for_selected_times(self, output, time_indices):
         """
@@ -177,52 +175,46 @@ class PostProcessing:
         :param time_indices: the time index
         :return: the calculated value of the requested output at the requested time index
         """
-
-        if self.operations_to_perform[output]["operation"] == "division":
+        if output.startswith("prev"):
             out = []
-            for i in time_indices:
-                numerator = self.model.outputs[
-                    i, self.operations_to_perform[output]["numerator_indices"]
-                ].sum()
-                extra_for_denominator = self.model.outputs[
-                    i, self.operations_to_perform[output]["denominator_extra_indices"]
-                ].sum()
-                if numerator + extra_for_denominator == 0:
-                    q = 0
-                else:
-                    q = numerator / (numerator + extra_for_denominator)
+            for i_time in time_indices:
+                numerator = \
+                    self.model.outputs[i_time, self.operations_to_perform[output]["numerator_indices"]].sum()
+                extra_for_denominator = \
+                    self.model.outputs[i_time, self.operations_to_perform[output]["denominator_extra_indices"]].sum()
+                value = numerator / (numerator + extra_for_denominator) if numerator + extra_for_denominator > 0. else 0
                 if output in self.multipliers.keys():
-                    q *= self.multipliers[output]
-                out.append(q)
+                    value *= self.multipliers[output]
+                out.append(value)
 
-        elif self.operations_to_perform[output]["operation"] == "sum_across_compartments":
+        elif output.startswith("distribution_of_strata"):
             out = {}
             for stratum in self.operations_to_perform[output]["compartment_indices"].keys():
                 out[stratum] = []
-                for i in time_indices:
+                for i_time in time_indices:
                     out[stratum].append(
-                        self.model.outputs[
-                            i, self.operations_to_perform[output]["compartment_indices"][stratum]
-                        ].sum()
-                    )
-        else:
-            ValueError(
-                "Operation" + self.operations_to_perform[output]["operation"] + " is not supported"
-            )
+                        self.model.outputs[i_time, self.operations_to_perform[output]["compartment_indices"][stratum]
+                        ].sum())
 
+        else:
+            ValueError("output type not currently supported")
         return out
 
     def give_output_for_given_time(self, output, time):
         """
         quick method to return a specific output at a given time, once all requested outputs have been calculated.
-        :param output: string to specify the output to be returned
-        :param time
-        :return: the requested output at the requested time
+
+        :param output: string
+            specifies the output to be returned
+        :param time: float
+            time of interest
+        :return:
+            the requested output at the requested time
         """
         if output not in self.requested_outputs:
             raise ValueError("the output was not requested for calculation")
 
-        if output in self.requested_times.keys():
+        elif output in self.requested_times.keys():
             if time not in self.requested_times[output]:
                 raise ValueError("the time was not among the requested times for calculation")
             index = self.requested_times[output].index(time)
