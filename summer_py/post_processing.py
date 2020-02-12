@@ -277,7 +277,7 @@ if __name__ == "__main__":
             },
             {"type": "compartment_death", "parameter": "infect_death", "origin": "infectious"},
         ],
-        output_connections={"incidence": {"origin": "susceptible", "to": "infectious"}},
+        output_connections={},
         verbose=False,
         integration_type="solve_ivp",
     )

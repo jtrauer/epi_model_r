@@ -56,7 +56,7 @@ def get_model_schema(model):
         },
         "initial_conditions": {
             "type": "dict",
-            "valueschema": {"type": "integer"},
+            "valueschema": {"anyof_type": ["integer", "float"]},
             "check_with": check_initial_conditions(model),
         },
         "requested_flows": {
