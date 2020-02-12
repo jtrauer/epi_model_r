@@ -1,6 +1,6 @@
 """
 Functions to validate the inputs to a model.
- Validation performed using Cerberus: https://docs.python-cerberus.org/en/stable/index.html
+Validation performed using Cerberus: https://docs.python-cerberus.org/en/stable/index.html
 """
 from cerberus import Validator
 

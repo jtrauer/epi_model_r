@@ -148,7 +148,6 @@ class EpiModel:
             columns=("type", "parameter", "origin", "to", "implement", "strain", "force_index")
         )
         self.death_flows = pd.DataFrame(columns=("type", "parameter", "origin", "implement"))
-        self.step = 0  # For storing derived output in db
         self.all_stratifications = {}
         self.customised_flow_functions = {}
         self.time_variants = {}
@@ -184,11 +183,11 @@ class EpiModel:
         self.times = times
         self.verbose = verbose
         validate_model(self)
-        self.setup_initialcompartment_values()
+        self.setup_initial_compartment_values()
         self.setup_flows()
         self.setup_default_parameters()
 
-    def setup_initialcompartment_values(self):
+    def setup_initial_compartment_values(self):
         """
         Populate model compartments with the values set in `initial conditions`.
         """
@@ -765,4 +764,3 @@ class EpiModel:
             self.times, multiplier * self.get_total_compartment_size(compartment_tags)
         )
         matplotlib.pyplot.show()
-
