@@ -2,24 +2,7 @@ from numpy import linspace
 
 from summer_py.summer_model.strat_model import StratifiedModel
 from summer_py.summer_model.utils.string import find_name_components
-
-
-def find_first_list_element_above(a_list, value):
-    """
-    Simple method to return the index of the first element of a list that is greater than a specified value.
-
-    Args:
-        a_list: List of floats
-        value: The value that the element must be greater than
-    """
-    if max(a_list) <= value:
-        ValueError("The requested value is greater than max(a_list)")
-
-    for i, val in enumerate(a_list):
-        if val > value:
-            return i
-
-    # return next(x[0] for x in enumerate(a_list) if x[1] > value)
+from summer_py.summer_model.utils.data_structures import find_first_list_element_above
 
 
 class PostProcessing:

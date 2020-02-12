@@ -99,3 +99,19 @@ def create_cumulative_dict(dict_of_props):
         cumulative_prop += dict_of_props[stratum]
         cumulative_dict_of_props[stratum] = cumulative_prop
     return cumulative_dict_of_props
+
+
+def find_first_list_element_above(a_list, value):
+    """
+    Simple method to return the index of the first element of a list that is greater than a specified value.
+
+    Args:
+        a_list: List of floats
+        value: The value that the element must be greater than
+    """
+    if max(a_list) <= value:
+        ValueError("The requested value is greater than max(a_list)")
+
+    for i, val in enumerate(a_list):
+        if val > value:
+            return i
