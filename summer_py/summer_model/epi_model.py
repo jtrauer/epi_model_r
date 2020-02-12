@@ -5,6 +5,8 @@ import numpy
 import pandas as pd
 from scipy.integrate import odeint, solve_ivp
 
+from ..constants import Compartment, Flow, BirthApproach, Stratification, IntegrationType
+from .utils.validation import validate_model
 from .utils import (
     convert_boolean_list_to_indices,
     find_name_components,
@@ -62,9 +64,6 @@ class EpiModel:
     :attribute initial_conditions: dict
         keys are compartment types, values are starting population values for each compartment
         note that not all compartment_types must be included as keys in requests
-    :attribute initial_conditions_to_total: bool
-        whether to sum the initial conditions up to a certain total if this value hasn't yet been reached through the
-            initial_conditions argument
     :attribute integration_type: str
         integration approach for numeric solution to odes
         currently must be odeint or solveivp, but will likely be extended as this module is developed
@@ -85,7 +84,7 @@ class EpiModel:
     :attribute starting_compartment: str
         optional name of the compartment to add population recruitment to
     :attribute starting_population: numeric (int or float)
-        value for the total starting population to be supplemented to if initial_conditions_to_total requested
+        value for the total starting population
     :attribute time_variants: dict
         keys parameter names, values functions with independent variable being time and returning parameter value
     :attribute times: list
@@ -128,402 +127,113 @@ class EpiModel:
         initial_conditions,
         parameters,
         requested_flows,
-        initial_conditions_to_total=True,
-        infectious_compartment=("infectious",),
-        birth_approach="no_birth",
+        infectious_compartment=(Compartment.INFECTIOUS,),
+        birth_approach=BirthApproach.NO_BIRTH,
         verbose=False,
         reporting_sigfigs=4,
-        entry_compartment="susceptible",
+        entry_compartment=Compartment.SUSCEPTIBLE,
         starting_population=1,
-        starting_compartment="",
         equilibrium_stopping_tolerance=1e-6,
-        integration_type="odeint",
+        integration_type=IntegrationType.ODE_INT,
         output_connections={},
         death_output_categories=(),
         derived_output_functions={},
         ticker=False,
     ):
         """
-        construction method to create a basic compartmental model
-        includes checking that the arguments have been provided correctly by the user
-        at this stage the model remains unstratified, but has characteristics required to support the stratification
-            process
-
-        :params: all arguments essentially become object attributes and are described in the first main docstring to
-            this object class above
+        Create a basic compartmental model.
+        Thise model is unstratified, but has characteristics required to support stratification.
         """
-
-        # set flow attributes as pandas data frames with fixed column names
         self.transition_flows = pd.DataFrame(
             columns=("type", "parameter", "origin", "to", "implement", "strain", "force_index")
         )
         self.death_flows = pd.DataFrame(columns=("type", "parameter", "origin", "implement"))
+        self.all_stratifications = {}
+        self.customised_flow_functions = {}
+        self.time_variants = {}
+        self.tracked_quantities = {}
+        self.compartment_names = []
+        self.compartment_values = []
+        self.infectious_indices = []
+        self.change_indices_to_implement = None
+        self.death_indices_to_implement = None
+        self.infectious_denominators = None
+        self.infectious_populations = None
+        self.outputs = None
+        self.transition_indices_to_implement = None
 
-        # attributes with specific format that are independent of user inputs
-        (
-            self.tracked_quantities,
-            self.time_variants,
-            self.all_stratifications,
-            self.customised_flow_functions,
-        ) = ({} for _ in range(4))
-        self.compartment_values, self.compartment_names, self.infectious_indices = (
-            [] for _ in range(3)
-        )
+        self.birth_approach = birth_approach
+        # Copy `compartment_types` in case the compartment names are stratified later.
+        self.compartment_names = list(compartment_types)
+        self.compartment_types = compartment_types
+        self.death_output_categories = death_output_categories
+        self.derived_output_functions = derived_output_functions
+        self.derived_outputs = {"times": times}
+        self.entry_compartment = entry_compartment
+        self.equilibrium_stopping_tolerance = equilibrium_stopping_tolerance
+        self.infectious_compartment = infectious_compartment
+        self.initial_conditions = initial_conditions
+        self.integration_type = integration_type
+        self.output_connections = output_connections
+        self.parameters = parameters
+        self.reporting_sigfigs = reporting_sigfigs
+        self.requested_flows = requested_flows
+        self.starting_population = starting_population
+        self.ticker = ticker
+        self.times = times
+        self.verbose = verbose
+        validate_model(self)
+        self.setup_initial_compartment_values()
+        self.setup_flows()
+        self.setup_default_parameters()
 
-        # ensure requests are fed in correctly
-        self.check_and_report_attributes(
-            times,
-            compartment_types,
-            initial_conditions,
-            parameters,
-            requested_flows,
-            initial_conditions_to_total,
-            infectious_compartment,
-            birth_approach,
-            verbose,
-            reporting_sigfigs,
-            entry_compartment,
-            starting_population,
-            starting_compartment,
-            equilibrium_stopping_tolerance,
-            integration_type,
-            output_connections,
-            death_output_categories,
-            derived_output_functions,
-            ticker,
-        )
-
-        # stop ide complaining about attributes being defined outside __init__, even though they aren't
-        (
-            self.times,
-            self.compartment_types,
-            self.initial_conditions,
-            self.parameters,
-            self.requested_flows,
-            self.initial_conditions_to_total,
-            self.infectious_compartment,
-            self.birth_approach,
-            self.verbose,
-            self.reporting_sigfigs,
-            self.entry_compartment,
-            self.starting_population,
-            self.starting_compartment,
-            self.equilibrium_stopping_tolerance,
-            self.outputs,
-            self.integration_type,
-            self.output_connections,
-            self.infectious_populations,
-            self.infectious_denominators,
-            self.derived_output_functions,
-            self.transition_indices_to_implement,
-            self.death_indices_to_implement,
-            self.death_output_categories,
-            self.ticker,
-            self.change_indices_to_implement,
-        ) = (None for _ in range(25))
-
-        # for storing derived output in db
-        self.step = 0
-
-        # convert input arguments to model attributes
-        for attribute in (
-            "times",
-            "compartment_types",
-            "initial_conditions",
-            "parameters",
-            "initial_conditions_to_total",
-            "infectious_compartment",
-            "birth_approach",
-            "verbose",
-            "reporting_sigfigs",
-            "entry_compartment",
-            "starting_population",
-            "starting_compartment",
-            "infectious_compartment",
-            "equilibrium_stopping_tolerance",
-            "integration_type",
-            "output_connections",
-            "death_output_categories",
-            "derived_output_functions",
-            "ticker",
-        ):
-            setattr(self, attribute, eval(attribute))
-
-        # keep copy of the compartment types in case the compartment names are stratified later
-        self.compartment_names = copy.copy(self.compartment_types)
-
-        # set initial conditions and implement flows
-        self.set_initial_conditions(initial_conditions_to_total)
-
-        # implement unstratified flows
-        self.implement_flows(requested_flows)
-
-        # add any missing quantities that will be needed
-        self.initialise_default_quantities()
-
-        # prepare dictionary structure for any derived outputs to be calculated post-integration
-        self.derived_outputs = {"times": self.times}
-
-    def check_and_report_attributes(
-        self,
-        _times,
-        _compartment_types,
-        _initial_conditions,
-        _parameters,
-        _requested_flows,
-        _initial_conditions_to_total,
-        _infectious_compartment,
-        _birth_approach,
-        _verbose,
-        _reporting_sigfigs,
-        _entry_compartment,
-        _starting_population,
-        _starting_compartment,
-        _equilibrium_stopping_tolerance,
-        _integration_type,
-        _output_connections,
-        _death_output_categories,
-        _derived_output_functions,
-        _ticker,
-    ):
+    def setup_initial_compartment_values(self):
         """
-        check all input data have been requested correctly
-
-        :parameters: all parameters have come directly from the construction (__init__) method unchanged and have been
-            renamed with a preceding _ character to indicate different scope
+        Populate model compartments with the values set in `initial conditions`.
         """
+        self.compartment_values = [0 for _ in self.compartment_names]
+        pop_remainder = self.starting_population - sum(self.initial_conditions.values())
+        for idx, comp_name in enumerate(self.compartment_names):
+            if comp_name in self.initial_conditions:
+                self.compartment_values[idx] = self.initial_conditions[comp_name]
 
-        # check variables are of the expected type
-        for expected_numeric_variable in ("_reporting_sigfigs", "_starting_population"):
-            if not isinstance(eval(expected_numeric_variable), int):
-                raise TypeError("expected integer for %s" % expected_numeric_variable)
-        for expected_float_variable in ("_equilibrium_stopping_tolerance",):
-            if not isinstance(eval(expected_float_variable), float):
-                raise TypeError("expected float for %s" % expected_float_variable)
-        for expected_list in ("_times", "_compartment_types", "_requested_flows"):
-            if not isinstance(eval(expected_list), list):
-                raise TypeError("expected list for %s" % expected_list)
-        for expected_tuple in ("_infectious_compartment", "_death_output_categories"):
-            if not isinstance(eval(expected_tuple), tuple):
-                raise TypeError("expected tuple for %s" % expected_tuple)
-        for expected_string in (
-            "_birth_approach",
-            "_entry_compartment",
-            "_starting_compartment",
-            "_integration_type",
-        ):
-            if not isinstance(eval(expected_string), str):
-                raise TypeError("expected string for %s" % expected_string)
-        for expected_boolean in ("_initial_conditions_to_total", "_verbose", "_ticker"):
-            if not isinstance(eval(expected_boolean), bool):
-                raise TypeError("expected boolean for %s" % expected_boolean)
-        for expected_dict in ("_derived_output_functions",):
-            if not isinstance(eval(expected_dict), dict):
-                raise TypeError("expected dictionary for %s" % expected_dict)
+            if comp_name == self.entry_compartment:
+                self.compartment_values[idx] += pop_remainder
 
-        # check some specific requirements
-        if any(_infectious_compartment) not in _compartment_types:
-            ValueError("infectious compartment name is not one of the listed compartment types")
-        if _birth_approach not in ("add_crude_birth_rate", "replace_deaths", "no_births"):
-            ValueError("requested birth approach unavailable")
-        if sorted(_times) != _times:
-            self.output_to_user("requested integration times are not sorted, now sorting")
-            self.times = sorted(self.times)
-        for output in _output_connections:
-            if any(
-                item not in ("origin", "to", "origin_condition", "to_condition")
-                for item in _output_connections[output]
-            ):
-                raise ValueError(
-                    "output connections incorrect specified, need an 'origin' and possibly 'to',"
-                    "'origin_condition and 'to_condition' keys"
-                )
-
-        # report on characteristics of inputs
-        if _verbose:
-            print(
-                "integration times are from %s to %s (time units are always arbitrary)"
-                % (round(_times[0], _reporting_sigfigs), round(_times[-1], _reporting_sigfigs))
-            )
-            print("unstratified, unprocessed initial conditions requested are:")
-            for compartment in _initial_conditions:
-                print("\t%s: %s" % (compartment, _initial_conditions[compartment]))
-            print("infectious compartment(s) are '%s'" % _infectious_compartment)
-            print("birth approach is %s" % _birth_approach)
-
-    def set_initial_conditions(self, _initial_conditions_to_total):
+    def setup_flows(self):
         """
-        set starting compartment values according to user request
-
-        :param _initial_conditions_to_total: bool
-            unchanged from argument to __init__
+        Load user-specified flows into dataframes.
         """
-
-        # first set all compartments to zero
-        self.compartment_values = [0.0] * len(self.compartment_names)
-
-        # set starting values of (unstratified) compartments to requested value
-        for comp in self.initial_conditions:
-            if comp in self.compartment_types:
-                self.compartment_values[
-                    self.compartment_names.index(comp)
-                ] = self.initial_conditions[comp]
+        for flow in self.requested_flows:
+            flow["implement"] = flow.get("implement", len(self.all_stratifications))
+            if flow["type"] == Flow.COMPARTMENT_DEATH:
+                # Add a death flow
+                self.death_flows = self.death_flows.append(flow, ignore_index=True)
             else:
-                raise ValueError(
-                    "compartment %s requested in initial conditions not found in model compartment types"
-                )
+                # Add a transition flow
+                flow_data = {key: value for key, value in flow.items() if key != "function"}
+                self.transition_flows = self.transition_flows.append(flow_data, ignore_index=True)
+                if flow["type"] == Flow.CUSTOM:
+                    idx = self.transition_flows.shape[0] - 1
+                    self.customised_flow_functions[idx] = flow["function"]
 
-        # sum to a total value if requested
-        if _initial_conditions_to_total:
-            self.sum_initial_compartments_to_total()
-
-    def sum_initial_compartments_to_total(self):
+    def setup_default_parameters(self):
         """
-        make initial conditions sum to a certain user-requested value
+        Setup required parameters and tracked quantities if not specified by user.
         """
-        remainder_compartment = self.find_remainder_compartment()
-        remaining_population = self.find_remainder_population(remainder_compartment)
-        self.output_to_user("requested that total population sum to %s" % self.starting_population)
-        self.output_to_user(
-            "remaining population of %s allocated to %s compartment"
-            % (remaining_population, remainder_compartment)
-        )
-        self.compartment_values[
-            self.compartment_names.index(remainder_compartment)
-        ] = remaining_population
-
-    def find_remainder_compartment(self):
-        """
-        find the compartment to put the remaining population that hasn't been assigned yet when summing to total
-
-        :return: str
-            name of the compartment to assign the remaining population size to
-        """
-        if len(self.starting_compartment) == 0:
-            self.output_to_user(
-                "no default starting compartment requested for unallocated population, "
-                + "so will be allocated to entry compartment %s" % self.entry_compartment
-            )
-            return self.entry_compartment
-        elif self.starting_compartment not in self.compartment_types:
-            raise ValueError(
-                "starting compartment to populate with initial values not found in available compartments"
-            )
-        else:
-            return self.starting_compartment
-
-    def find_remainder_population(self, _remainder_compartment):
-        """
-        start by calculating the unassigned starting population as the difference between the specified compartment
-            values and the requested starting population
-        if the remainder compartment has been specified by the user as needing some initial values, add these back on,
-            because they would have contributed to the calculation of the remainder, which they shouldn't do
-
-        :param _remainder_compartment: str
-            name of the compartment to assign the remaining population size to
-        :return: remaining_population: float
-            value of the population size to assign to the initial conditions remainder population compartment
-        """
-        remainder = self.starting_population - sum(self.compartment_values)
-        if _remainder_compartment in self.initial_conditions:
-            remainder += self.initial_conditions[_remainder_compartment]
-        if remainder < 0.0:
-            raise ValueError(
-                "total of requested compartment values is greater than the requested starting population"
-            )
-        return remainder
-
-    def implement_flows(self, _requested_flows):
-        """
-        add all flows to create data frames from input lists
-
-        :param _requested_flows: dict
-            unchanged from argument to __init__
-        """
-        for flow in _requested_flows:
-
-            # check flow requested correctly
-            if (
-                flow["parameter"] not in self.parameters
-                and flow["parameter"] not in self.time_variants
-            ):
-                raise ValueError("flow parameter not found in parameter list")
-            if flow["origin"] not in self.compartment_types:
-                raise ValueError("from compartment name not found in compartment types")
-            if "to" in flow and flow["to"] not in self.compartment_types:
-                raise ValueError("to compartment name not found in compartment types")
-
-            # add flow to appropriate data frame
-            if flow["type"] == "compartment_death":
-                self.add_death_flow(flow)
-            else:
-                self.add_transition_flow(flow)
-
-    def initialise_default_quantities(self):
-        """
-        add parameters and tracked quantities that weren't requested but will be needed during integration
-        """
-
-        # universal death rate
+        # Set universal death rate to 0 by default
         if "universal_death_rate" not in self.parameters:
             self.parameters["universal_death_rate"] = 0.0
 
-        # birth approach-specific parameters
-        if (
-            self.birth_approach == "add_crude_birth_rate"
+        # Birth approach parameters
+        birth_rate_required = (
+            self.birth_approach == BirthApproach.ADD_CRUDE
             and "crude_birth_rate" not in self.parameters
-        ):
+        )
+        if birth_rate_required:
             self.parameters["crude_birth_rate"] = 0.0
-        elif self.birth_approach == "replace_deaths":
+        elif self.birth_approach == BirthApproach.REPLACE_DEATHS:
             self.tracked_quantities["total_deaths"] = 0.0
-
-        # for each derived quantity to be recorded, initialise derived outputs, and a tracked quantity if needed
-        for output in self.output_connections:
-            for comp in ["origin", "to"]:
-
-                # add empty string as conditions if no condition provided
-                if comp + "_condition" not in self.output_connections[output].keys():
-                    self.output_connections[output][comp + "_condition"] = ""
-
-        # parameters essential for later stratification, if requested
-        self.parameters["entry_fractions"] = 1.0
-
-    def add_transition_flow(self, _flow):
-        """
-        add a flow (row) to the data frame storing the transition flows
-
-        :param _flow: dict
-            user-submitted flow with keys that must match existing format
-        """
-
-        # implement value starts at zero for unstratified that can be progressively incremented during stratification
-        _flow["implement"] = (
-            len(self.all_stratifications) if "implement" not in _flow else _flow["implement"]
-        )
-        self.transition_flows = self.transition_flows.append(
-            {key: value for key, value in _flow.items() if key != "function"}, ignore_index=True
-        )
-
-        # record the associated function if the flow being considered is a customised flow
-        if _flow["type"] == "customised_flows":
-            if "function" not in _flow.keys():
-                raise ValueError(
-                    "a customised flow requires a function to be specified in user request dictionary"
-                )
-            elif not callable(_flow["function"]):
-                raise ValueError("value of 'function' key must be a function")
-            self.customised_flow_functions[self.transition_flows.shape[0] - 1] = _flow["function"]
-
-    def add_death_flow(self, _flow):
-        """
-        same as previous method, but for compartment-specific death flows
-
-        :param _flow: as for previous method
-        """
-        _flow["implement"] = (
-            len(self.all_stratifications) if "implement" not in _flow else _flow["implement"]
-        )
-        self.death_flows = self.death_flows.append(_flow, ignore_index=True)
 
     """
     pre-integration methods
@@ -592,56 +302,48 @@ class EpiModel:
 
     def run_model(self):
         """
-        main function to integrate model odes, called externally in the master running script
+        Calculates the model's outputs using an ODE solver.
+
+        The ODE is solved over the user-specified timesteps (self.times),
+        using the user-specified initial conditions (self.compartment_values).
+
+        The final result is an array of compartment values at each timestep (self.outputs).
+        Also calculates post-processing outputs after the ODE integration is complete.
         """
         self.output_to_user("\n-----\nnow integrating")
         self.prepare_to_run()
 
-        # basic default integration method
-        if self.integration_type == "odeint":
-
-            def make_model_function(compartment_values, time):
+        if self.integration_type == IntegrationType.ODE_INT:
+            # Basic, default integration method
+            def ode_func(compartment_values, time):
+                """
+                Inner loop of ODE solver which describes ODE dynamics.
+                Returns the flow rates at the current timestep,
+                given the current compartment values and time.
+                """
                 self.update_tracked_quantities(compartment_values)
-                return self.apply_all_flow_types_to_odes(
-                    [0.0] * len(self.compartment_names), compartment_values, time
-                )
+                return self.apply_all_flow_types_to_odes(compartment_values, time)
 
             self.outputs = odeint(
-                make_model_function, self.compartment_values, self.times, atol=1.0e-3, rtol=1.0e-3
+                ode_func, self.compartment_values, self.times, atol=1.0e-3, rtol=1.0e-3
             )
 
-        # alternative integration method
-        elif self.integration_type == "solve_ivp":
-
-            # solve_ivp requires arguments to model function in the reverse order
-            def make_model_function(time, compartment_values):
+        elif self.integration_type == IntegrationType.SOLVE_IVP:
+            # Alternative integration method, which allows us to set a stopping condition.
+            def ode_func(time, compartment_values):
                 self.update_tracked_quantities(compartment_values)
-                return self.apply_all_flow_types_to_odes(
-                    [0.0] * len(self.compartment_names), compartment_values, time
-                )
+                return self.apply_all_flow_types_to_odes(compartment_values, time)
 
-            # add a stopping condition, which was the original purpose of using this integration approach
             def set_stopping_conditions(time, compartment_values):
                 self.update_tracked_quantities(compartment_values)
                 return (
-                    max(
-                        list(
-                            map(
-                                abs,
-                                self.apply_all_flow_types_to_odes(
-                                    [0.0] * len(self.compartment_names), compartment_values, time
-                                ),
-                            )
-                        )
-                    )
+                    max(list(map(abs, self.apply_all_flow_types_to_odes(compartment_values, time))))
                     - self.equilibrium_stopping_tolerance
                 )
 
             set_stopping_conditions.terminal = True
-
-            # solve_ivp returns more detailed structure, with (transposed) outputs (called "y") being just one component
             self.outputs = solve_ivp(
-                make_model_function,
+                ode_func,
                 (self.times[0], self.times[-1]),
                 self.compartment_values,
                 t_eval=self.times,
@@ -649,52 +351,53 @@ class EpiModel:
             )["y"].transpose()
 
         else:
-            raise ValueError("integration approach requested not available")
+            raise ValueError("Integration approach requested not available")
 
-        # check that all compartment values are >= 0
+        # Check that all compartment values are >= 0
         if numpy.any(self.outputs < 0.0):
-            print("warning, compartment or compartments with negative values")
+            print("Warning: compartment(s) with negative values.")
 
-        self.output_to_user("integration complete")
+        self.output_to_user("Integration complete")
 
-        # collate outputs to be calculated post-integration that are not just compartment sizes
+        # Collate outputs to be calculated post-integration that are not just compartment sizes.
         self.calculate_post_integration_connection_outputs()
         self.calculate_post_integration_function_outputs()
         for death_output in self.death_output_categories:
             self.calculate_post_integration_death_outputs(death_output)
 
-    def apply_all_flow_types_to_odes(self, _ode_equations, _compartment_values, _time):
+    def apply_all_flow_types_to_odes(self, compartment_values, time):
         """
         apply all flow types sequentially to a vector of zeros
         note that deaths must come before births in case births replace deaths
 
-        :param _ode_equations: list
+        :param flow_rates: list
             comes in as a list of zeros with length equal to that of the number of compartments for integration
-        :param _compartment_values: numpy.ndarray
+        :param compartment_values: numpy.ndarray
             working values of the compartment sizes
-        :param _time: float
+        :param time: float
             current integration time
         :return: ode equations as list
             updated ode equations in same format but with all flows implemented
         """
         if self.ticker:
-            print("integrating at time: %s" % _time)
-        _ode_equations = self.apply_transition_flows(_ode_equations, _compartment_values, _time)
-        _ode_equations = self.apply_compartment_death_flows(
-            _ode_equations, _compartment_values, _time
-        )
-        _ode_equations = self.apply_universal_death_flow(_ode_equations, _compartment_values, _time)
-        _ode_equations = self.apply_birth_rate(_ode_equations, _compartment_values, _time)
-        _ode_equations = self.apply_change_rates(_ode_equations, _compartment_values, _time)
-        return _ode_equations
+            print("Integrating at time: %s" % time)
 
-    def apply_change_rates(self, _ode_equations, _compartment_values, _time):
+        flow_rates = [0.0 for _ in self.compartment_names]
+        flow_rates = self.apply_transition_flows(flow_rates, compartment_values, time)
+        # Apply deaths before births so that we can use 'total deaths' to calculate the birth rate, if required.
+        flow_rates = self.apply_compartment_death_flows(flow_rates, compartment_values, time)
+        flow_rates = self.apply_universal_death_flow(flow_rates, compartment_values, time)
+        flow_rates = self.apply_birth_rate(flow_rates, compartment_values, time)
+        flow_rates = self.apply_change_rates(flow_rates, compartment_values, time)
+        return flow_rates
+
+    def apply_change_rates(self, flow_rates, compartment_values, time):
         """
         not relevant to unstratified model
         """
-        return _ode_equations
+        return flow_rates
 
-    def apply_transition_flows(self, _ode_equations, _compartment_values, _time):
+    def apply_transition_flows(self, flow_rates, compartment_values, time):
         """
         apply fixed or infection-related inter-compartmental transition flows to odes
 
@@ -702,28 +405,28 @@ class EpiModel:
         """
         for n_flow in self.transition_indices_to_implement:
             # Find the net flow between compartments
-            net_flow = self.find_net_transition_flow(n_flow, _time, _compartment_values)
+            net_flow = self.find_net_transition_flow(n_flow, time, compartment_values)
 
             # Update equations with transition flows between compartments
             origin_name = self.transition_flows_dict["origin"][n_flow]
             target_name = self.transition_flows_dict["to"][n_flow]
             origin_idx = self.compartment_idx_lookup[origin_name]
             target_idx = self.compartment_idx_lookup[target_name]
-            _ode_equations[origin_idx] -= net_flow
-            _ode_equations[target_idx] += net_flow
+            flow_rates[origin_idx] -= net_flow
+            flow_rates[target_idx] += net_flow
 
         # return flow rates
-        return _ode_equations
+        return flow_rates
 
-    def find_net_transition_flow(self, n_flow, _time, _compartment_values):
+    def find_net_transition_flow(self, n_flow, time, compartment_values):
         """
         common code to finding transition flows during and after integration packaged into single function
 
         :param n_flow: int
             row of interest in transition flow dataframe
-        :param _time: float
+        :param time: float
             time step, which may be time during integration or post-integration time point of interest
-        :param _compartment_values: list
+        :param compartment_values: list
             list of current compartment sizes
         :return: float
             net transition between the two compartments being considered
@@ -731,7 +434,7 @@ class EpiModel:
 
         # find adjusted parameter value
         parameter = self.transition_flows_dict["parameter"][n_flow]
-        parameter_value = self.get_parameter_value(parameter, _time)
+        parameter_value = self.get_parameter_value(parameter, time)
 
         # the flow is null if the parameter is null
         if parameter_value == 0.0:
@@ -749,45 +452,45 @@ class EpiModel:
         is_customised_flow = flow_type == "customised_flows"
         if is_customised_flow:
             custom_flow_func = self.customised_flow_functions[n_flow]
-            return parameter_value * custom_flow_func(self, n_flow, _time, _compartment_values)
+            return parameter_value * custom_flow_func(self, n_flow, time, compartment_values)
         else:
-            return parameter_value * _compartment_values[origin_idx] * infectious_population
+            return parameter_value * compartment_values[origin_idx] * infectious_population
 
-    def apply_compartment_death_flows(self, _ode_equations, _compartment_values, _time):
+    def apply_compartment_death_flows(self, flow_rates, compartment_values, time):
         """
         equivalent method to for transition flows above, but for deaths
 
         :parameters and return: see previous method apply_all_flow_types_to_odes
         """
         for n_flow in self.death_indices_to_implement:
-            net_flow = self.find_net_infection_death_flow(n_flow, _time, _compartment_values)
+            net_flow = self.find_net_infection_death_flow(n_flow, time, compartment_values)
             origin_name = self.death_flows_dict["origin"][n_flow]
             origin_idx = self.compartment_idx_lookup[origin_name]
-            _ode_equations[origin_idx] -= net_flow
+            flow_rates[origin_idx] -= net_flow
             if "total_deaths" in self.tracked_quantities:
                 self.tracked_quantities["total_deaths"] += net_flow
 
-        return _ode_equations
+        return flow_rates
 
-    def find_net_infection_death_flow(self, _n_flow, _time, _compartment_values):
+    def find_net_infection_death_flow(self, _n_flow, time, compartment_values):
         """
         find the net infection death flow rate for a particular compartment
 
         :param _n_flow: int
             row of interest in death flow dataframe
-        :param _time: float
+        :param time: float
             time at which the death rate is being evaluated
-        :param _compartment_values: list
+        :param compartment_values: list
             list of current compartment sizes
         """
         origin_name = self.death_flows_dict["origin"][_n_flow]
         origin_idx = self.compartment_idx_lookup[origin_name]
 
         parameter = self.death_flows_dict["parameter"][_n_flow]
-        parameter_value = self.get_parameter_value(parameter, _time)
-        return parameter_value * _compartment_values[origin_idx]
+        parameter_value = self.get_parameter_value(parameter, time)
+        return parameter_value * compartment_values[origin_idx]
 
-    def apply_universal_death_flow(self, _ode_equations, _compartment_values, _time):
+    def apply_universal_death_flow(self, flow_rates, compartment_values, time):
         """
         apply the population-wide death rate to all compartments
 
@@ -795,55 +498,54 @@ class EpiModel:
         """
         for n_comp, compartment in enumerate(self.compartment_names):
             net_flow = (
-                self.get_compartment_death_rate(compartment, _time) * _compartment_values[n_comp]
+                self.get_compartment_death_rate(compartment, time) * compartment_values[n_comp]
             )
-            _ode_equations = increment_list_by_index(_ode_equations, n_comp, -net_flow)
+            flow_rates = increment_list_by_index(flow_rates, n_comp, -net_flow)
 
             # track deaths in case births need to replace deaths
             if "total_deaths" in self.tracked_quantities:
                 self.tracked_quantities["total_deaths"] += net_flow
-        return _ode_equations
+        return flow_rates
 
-    def get_compartment_death_rate(self, _compartment, _time):
+    def get_compartment_death_rate(self, _compartment, time):
         """
         calculate rate of non-disease-related deaths from the compartment being considered
         needs to be separated out from the previous method for later stratification
 
         :param _compartment: str
             name of the compartment being considered, which is ignored here
-        :param _time: float
+        :param time: float
             time in model integration
         :return: float
             rate of death from the compartment of interest
         """
-        return self.get_parameter_value("universal_death_rate", _time)
+        return self.get_parameter_value("universal_death_rate", time)
 
-    def apply_birth_rate(self, _ode_equations, _compartment_values, _time):
+    def apply_birth_rate(self, flow_rates, compartment_values, time):
         """
         apply a birth rate to the entry compartment
 
         :parameters and return: see previous method apply_all_flow_types_to_odes
         """
-        return increment_list_by_index(
-            _ode_equations,
-            self.compartment_names.index(self.entry_compartment),
-            self.find_total_births(_compartment_values, _time),
-        )
+        total_births = self.find_total_births(compartment_values, time)
+        entry_idx = self.compartment_idx_lookup[self.entry_compartment]
+        flow_rates[entry_idx] += total_births
+        return flow_rates
 
-    def find_total_births(self, _compartment_values, _time):
+    def find_total_births(self, compartment_values, time):
         """
         calculate the total births to apply dependent on the approach requested
 
-        :param _compartment_values:
+        :param compartment_values:
             as for preceding methods
-        :param _time:
+        :param time:
             as for preceding methods
         :return: float
             total rate of births to be implemented in the model
         """
         if self.birth_approach == "add_crude_birth_rate":
-            return self.get_single_parameter_component("crude_birth_rate", _time) * sum(
-                _compartment_values
+            return self.get_single_parameter_component("crude_birth_rate", time) * sum(
+                compartment_values
             )
         elif self.birth_approach == "replace_deaths":
             return self.tracked_quantities["total_deaths"]
@@ -862,48 +564,45 @@ class EpiModel:
             needs to return as one for flows that are not transmission dynamic infectiousness flows
         """
         flow_type = self.transition_flows_dict["type"][n_flow]
-        if flow_type == "infection_density":
+        if flow_type == Flow.INFECTION_DENSITY:
             return self.infectious_populations
-        elif flow_type == "infection_frequency":
+        elif flow_type == Flow.INFECTION_FREQUENCY:
             return self.infectious_populations / self.infectious_denominators
         else:
             return 1.0
 
-    def update_tracked_quantities(self, _compartment_values):
+    def update_tracked_quantities(self, compartment_values):
         """
-        update quantities that emerge during model running (not pre-defined functions of time)
-
-        :param _compartment_values:
-            as for preceding methods
+        Update quantities that emerge during model running (not pre-defined functions of time)
         """
-        self.find_infectious_population(_compartment_values)
+        self.find_infectious_population(compartment_values)
         for quantity in self.tracked_quantities:
             self.tracked_quantities[quantity] = 0.0
 
-    def find_infectious_population(self, _compartment_values):
+    def find_infectious_population(self, compartment_values):
         """
         calculations to find the effective infectious population
 
-        :param _compartment_values:
+        :param compartment_values:
             as for preceding methods
         """
         self.infectious_populations = sum(
-            [_compartment_values[compartment] for compartment in self.infectious_indices]
+            [compartment_values[compartment] for compartment in self.infectious_indices]
         )
-        self.infectious_denominators = sum(_compartment_values)
+        self.infectious_denominators = sum(compartment_values)
 
-    def get_parameter_value(self, _parameter, _time):
+    def get_parameter_value(self, _parameter, time):
         """
         primarily for use in the stratified version when over-written
 
         :param _parameter: str
             parameter name
-        :param _time: float
+        :param time: float
             current integration time
         :return: float
             parameter value
         """
-        return self.get_single_parameter_component(_parameter, _time)
+        return self.get_single_parameter_component(_parameter, time)
 
     def get_single_parameter_component(self, _parameter, time):
         """
@@ -935,11 +634,11 @@ class EpiModel:
         for output in self.output_connections:
             self.derived_outputs[output] = [0.0] * len(self.times)
             transition_indices = self.find_output_transition_indices(output)
-            for n_time, time in enumerate(self.times):
+            for ntime, time in enumerate(self.times):
                 self.restore_past_state(time)
                 for n_flow in transition_indices:
                     net_flow = self.find_net_transition_flow(n_flow, time, self.compartment_values)
-                    self.derived_outputs[output][n_time] += net_flow
+                    self.derived_outputs[output][ntime] += net_flow
 
     def calculate_post_integration_death_outputs(self, death_output):
         """
@@ -954,11 +653,11 @@ class EpiModel:
         )
         self.derived_outputs[category_name] = [0.0] * len(self.times)
         death_indices = self.find_output_death_indices(death_output)
-        for n_time, time in enumerate(self.times):
+        for ntime, time in enumerate(self.times):
             self.restore_past_state(time)
             for n_flow in death_indices:
                 net_flow = self.find_net_infection_death_flow(n_flow, time, self.compartment_values)
-                self.derived_outputs[category_name][n_time] += net_flow
+                self.derived_outputs[category_name][ntime] += net_flow
 
     def calculate_post_integration_function_outputs(self):
         """
@@ -966,9 +665,9 @@ class EpiModel:
         """
         for output in self.derived_output_functions:
             self.derived_outputs[output] = [0.0] * len(self.times)
-            for n_time, time in enumerate(self.times):
+            for ntime, time in enumerate(self.times):
                 self.restore_past_state(time)
-                self.derived_outputs[output][n_time] = self.derived_output_functions[output](
+                self.derived_outputs[output][ntime] = self.derived_output_functions[output](
                     self, time
                 )
 

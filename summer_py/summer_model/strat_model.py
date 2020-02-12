@@ -4,6 +4,7 @@ from functools import lru_cache
 
 import numpy
 
+from summer_py.constants import Compartment, Flow, BirthApproach, Stratification, IntegrationType
 from .epi_model import EpiModel
 from .utils import (
     convert_boolean_list_to_indices,
@@ -143,10 +144,6 @@ class StratifiedModel(EpiModel):
         del self.compartment_names[self.compartment_names.index(compartment_name)]
         self.output_to_user("removing compartment: %s" % compartment_name)
 
-    """
-    model construction and methods
-    """
-
     def __init__(
         self,
         times,
@@ -154,84 +151,67 @@ class StratifiedModel(EpiModel):
         initial_conditions,
         parameters,
         requested_flows,
-        initial_conditions_to_total=True,
-        infectious_compartment=("infectious",),
-        birth_approach="no_birth",
+        infectious_compartment=(Compartment.INFECTIOUS,),
+        birth_approach=BirthApproach.NO_BIRTH,
         verbose=False,
         reporting_sigfigs=4,
-        entry_compartment="susceptible",
+        entry_compartment=Compartment.SUSCEPTIBLE,
         starting_population=1,
-        starting_compartment="",
         equilibrium_stopping_tolerance=1e-6,
-        integration_type="odeint",
+        integration_type=IntegrationType.ODE_INT,
         output_connections={},
         death_output_categories=(),
         derived_output_functions={},
         ticker=False,
     ):
-        """
-        constructor mostly inherits from parent class, with a few additional attributes that are required for the
-        stratified version
-
-        :parameters: all parameters coming in as arguments are those that are also attributes of the parent class
-        """
-        EpiModel.__init__(
-            self,
+        super().__init__(
             times,
             compartment_types,
             initial_conditions,
             parameters,
             requested_flows,
-            initial_conditions_to_total=initial_conditions_to_total,
-            infectious_compartment=infectious_compartment,
-            birth_approach=birth_approach,
-            verbose=verbose,
-            reporting_sigfigs=reporting_sigfigs,
-            entry_compartment=entry_compartment,
-            starting_population=starting_population,
-            starting_compartment=starting_compartment,
-            equilibrium_stopping_tolerance=equilibrium_stopping_tolerance,
-            integration_type=integration_type,
-            output_connections=output_connections,
-            death_output_categories=death_output_categories,
-            derived_output_functions=derived_output_functions,
-            ticker=ticker,
+            infectious_compartment,
+            birth_approach,
+            verbose,
+            reporting_sigfigs,
+            entry_compartment,
+            starting_population,
+            equilibrium_stopping_tolerance,
+            integration_type,
+            output_connections,
+            death_output_categories,
+            derived_output_functions,
+            ticker,
         )
-
-        (
-            self.full_stratification_list,
-            self.removed_compartments,
-            self.overwrite_parameters,
-            self.compartment_types_to_stratify,
-            self.infectious_denominators,
-            self.strains,
-            self.mixing_categories,
-            self.unstratified_compartment_names,
-        ) = ([] for _ in range(8))
-        (
-            self.all_stratifications,
-            self.infectiousness_adjustments,
-            self.final_parameter_functions,
-            self.adaptation_functions,
-            self.infectiousness_levels,
-            self.infectious_indices,
-            self.infectious_compartments,
-            self.infectiousness_multipliers,
-            self.parameter_components,
-            self.mortality_components,
-            self.infectious_populations,
-            self.strain_mixing_elements,
-            self.strain_mixing_multipliers,
-            self.strata_indices,
-            self.target_props,
-            self.cumulative_target_props,
-        ) = ({} for _ in range(16))
-        self.overwrite_character, self.overwrite_key = "W", "overwrite"
-        self.heterogeneous_mixing, self.mixing_matrix, self.available_death_rates, = (
-            False,
-            None,
-            [""],
-        )
+        self.full_stratification_list = []
+        self.removed_compartments = []
+        self.overwrite_parameters = []
+        self.compartment_types_to_stratify = []
+        self.infectious_denominators = []
+        self.strains = []
+        self.mixing_categories = []
+        self.unstratified_compartment_names = []
+        self.all_stratifications = {}
+        self.infectiousness_adjustments = {}
+        self.final_parameter_functions = {}
+        self.adaptation_functions = {}
+        self.infectiousness_levels = {}
+        self.infectious_indices = {}
+        self.infectious_compartments = {}
+        self.infectiousness_multipliers = {}
+        self.parameter_components = {}
+        self.mortality_components = {}
+        self.infectious_populations = {}
+        self.strain_mixing_elements = {}
+        self.strain_mixing_multipliers = {}
+        self.strata_indices = {}
+        self.target_props = {}
+        self.cumulative_target_props = {}
+        self.overwrite_character = "W"
+        self.overwrite_key = "overwrite"
+        self.heterogeneous_mixing = False
+        self.mixing_matrix = None
+        self.available_death_rates = [""]
         self.parameters["strata_equilibration_parameter"] = 0.01
 
     """
@@ -1693,7 +1673,7 @@ class StratifiedModel(EpiModel):
 
     # Cache return values to prevent wasteful re-computation - cache size is huge.
     # Floating point return type is 8 bytes, meaning 2**17 values is ~1MB of memory.
-    @lru_cache(maxsize=2**17)
+    @lru_cache(maxsize=2 ** 17)
     def get_parameter_value(self, _parameter, _time):
         """
         returns a parameter value by calling the function represented by its string within the parameter_functions
