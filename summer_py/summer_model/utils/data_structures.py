@@ -115,3 +115,16 @@ def find_first_list_element_above(a_list, value):
     for i, val in enumerate(a_list):
         if val > value:
             return i
+
+
+def remove_multiple_elements_from_list(a_list, indices_to_be_removed):
+    """
+    remove list elements according to a list of indices to be removed from that list
+
+    :param a_list: list
+        list to be processed
+    :param indices_to_be_removed: list
+        list of the elements that are no longer needed
+    """
+    return [a_list[i] for i in range(len(a_list)) if i not in indices_to_be_removed]
+

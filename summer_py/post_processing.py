@@ -2,7 +2,7 @@ from numpy import linspace
 
 from summer_py.summer_model.strat_model import StratifiedModel
 from summer_py.summer_model.utils.string import find_name_components
-from summer_py.summer_model.utils.data_structures import find_first_list_element_above
+from summer_py.summer_model.utils.data_structures import *
 
 
 class PostProcessing:
@@ -60,8 +60,8 @@ class PostProcessing:
 
         # Check that the requested strata distributions correspond to an existing model stratification
         indices_to_be_removed = []
-        for i, output in enumerate(self.requested_outputs):
-            if output[0:22] == "distribution_of_strata":
+        for i_output, output in enumerate(self.requested_outputs):
+            if output.startswith("distribution_of_strata"):
                 stratification_of_interest = output.split("X")[1]
                 if stratification_of_interest not in self.model.all_stratifications.keys():
                     print(
@@ -69,12 +69,9 @@ class PostProcessing:
                         + stratification_of_interest
                         + "' is not among the model stratifications. Will be ignored for output processing"
                     )
-                    indices_to_be_removed.append(i)
-        self.requested_outputs = [
-            self.requested_outputs[i]
-            for i in range(len(self.requested_outputs))
-            if i not in indices_to_be_removed
-        ]
+                    indices_to_be_removed.append(i_output)
+
+        self.requested_outputs = remove_multiple_elements_from_list(self.requested_outputs, indices_to_be_removed)
 
     def interpret_requested_outputs(self):
         """
