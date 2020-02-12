@@ -527,11 +527,10 @@ class EpiModel:
 
         :parameters and return: see previous method apply_all_flow_types_to_odes
         """
-        return increment_list_by_index(
-            flow_rates,
-            self.compartment_names.index(self.entry_compartment),
-            self.find_total_births(compartment_values, time),
-        )
+        total_births = self.find_total_births(compartment_values, time)
+        entry_idx = self.compartment_idx_lookup[self.entry_compartment]
+        flow_rates[entry_idx] += total_births
+        return flow_rates
 
     def find_total_births(self, compartment_values, time):
         """
