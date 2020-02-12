@@ -205,17 +205,28 @@ class EpiModel:
         Load user-specified flows into dataframes.
         """
         for flow in self.requested_flows:
-            flow["implement"] = flow.get("implement", len(self.all_stratifications))
             if flow["type"] == Flow.COMPARTMENT_DEATH:
-                # Add a death flow
-                self.death_flows = self.death_flows.append(flow, ignore_index=True)
+                self.add_death_flow(flow)
             else:
-                # Add a transition flow
-                flow_data = {key: value for key, value in flow.items() if key != "function"}
-                self.transition_flows = self.transition_flows.append(flow_data, ignore_index=True)
-                if flow["type"] == Flow.CUSTOM:
-                    idx = self.transition_flows.shape[0] - 1
-                    self.customised_flow_functions[idx] = flow["function"]
+                self.add_transition_flow(flow)
+
+    def add_transition_flow(self, flow):
+        """
+        Add a transition flow to the model's flows.
+        """
+        flow["implement"] = flow.get("implement", len(self.all_stratifications))
+        flow_data = {key: value for key, value in flow.items() if key != "function"}
+        self.transition_flows = self.transition_flows.append(flow_data, ignore_index=True)
+        if flow["type"] == Flow.CUSTOM:
+            idx = self.transition_flows.shape[0] - 1
+            self.customised_flow_functions[idx] = flow["function"]
+
+    def add_death_flow(self, flow):
+        """
+        Add a death flow to the model's flows.
+        """
+        flow["implement"] = flow.get("implement", len(self.all_stratifications))
+        self.death_flows = self.death_flows.append(flow, ignore_index=True)
 
     def setup_default_parameters(self):
         """
