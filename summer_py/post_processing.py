@@ -1,6 +1,7 @@
 from numpy import linspace
 
-from . import summer_model as sm
+from summer_py.summer_model.strat_model import StratifiedModel
+from summer_py.summer_model.utils.string import find_name_components
 
 
 def find_first_list_element_above(a_list, value):
@@ -137,7 +138,7 @@ class PostProcessing:
                 ] = []  # to be added to the numerator ones to form the whole denominator
                 for j, compartment in enumerate(self.model.compartment_names):
                     is_relevant = True
-                    name_components = sm.find_name_components(compartment)
+                    name_components = find_name_components(compartment)
                     for condition in conditions.keys():  # for each stratification
                         if not any(
                             category in name_components for category in conditions[condition]
@@ -162,7 +163,7 @@ class PostProcessing:
                     self.operations_to_perform[output]["compartment_indices"][stratum_name] = []
                     keyword = stratification_of_interest + "_" + stratum_name
                     for j, compartment_name in enumerate(self.model.compartment_names):
-                        name_components = sm.find_name_components(compartment_name)
+                        name_components = find_name_components(compartment_name)
                         if keyword in name_components:
                             self.operations_to_perform[output]["compartment_indices"][
                                 stratum_name
@@ -256,7 +257,7 @@ class PostProcessing:
 
 if __name__ == "__main__":
     # build and run an example model
-    sir_model = sm.StratifiedModel(
+    sir_model = StratifiedModel(
         linspace(0, 60 / 365, 61).tolist(),
         ["susceptible", "infectious", "recovered"],
         {"infectious": 0.001},
@@ -316,7 +317,7 @@ if __name__ == "__main__":
         "prevXinfectiousXamong": 1.0e5,
     }
 
-    pp = PostProcessing(sir_model, req_outputs, req_times, req_multipliers)
+    pp = PostProcessing(sir_model, req_outputs, requested_times=req_times, multipliers=req_multipliers)
 
     print(pp.generated_outputs)
 
