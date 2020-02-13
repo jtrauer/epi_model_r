@@ -15,10 +15,9 @@ from summer_py.constants import Compartment, Flow, BirthApproach, Stratification
 
 
 @pytest.mark.parametrize(
-    "ModelClass,extra_default_kwargs",
-    [[EpiModel, {}], [StratifiedModel, {"strata_equilibration_parameter": 0.01}]],
+    "ModelClass", [EpiModel, StratifiedModel],
 )
-def test_setup_default_parameters(ModelClass, extra_default_kwargs):
+def test_setup_default_parameters(ModelClass):
     """
     Ensure default params are set correctly on model setup.
     """
@@ -26,19 +25,21 @@ def test_setup_default_parameters(ModelClass, extra_default_kwargs):
         "times": _get_integration_times(2000, 2005, 1),
         "compartment_types": [Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS],
         "initial_conditions": {},
-        "parameters": {**extra_default_kwargs},
+        "parameters": {},
         "requested_flows": [],
         "starting_population": 100,
     }
 
     # Expect univseral death rate to be set by default
     model = ModelClass(**deepcopy(base_kwargs))
-    assert model.parameters == {"universal_death_rate": 0, **extra_default_kwargs}
+    assert model.parameters == {
+        "universal_death_rate": 0,
+    }
 
     # Expect univseral death rate to be overidden
     kwargs = {**deepcopy(base_kwargs), "parameters": {"universal_death_rate": 1234}}
     model = ModelClass(**kwargs)
-    assert model.parameters == {"universal_death_rate": 1234, **extra_default_kwargs}
+    assert model.parameters == {"universal_death_rate": 1234}
 
     # Expect crude birth rate to be set
     kwargs = {**deepcopy(base_kwargs), "birth_approach": BirthApproach.ADD_CRUDE}
@@ -46,7 +47,6 @@ def test_setup_default_parameters(ModelClass, extra_default_kwargs):
     assert model.parameters == {
         "universal_death_rate": 0,
         "crude_birth_rate": 0,
-        **extra_default_kwargs,
     }
 
     # Expect crude birth rate to be overidden
@@ -59,13 +59,12 @@ def test_setup_default_parameters(ModelClass, extra_default_kwargs):
     assert model.parameters == {
         "universal_death_rate": 0,
         "crude_birth_rate": 123,
-        **extra_default_kwargs,
     }
 
     # Expect death rate to be tracked
     kwargs = {**deepcopy(base_kwargs), "birth_approach": BirthApproach.REPLACE_DEATHS}
     model = ModelClass(**kwargs)
-    assert model.parameters == {"universal_death_rate": 0, **extra_default_kwargs}
+    assert model.parameters == {"universal_death_rate": 0}
     assert model.tracked_quantities == {
         "total_deaths": 0,
     }

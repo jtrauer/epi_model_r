@@ -51,8 +51,6 @@ class EpiModel:
         collated as lists for each time step with descriptive keys equivalent to those for tracked_quantities
     :attribute entry_compartment: str
         name of the compartment that births come in to
-    :attribute equilibrium_stopping_tolerance: float
-        value at which relative changes in compartment size trigger stopping when equilibrium reached
     :attribute infectious_compartment: tuple
         name(s) of the infectious compartment for calculation of inter-compartmental infection flows
     :attribute infectious_denominators: float64
@@ -64,9 +62,6 @@ class EpiModel:
     :attribute initial_conditions: dict
         keys are compartment types, values are starting population values for each compartment
         note that not all compartment_types must be included as keys in requests
-    :attribute integration_type: str
-        integration approach for numeric solution to odes
-        currently must be odeint or solveivp, but will likely be extended as this module is developed
     :attribute output_connections: dict
         keys are the names of the quantities to be tracked
         value is dict containing the origin and the destination ("to") compartments on which to base these calculations

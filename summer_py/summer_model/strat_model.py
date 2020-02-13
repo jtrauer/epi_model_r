@@ -21,6 +21,10 @@ from .utils import (
     increment_list_by_index,
 )
 
+STRATA_EQUILIBRATION_FACTOR = 0.01
+OVERWRITE_CHARACTER = "W"
+OVERWRITE_KEY = "overwrite"
+
 
 class StratifiedModel(EpiModel):
     """
@@ -203,12 +207,9 @@ class StratifiedModel(EpiModel):
         self.strata_indices = {}
         self.target_props = {}
         self.cumulative_target_props = {}
-        self.overwrite_character = "W"
-        self.overwrite_key = "overwrite"
         self.heterogeneous_mixing = False
         self.mixing_matrix = None
         self.available_death_rates = [""]
-        self.parameters["strata_equilibration_parameter"] = 0.01
 
     """
     stratification methods
@@ -473,25 +474,25 @@ class StratifiedModel(EpiModel):
 
             # ignore overwrite if submitted with the standard approach
             for stratum in _adjustment_requests[parameter]:
-                if stratum == "overwrite":
+                if stratum == OVERWRITE_KEY:
                     continue
 
                 # if the parameter ends in W, interpret as an overwrite parameter and added to this key
-                elif stratum[-1] == self.overwrite_character:
-                    if "overwrite" not in revised_adjustments[parameter]:
-                        revised_adjustments[parameter]["overwrite"] = []
+                elif stratum[-1] == OVERWRITE_CHARACTER:
+                    if OVERWRITE_KEY not in revised_adjustments[parameter]:
+                        revised_adjustments[parameter][OVERWRITE_KEY] = []
                     revised_adjustments[parameter][stratum[:-1]] = _adjustment_requests[parameter][
                         stratum
                     ]
-                    revised_adjustments[parameter]["overwrite"].append(stratum[:-1])
+                    revised_adjustments[parameter][OVERWRITE_KEY].append(stratum[:-1])
 
                 # otherwise just accept the parameter in its submitted form
                 else:
                     revised_adjustments[parameter][stratum] = _adjustment_requests[parameter][
                         stratum
                     ]
-            if "overwrite" not in revised_adjustments:
-                revised_adjustments["overwrite"] = []
+            if OVERWRITE_KEY not in revised_adjustments:
+                revised_adjustments[OVERWRITE_KEY] = []
         return revised_adjustments
 
     def check_compartment_request(self, _compartment_types_to_stratify):
@@ -534,7 +535,7 @@ class StratifiedModel(EpiModel):
         """
         for parameter in _adjustment_requests:
             if any(
-                requested_stratum not in _strata_names + [self.overwrite_key]
+                requested_stratum not in _strata_names + [OVERWRITE_KEY]
                 for requested_stratum in _adjustment_requests[parameter]
             ):
                 raise ValueError(
@@ -819,9 +820,8 @@ class StratifiedModel(EpiModel):
 
             # record the parameters that over-write the less stratified parameters closer to the trunk of the tree
             if (
-                self.overwrite_key in _adjustment_requests[relevant_adjustment_request]
-                and _stratum
-                in _adjustment_requests[relevant_adjustment_request][self.overwrite_key]
+                OVERWRITE_KEY in _adjustment_requests[relevant_adjustment_request]
+                and _stratum in _adjustment_requests[relevant_adjustment_request][OVERWRITE_KEY]
             ):
                 self.overwrite_parameters.append(parameter_adjustment_name)
         return parameter_adjustment_name
@@ -1101,8 +1101,8 @@ class StratifiedModel(EpiModel):
 
                 # record the parameters that over-write the less stratified parameters closer to the trunk of the tree
                 if (
-                    self.overwrite_key in _adjustment_requests["universal_death_rate"]
-                    and stratum in _adjustment_requests["universal_death_rate"][self.overwrite_key]
+                    OVERWRITE_KEY in _adjustment_requests["universal_death_rate"]
+                    and stratum in _adjustment_requests["universal_death_rate"][OVERWRITE_KEY]
                 ):
                     self.overwrite_parameters.append(
                         create_stratified_name(
@@ -1838,7 +1838,7 @@ class StratifiedModel(EpiModel):
             # calculate net flow
             net_flow = (
                 numpy.log(numerator / denominator)
-                / self.parameters["strata_equilibration_parameter"]
+                / STRATA_EQUILIBRATION_FACTOR
                 * _compartment_values[self.compartment_names.index(take_compartment)]
             )
 
@@ -1965,7 +1965,6 @@ if __name__ == "__main__":
             },
         },
         verbose=False,
-        integration_type="odeint",
         derived_output_functions={"population": get_total_popsize},
         death_output_categories=((), ("hiv_positive",)),
     )
