@@ -1,11 +1,5 @@
 """
 Ensure that the EpiModel model produces the correct flow rates and outputs when run.
-
-TODO: test
-
-- apply_all_flow_types_to_odes
-- apply_transition_flows
-
 """
 import pytest
 
