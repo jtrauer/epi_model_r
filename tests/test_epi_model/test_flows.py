@@ -5,8 +5,6 @@ TODO: test
 
 - apply_all_flow_types_to_odes
 - apply_transition_flows
-- apply_compartment_death_flows
-- apply_universal_death_flow
 
 """
 import pytest
@@ -22,6 +20,142 @@ MODEL_KWARGS = {
     "requested_flows": [],
     "starting_population": 1000,
 }
+
+
+PARAM_VARS = "flows,params,flow_rates,expected_new_rates"
+PARAM_VALS = [
+    # No transition flows implemented, expect no flows.
+    [[], {}, [1, 2], [1, 2]],
+    # Add standard flow where 30% of infected people recover back to susceptible.
+    [
+        [
+            {
+                "type": Flow.STANDARD,
+                "parameter": "recover_rate",
+                "origin": Compartment.INFECTIOUS,
+                "to": Compartment.SUSCEPTIBLE,
+            }
+        ],
+        {"recover_rate": 0.3},
+        [1, 2],
+        [4, -1],
+    ],
+    # TODO: Add a flow with a custom flow func
+    # [
+    #     [
+    #         {
+    #             "type": Flow.CUSTOM,
+    #             "parameter": "recover_rate",
+    #             "origin": Compartment.INFECTIOUS,
+    #             "to": Compartment.SUSCEPTIBLE,
+    #         }
+    #     ],
+    #     {"recover_rate": 0.3},
+    #     [1, 2],
+    #     [4, -1],
+    # ],
+    # TODO: Infection frequency
+    # TODO: Infection density
+]
+
+
+@pytest.mark.parametrize(PARAM_VARS, PARAM_VALS)
+def test_apply_transition_flows(flows, params, flow_rates, expected_new_rates):
+    """
+    Ensure user-specified compartment transition flows are applied correctly.
+    """
+    model_kwargs = {
+        **MODEL_KWARGS,
+        "parameters": params,
+        "requested_flows": flows,
+    }
+    model = EpiModel(**model_kwargs)
+    model.prepare_to_run()
+    new_rates = model.apply_transition_flows(flow_rates, model.compartment_values, 2000)
+    assert new_rates == expected_new_rates
+
+
+PARAM_VARS = "flows,params,flow_rates,expected_new_rates,expect_deaths"
+PARAM_VALS = [
+    # No death flows implemented, expect no deaths.
+    [[], {}, [1, 2], [1, 2], 0,],
+    # Add flow where 50% of infectious people die.
+    [
+        [
+            {
+                "type": Flow.COMPARTMENT_DEATH,
+                "parameter": "infect_death",
+                "origin": Compartment.INFECTIOUS,
+            }
+        ],
+        {"infect_death": 0.5},
+        [1, 2],
+        [1, -3],
+        5,
+    ],
+    # Add flow where 20% of susceptible people die.
+    [
+        [
+            {
+                "type": Flow.COMPARTMENT_DEATH,
+                "parameter": "sus_death",
+                "origin": Compartment.SUSCEPTIBLE,
+            }
+        ],
+        {"sus_death": 0.2},
+        [1, 2],
+        [-197, 2],
+        198,
+    ],
+]
+
+
+@pytest.mark.parametrize(PARAM_VARS, PARAM_VALS)
+def test_apply_compartment_death_flows(
+    flows, params, flow_rates, expected_new_rates, expect_deaths
+):
+    """
+    Ensure user-specified compartment death flows are applied correctly.
+    """
+    model_kwargs = {
+        **MODEL_KWARGS,
+        "birth_approach": BirthApproach.REPLACE_DEATHS,
+        "parameters": params,
+        "requested_flows": flows,
+    }
+    model = EpiModel(**model_kwargs)
+    model.prepare_to_run()
+    new_rates = model.apply_compartment_death_flows(flow_rates, model.compartment_values, 2000)
+    assert new_rates == expected_new_rates
+    assert model.tracked_quantities["total_deaths"] == expect_deaths
+
+
+PARAM_VARS = "death_rate,flow_rates,expected_new_rates,expect_deaths"
+PARAM_VALS = [
+    # Positive death rate, expect deaths in all compartments.
+    [0.02, [1, 2], [-18.8, 1.8], 20],
+    # Zero death rate, expect no deaths.
+    [0, [1, 2], [1, 2], 0],
+]
+
+
+@pytest.mark.parametrize(PARAM_VARS, PARAM_VALS)
+def test_epi_model_apply_universal_death_flow(
+    death_rate, flow_rates, expected_new_rates, expect_deaths
+):
+    """
+    Ensure EpiModel apply universal death rates to kill all compartments in proportion to death rate.
+    """
+    model_kwargs = {
+        **MODEL_KWARGS,
+        "birth_approach": BirthApproach.REPLACE_DEATHS,
+        "parameters": {"universal_death_rate": death_rate,},
+    }
+    model = EpiModel(**model_kwargs)
+    model.prepare_to_run()
+    new_rates = model.apply_universal_death_flow(flow_rates, model.compartment_values, 2000)
+    assert new_rates == expected_new_rates
+    assert model.tracked_quantities["total_deaths"] == expect_deaths
 
 
 def test_epi_model_apply_change_rates():
@@ -47,9 +181,16 @@ def test_epi_model_apply_birth_rate__with_no_birth_approach__expect_no_births():
     assert new_rates == flow_rates
 
 
-@pytest.mark.parametrize(
-    "birth_rate,flow_rates,expected_new_rates", [[0.0035, [1, 2], [4.5, 2]], [0, [1, 2], [1, 2]]],
-)
+PARAM_VARS = "birth_rate,flow_rates,expected_new_rates"
+PARAM_VALS = [
+    # Positive birth rate, expect births in entry compartment.
+    [0.0035, [1, 2], [4.5, 2]],
+    # Zero birth rate, expect no births.
+    [0, [1, 2], [1, 2]],
+]
+
+
+@pytest.mark.parametrize(PARAM_VARS, PARAM_VALS)
 def test_epi_model_apply_birth_rate__with_crude_birth_rate__expect_births(
     birth_rate, flow_rates, expected_new_rates
 ):
@@ -65,9 +206,16 @@ def test_epi_model_apply_birth_rate__with_crude_birth_rate__expect_births(
     assert new_rates == expected_new_rates
 
 
-@pytest.mark.parametrize(
-    "total_deaths,flow_rates,expected_new_rates", [[4, [1, 2], [5, 2]], [0, [1, 2], [1, 2]]],
-)
+PARAM_VARS = "total_deaths,flow_rates,expected_new_rates"
+PARAM_VALS = [
+    # Some deaths, expect proportional births in entry compartment,
+    [4, [1, 2], [5, 2]],
+    # No deaths, expect no births.
+    [0, [1, 2], [1, 2]],
+]
+
+
+@pytest.mark.parametrize(PARAM_VARS, PARAM_VALS)
 def test_epi_model_apply_birth_rate__with_replace_deaths__expect_births(
     total_deaths, flow_rates, expected_new_rates
 ):
