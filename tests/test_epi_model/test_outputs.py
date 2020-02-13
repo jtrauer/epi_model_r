@@ -286,8 +286,6 @@ def test_epi_model__with_complex_dynamics__expect_correct_outputs(ModelClass):
         - 5 compartments
         - birth rate +  universal death rate
         - standard inter-compartment flows
-
-    FIXME: Change parameter values to be vaugely realistic
     """
     # Set up a model with 1000 people, 100 intially infected
     pop = 1000

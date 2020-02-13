@@ -393,7 +393,7 @@ class EpiModel:
         if self.ticker:
             print("Integrating at time: %s" % time)
 
-        flow_rates = [0.0 for _ in self.compartment_names]
+        flow_rates = numpy.zeros(len(self.compartment_names))
         flow_rates = self.apply_transition_flows(flow_rates, compartment_values, time)
         # Apply deaths before births so that we can use 'total deaths' to calculate the birth rate, if required.
         flow_rates = self.apply_compartment_death_flows(flow_rates, compartment_values, time)
@@ -452,7 +452,7 @@ class EpiModel:
             return 0.0
 
         # find from compartment and the "infectious population" (which equals one for non-infection-related flows)
-        infectious_population = self.find_infectious_multiplier(n_flow)
+        infectious_population_factor = self.find_infectious_multiplier(n_flow)
 
         # find the index of the origin or from compartment
         origin_name = self.transition_flows_dict["origin"][n_flow]
@@ -460,12 +460,11 @@ class EpiModel:
 
         # implement flows according to whether customised or standard/infection-related
         flow_type = self.transition_flows_dict["type"][n_flow]
-        is_customised_flow = flow_type == "customised_flows"
-        if is_customised_flow:
+        if flow_type == Flow.CUSTOM:
             custom_flow_func = self.customised_flow_functions[n_flow]
             return parameter_value * custom_flow_func(self, n_flow, time, compartment_values)
         else:
-            return parameter_value * compartment_values[origin_idx] * infectious_population
+            return parameter_value * compartment_values[origin_idx] * infectious_population_factor
 
     def apply_compartment_death_flows(self, flow_rates, compartment_values, time):
         """
@@ -508,12 +507,11 @@ class EpiModel:
         :parameters and return: see previous method apply_all_flow_types_to_odes
         """
         for n_comp, compartment in enumerate(self.compartment_names):
-            net_flow = (
-                self.get_compartment_death_rate(compartment, time) * compartment_values[n_comp]
-            )
-            flow_rates = increment_list_by_index(flow_rates, n_comp, -net_flow)
+            death_rate = self.get_compartment_death_rate(compartment, time)
+            net_flow = death_rate * compartment_values[n_comp]
+            flow_rates[n_comp] -= net_flow
 
-            # track deaths in case births need to replace deaths
+            # Track deaths in case births need to replace deaths
             if "total_deaths" in self.tracked_quantities:
                 self.tracked_quantities["total_deaths"] += net_flow
         return flow_rates
