@@ -88,8 +88,8 @@ def get_model_schema(model):
                 "schema": {
                     "origin": {"type": "string"},
                     "to": {"type": "string"},
-                    "origin_condition": {"type": "string"},
-                    "to_condition": {"type": "string"},
+                    "origin_condition": {"type": "string", "required": False},
+                    "to_condition": {"type": "string", "required": False},
                 },
             },
         },
