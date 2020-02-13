@@ -189,7 +189,6 @@ def test_model_compartment_init__with_no_remainder__expect_correct_allocation(Mo
 
 bad_inputs = [
     {"starting_population": "this should be an integer"},
-    {"equilibrium_stopping_tolerance": "this should be a float"},
     {"times": "this should be a list"},
     {"birth_approach": 0},  # Should be a string
     {"verbose": "this should be a bool"},

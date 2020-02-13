@@ -29,7 +29,6 @@ def get_model_schema(model):
         "ticker": {"type": "boolean"},
         "reporting_sigfigs": {"type": "integer"},
         "starting_population": {"type": "integer"},
-        "equilibrium_stopping_tolerance": {"type": "float"},
         "entry_compartment": {"type": "string"},
         "birth_approach": {
             "type": "string",
@@ -38,10 +37,6 @@ def get_model_schema(model):
                 BirthApproach.REPLACE_DEATHS,
                 BirthApproach.NO_BIRTH,
             ],
-        },
-        "integration_type": {
-            "type": "string",
-            "allowed": [IntegrationType.ODE_INT, IntegrationType.SOLVE_IVP],
         },
         "times": {
             "type": "list",

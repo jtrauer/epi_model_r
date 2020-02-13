@@ -133,8 +133,6 @@ class EpiModel:
         reporting_sigfigs=4,
         entry_compartment=Compartment.SUSCEPTIBLE,
         starting_population=1,
-        equilibrium_stopping_tolerance=1e-6,
-        integration_type=IntegrationType.ODE_INT,
         output_connections={},
         death_output_categories=(),
         derived_output_functions={},
@@ -170,10 +168,8 @@ class EpiModel:
         self.derived_output_functions = derived_output_functions
         self.derived_outputs = {"times": times}
         self.entry_compartment = entry_compartment
-        self.equilibrium_stopping_tolerance = equilibrium_stopping_tolerance
         self.infectious_compartment = infectious_compartment
         self.initial_conditions = initial_conditions
-        self.integration_type = integration_type
         self.output_connections = output_connections
         self.parameters = parameters
         self.reporting_sigfigs = reporting_sigfigs
@@ -311,7 +307,7 @@ class EpiModel:
     model running methods
     """
 
-    def run_model(self):
+    def run_model(self, integration_type=IntegrationType.ODE_INT, stopping_tolerance=1e-6):
         """
         Calculates the model's outputs using an ODE solver.
 
@@ -324,7 +320,7 @@ class EpiModel:
         self.output_to_user("\n-----\nnow integrating")
         self.prepare_to_run()
 
-        if self.integration_type == IntegrationType.ODE_INT:
+        if integration_type == IntegrationType.ODE_INT:
             # Basic, default integration method
             def ode_func(compartment_values, time):
                 """
@@ -339,7 +335,7 @@ class EpiModel:
                 ode_func, self.compartment_values, self.times, atol=1.0e-3, rtol=1.0e-3
             )
 
-        elif self.integration_type == IntegrationType.SOLVE_IVP:
+        elif integration_type == IntegrationType.SOLVE_IVP:
             # Alternative integration method, which allows us to set a stopping condition.
             def ode_func(time, compartment_values):
                 self.update_tracked_quantities(compartment_values)
@@ -349,7 +345,7 @@ class EpiModel:
                 self.update_tracked_quantities(compartment_values)
                 return (
                     max(list(map(abs, self.apply_all_flow_types_to_odes(compartment_values, time))))
-                    - self.equilibrium_stopping_tolerance
+                    - stopping_tolerance
                 )
 
             set_stopping_conditions.terminal = True
