@@ -40,22 +40,52 @@ PARAM_VALS = [
         [1, 2],
         [4, -1],
     ],
-    # TODO: Add a flow with a custom flow func
-    # [
-    #     [
-    #         {
-    #             "type": Flow.CUSTOM,
-    #             "parameter": "recover_rate",
-    #             "origin": Compartment.INFECTIOUS,
-    #             "to": Compartment.SUSCEPTIBLE,
-    #         }
-    #     ],
-    #     {"recover_rate": 0.3},
-    #     [1, 2],
-    #     [4, -1],
-    # ],
-    # TODO: Infection frequency
-    # TODO: Infection density
+    # Add a flow with a custom flow func
+    [
+        [
+            {
+                "type": Flow.CUSTOM,
+                "parameter": "recover_rate",
+                "origin": Compartment.INFECTIOUS,
+                "to": Compartment.SUSCEPTIBLE,
+                # Add a function that halves the rate, but uses total population.
+                "function": lambda model, flow_idx, time, compartments: 0.5 * sum(compartments),
+            }
+        ],
+        {"recover_rate": 0.3},
+        [1, 2],
+        [151, -148],
+    ],
+    # Use infection frequency, expect infection multiplier to be proportional
+    # to the proprotion of infectious to total pop.
+    [
+        [
+            {
+                "type": Flow.INFECTION_FREQUENCY,
+                "parameter": "contact_rate",
+                "origin": Compartment.SUSCEPTIBLE,
+                "to": Compartment.INFECTIOUS,
+            }
+        ],
+        {"contact_rate": 10},
+        [1, 2],
+        [-98, 101],
+    ],
+    # Use infection density, expect infection multiplier to be proportional
+    # to the infectious pop.
+    [
+        [
+            {
+                "type": Flow.INFECTION_DENSITY,
+                "parameter": "contact_rate",
+                "origin": Compartment.SUSCEPTIBLE,
+                "to": Compartment.INFECTIOUS,
+            }
+        ],
+        {"contact_rate": 0.01},
+        [1, 2],
+        [-98, 101],
+    ],
 ]
 
 
@@ -71,6 +101,7 @@ def test_apply_transition_flows(flows, params, flow_rates, expected_new_rates):
     }
     model = EpiModel(**model_kwargs)
     model.prepare_to_run()
+    model.update_tracked_quantities(model.compartment_values)
     new_rates = model.apply_transition_flows(flow_rates, model.compartment_values, 2000)
     assert new_rates == expected_new_rates
 
