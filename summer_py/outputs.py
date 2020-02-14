@@ -582,23 +582,19 @@ class Outputs:
     def plot_targets(self, requested_output, axis):
 
         targets = self.targets_to_plot[requested_output]
-        for i, time in enumerate(targets['times']):
-            if len(targets['values'][i]) > 1:  # plot CI
+        for i, time in enumerate(targets["times"]):
+            if len(targets["values"][i]) > 1:  # plot CI
                 x_vals = [time, time]
-                y_vals = targets['values'][i][1:]
-                axis.plot(x_vals, y_vals, 'm', linewidth=1, color='red')
+                y_vals = targets["values"][i][1:]
+                axis.plot(x_vals, y_vals, "m", linewidth=1, color="red")
 
             # plot point estimate
-            marker_size = 30.
-            for colour in ['red', 'white']:
+            marker_size = 30.0
+            for colour in ["red", "white"]:
                 axis.scatter(
-                    time,
-                    targets['values'][i][0],
-                    marker="o",
-                    color=colour,
-                    s=marker_size,
+                    time, targets["values"][i][0], marker="o", color=colour, s=marker_size,
                 )
-                marker_size -= 20.
+                marker_size -= 20.0
 
     def plot_stacked_epi_outputs(self, axis, times_to_plot, current_data, fraction=True):
         # plot patches and proxy by category
@@ -783,10 +779,10 @@ if __name__ == "__main__":
     )
 
     targets_to_plot = {
-        "prevXinfectiousXamongXage_10Xstrain_sensitive": {'times': [0.01, 0.02],
-                                                          'values': [[20000, 18000, 22000],
-                                                                     [23000]]
-                                                          }
+        "prevXinfectiousXamongXage_10Xstrain_sensitive": {
+            "times": [0.01, 0.02],
+            "values": [[20000, 18000, 22000], [23000]],
+        }
     }
     translation_dict = {
         "prevXinfectiousXamongXage_10Xstrain_sensitive": "Prevalence of TB among 10-30 years old"

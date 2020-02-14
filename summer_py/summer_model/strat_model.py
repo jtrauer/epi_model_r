@@ -1,6 +1,7 @@
 import copy
 import itertools
 from functools import lru_cache
+from typing import List, Dict
 
 import numpy
 
@@ -277,7 +278,12 @@ class StratifiedModel(EpiModel):
         requested_proportions = self.prepare_starting_proportions(
             strata_names, requested_proportions
         )
-        self.stratify_compartments(stratification_name, strata_names, requested_proportions)
+        self.stratify_compartments(
+            stratification_name,
+            strata_names,
+            requested_proportions,
+            self.compartment_types_to_stratify,
+        )
 
         # stratify the flows
         self.stratify_transition_flows(stratification_name, strata_names, adjustment_requests)
@@ -613,33 +619,33 @@ class StratifiedModel(EpiModel):
         _requested_proportions.update(unrequested_proportions)
         return _requested_proportions
 
-    def stratify_compartments(self, _stratification_name, _strata_names, _requested_proportions):
+    def stratify_compartments(
+        self,
+        stratification_name: str,
+        strata_names: List[str],
+        strata_proportions: Dict[str, float],
+        compartments_to_stratify: List[str],
+    ):
         """
-        stratify the model compartments, which affects the compartment_names and the compartment_values attributes
+        Stratify the model compartments into sub-compartments, based on the strata names provided,
+        splitting the population according to the provided proprotions. Stratification will be applied 
+        to compartment_names and compartment_values.
 
-        :param _stratification_name:
-            see prepare_and_check_stratification
-        :param _strata_names:
-            see find_strata_names_from_input
-        :param _requested_proportions:
-            see prepare_starting_proportions
+        Only compartments specified in `self.compartment_types_to_stratify` will be stratified.
         """
+        # Find the existing compartments that need stratification
+        compartments_to_stratify = [
+            c for c in self.compartment_names if find_stem(c) in compartments_to_stratify
+        ]
+        for compartment in compartments_to_stratify:
+            # Add newm stratified compartment.
+            for stratum in strata_names:
+                name = create_stratified_name(compartment, stratification_name, stratum)
+                idx = self.compartment_names.index(compartment)
+                value = self.compartment_values[idx] * strata_proportions[stratum]
+                self.add_compartment(name, value)
 
-        # find the existing compartments that need stratification
-        self.output_to_user("\n-----\ndetermining which compartments to add and which to remove")
-        for compartment in [
-            comp
-            for comp in self.compartment_names
-            if find_stem(comp) in self.compartment_types_to_stratify
-        ]:
-
-            # add and remove compartments
-            for stratum in _strata_names:
-                self.add_compartment(
-                    create_stratified_name(compartment, _stratification_name, stratum),
-                    self.compartment_values[self.compartment_names.index(compartment)]
-                    * _requested_proportions[stratum],
-                )
+            # Remove the original compartment, since it has now been stratified.
             self.remove_compartment(compartment)
 
     def stratify_transition_flows(self, _stratification_name, _strata_names, _adjustment_requests):
@@ -1800,7 +1806,7 @@ class StratifiedModel(EpiModel):
             stratification, restriction, transition = find_name_components(
                 self.transition_flows.parameter[i_change]
             )
-            origin_stratum, to_stratum = transition.split("_")
+            origin_stratum, _ = transition.split("_")
 
             # find the distribution of the population across strata to be targeted
             _cumulative_target_props = self.find_target_strata_props(

@@ -71,7 +71,9 @@ class PostProcessing:
                     )
                     indices_to_be_removed.append(i_output)
 
-        self.requested_outputs = remove_multiple_elements_from_list(self.requested_outputs, indices_to_be_removed)
+        self.requested_outputs = remove_multiple_elements_from_list(
+            self.requested_outputs, indices_to_be_removed
+        )
 
     def interpret_requested_outputs(self):
         """
@@ -106,7 +108,7 @@ class PostProcessing:
                 # e.g. {'age': ['age_0', 'age_5'], 'bcg': ['bcg_vaccinated']}
 
                 # work out the conditions to be satisfied regarding the compartment of interest
-                numerator_conditions = string_pre_among.split("X")[1: -1]
+                numerator_conditions = string_pre_among.split("X")[1:-1]
 
                 # list all relevant compartments that should be included into the numerator or the denominator
                 self.operations_to_perform[output]["numerator_indices"] = []
@@ -119,7 +121,10 @@ class PostProcessing:
 
                     # for each relevant stratification
                     for condition in denominator_conditions.keys():
-                        if not any(category in name_components for category in denominator_conditions[condition]):
+                        if not any(
+                            category in name_components
+                            for category in denominator_conditions[condition]
+                        ):
                             is_in_denominator = False
                             break
 
@@ -127,7 +132,9 @@ class PostProcessing:
                         if all(category in compartment for category in numerator_conditions):
                             self.operations_to_perform[output]["numerator_indices"].append(i_comp)
                         else:
-                            self.operations_to_perform[output]["denominator_extra_indices"].append(i_comp)
+                            self.operations_to_perform[output]["denominator_extra_indices"].append(
+                                i_comp
+                            )
 
             # population distribution across a particular requested stratum
             elif output.startswith("distribution_of_strata"):
@@ -140,8 +147,12 @@ class PostProcessing:
                 for stratum_name in self.model.all_stratifications[stratification_of_interest]:
                     self.operations_to_perform[output]["compartment_indices"][stratum_name] = []
                     for i_comp, compartment_name in enumerate(self.model.compartment_names):
-                        if stratification_of_interest + "_" + stratum_name in find_name_components(compartment_name):
-                            self.operations_to_perform[output]["compartment_indices"][stratum_name].append(i_comp)
+                        if stratification_of_interest + "_" + stratum_name in find_name_components(
+                            compartment_name
+                        ):
+                            self.operations_to_perform[output]["compartment_indices"][
+                                stratum_name
+                            ].append(i_comp)
             else:
                 raise ValueError("only prevalence and distribution outputs are currently supported")
 
@@ -151,8 +162,9 @@ class PostProcessing:
         'self.generated_outputs' is populated during this process
         """
         for output in self.requested_outputs:
-            self.generated_outputs[output] = \
-                self.calculate_output_for_selected_times(output, self.find_output_times(output))
+            self.generated_outputs[output] = self.calculate_output_for_selected_times(
+                output, self.find_output_times(output)
+            )
 
     def find_output_times(self, output):
         """
@@ -161,7 +173,10 @@ class PostProcessing:
 
         # find model output times for user-requested times if a request submitted
         if output in self.requested_times.keys():
-            return [find_first_list_element_above(self.model.times, time) for time in self.requested_times[output]]
+            return [
+                find_first_list_element_above(self.model.times, time)
+                for time in self.requested_times[output]
+            ]
 
         # otherwise calculate outputs for all model output times
         else:
@@ -178,11 +193,17 @@ class PostProcessing:
         if output.startswith("prev"):
             out = []
             for i_time in time_indices:
-                numerator = \
-                    self.model.outputs[i_time, self.operations_to_perform[output]["numerator_indices"]].sum()
-                extra_for_denominator = \
-                    self.model.outputs[i_time, self.operations_to_perform[output]["denominator_extra_indices"]].sum()
-                value = numerator / (numerator + extra_for_denominator) if numerator + extra_for_denominator > 0. else 0
+                numerator = self.model.outputs[
+                    i_time, self.operations_to_perform[output]["numerator_indices"]
+                ].sum()
+                extra_for_denominator = self.model.outputs[
+                    i_time, self.operations_to_perform[output]["denominator_extra_indices"]
+                ].sum()
+                value = (
+                    numerator / (numerator + extra_for_denominator)
+                    if numerator + extra_for_denominator > 0.0
+                    else 0
+                )
                 if output in self.multipliers.keys():
                     value *= self.multipliers[output]
                 out.append(value)
@@ -193,8 +214,11 @@ class PostProcessing:
                 out[stratum] = []
                 for i_time in time_indices:
                     out[stratum].append(
-                        self.model.outputs[i_time, self.operations_to_perform[output]["compartment_indices"][stratum]
-                        ].sum())
+                        self.model.outputs[
+                            i_time,
+                            self.operations_to_perform[output]["compartment_indices"][stratum],
+                        ].sum()
+                    )
 
         else:
             ValueError("output type not currently supported")
@@ -289,7 +313,9 @@ if __name__ == "__main__":
         "prevXinfectiousXamong": 1.0e5,
     }
 
-    pp = PostProcessing(sir_model, req_outputs, requested_times=req_times, multipliers=req_multipliers)
+    pp = PostProcessing(
+        sir_model, req_outputs, requested_times=req_times, multipliers=req_multipliers
+    )
 
     print(pp.generated_outputs)
 
