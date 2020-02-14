@@ -546,35 +546,29 @@ class StratifiedModel(EpiModel):
     stratification preparation methods
     """
 
-    def set_ageing_rates(self, _strata_names):
+    def set_ageing_rates(self, strata_names):
         """
-        set inter-compartmental flows for ageing from one stratum to the next as the reciprocal of the width of the age
-            bracket
-
-        :param _strata_names:
-            see find_strata_names_from_input
+        Set inter-compartmental flows for ageing from one stratum to the next.
+        The ageing rate is proportional to the width of the age bracket.
         """
-        for stratum_number in range(len(_strata_names[:-1])):
-            start_age = int(_strata_names[stratum_number])
-            end_age = int(_strata_names[stratum_number + 1])
-            ageing_parameter_name = "ageing%sto%s" % (start_age, end_age)
+        ageing_flows = []
+        for strata_idx in range(len(strata_names) - 1):
+            start_age = int(strata_names[strata_idx])
+            end_age = int(strata_names[strata_idx + 1])
+            ageing_parameter_name = f"ageing{start_age}to{end_age}"
             ageing_rate = 1.0 / (end_age - start_age)
-            self.output_to_user(
-                "ageing rate from age group %s to %s is %s"
-                % (start_age, end_age, round(ageing_rate, self.reporting_sigfigs))
-            )
             self.parameters[ageing_parameter_name] = ageing_rate
             for compartment in self.compartment_names:
-                self.transition_flows = self.transition_flows.append(
-                    {
-                        "type": "standard_flows",
-                        "parameter": ageing_parameter_name,
-                        "origin": create_stratified_name(compartment, "age", start_age),
-                        "to": create_stratified_name(compartment, "age", end_age),
-                        "implement": len(self.all_stratifications),
-                    },
-                    ignore_index=True,
-                )
+                ageing_flow = {
+                    "type": Flow.STANDARD,
+                    "parameter": ageing_parameter_name,
+                    "origin": create_stratified_name(compartment, "age", start_age),
+                    "to": create_stratified_name(compartment, "age", end_age),
+                    "implement": len(self.all_stratifications),
+                }
+                ageing_flows.append(ageing_flow)
+
+        self.transition_flows = self.transition_flows.append(ageing_flows)
 
     def prepare_starting_proportions(self, _strata_names, _requested_proportions):
         """
