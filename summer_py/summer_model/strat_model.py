@@ -664,93 +664,73 @@ class StratifiedModel(EpiModel):
         Stratify flows depending on whether inflow, outflow or both need replication
         """
         flow_idxs = self.find_transition_indices_to_implement(back_one=1, include_change=True)
+        all_new_flows = []
         for n_flow in flow_idxs:
+            new_flows = []
             flow = self.transition_flows.iloc[n_flow]
             stratify_from = find_stem(flow.origin) in compartments_to_stratify
             stratify_to = find_stem(flow.to) in compartments_to_stratify
-            self.add_stratified_flows(
-                n_flow,
-                stratification_name,
-                strata_names,
-                stratify_from,
-                stratify_to,
-                adjustment_requests,
-            )
-
-    def add_stratified_flows(
-        self,
-        n_flow: int,
-        stratification_name: str,
-        strata_names: List[str],
-        stratify_from: bool,
-        stratify_to: bool,
-        adjustment_requests: Dict[str, Dict[str, float]],
-    ):
-        """
-        Add additional stratified flow to the transition flows.
-
-            stratify_from: Whether to stratify the from/origin compartment
-            stratify_to: Whether to stratify the to/destination compartment
-
-        """
-        if stratify_from or stratify_to:
-            flow = self.transition_flows.iloc[n_flow]
-            # Loop over each stratum in the requested stratification structure
-            for stratum in strata_names:
-                # Find the flow's parameter name
-                parameter_name = self.add_adjusted_parameter(
-                    flow.parameter, stratification_name, stratum, adjustment_requests,
-                )
-                if not parameter_name:
-                    parameter_name = self.sort_absent_transition_parameter(
-                        stratification_name,
-                        strata_names,
-                        stratum,
-                        stratify_from,
-                        stratify_to,
-                        flow.parameter,
+            if stratify_from or stratify_to:
+                for stratum in strata_names:
+                    # Find the flow's parameter name
+                    parameter_name = self.add_adjusted_parameter(
+                        flow.parameter, stratification_name, stratum, adjustment_requests,
                     )
+                    if not parameter_name:
+                        parameter_name = self.sort_absent_transition_parameter(
+                            stratification_name,
+                            strata_names,
+                            stratum,
+                            stratify_from,
+                            stratify_to,
+                            flow.parameter,
+                        )
 
-                # Determine whether to and/or from compartments are stratified
-                from_compartment = (
-                    create_stratified_name(flow.origin, stratification_name, stratum)
-                    if stratify_from
-                    else flow.origin
-                )
-                to_compartment = (
-                    create_stratified_name(flow.to, stratification_name, stratum)
-                    if stratify_to
-                    else flow.to
-                )
-                # Add the new flow
-                strain = (
-                    stratum
-                    if stratification_name == "strain" and flow.type != Flow.STRATA_CHANGE
-                    else flow.strain
-                )
-                self.transition_flows = self.transition_flows.append(
-                    {
+                    # Determine whether to and/or from compartments are stratified
+                    from_compartment = (
+                        create_stratified_name(flow.origin, stratification_name, stratum)
+                        if stratify_from
+                        else flow.origin
+                    )
+                    to_compartment = (
+                        create_stratified_name(flow.to, stratification_name, stratum)
+                        if stratify_to
+                        else flow.to
+                    )
+                    # Add the new flow
+                    strain = (
+                        stratum
+                        if stratification_name == "strain" and flow.type != Flow.STRATA_CHANGE
+                        else flow.strain
+                    )
+                    new_flow = {
                         "type": flow.type,
                         "parameter": parameter_name,
                         "origin": from_compartment,
                         "to": to_compartment,
                         "implement": len(self.all_stratifications),
                         "strain": strain,
-                    },
-                    ignore_index=True,
-                )
+                    }
+                    new_flows.append(new_flow)
 
-                # Update the customised flow function storage dictionary
-                if flow.type == Flow.CUSTOM:
-                    self.update_customised_flow_function_dict(n_flow)
+            else:
+                # If flow applies to a transition not involved in the stratification,
+                # still increment to ensure that it is implemented.
+                new_flow = flow.to_dict()
+                new_flow["implement"] += 1
+                new_flows.append(new_flow)
 
-        # If flow applies to a transition not involved in the stratification, still increment to ensure implemented
-        else:
-            new_flow = self.transition_flows.loc[n_flow, :].to_dict()
-            new_flow["implement"] += 1
-            self.transition_flows = self.transition_flows.append(new_flow, ignore_index=True)
-            if self.transition_flows.type[n_flow] == "customised_flows":
-                self.update_customised_flow_function_dict(n_flow)
+            # Update the customised flow functions.
+            num_flows = len(self.transition_flows) + len(all_new_flows)
+            for idx, new_flow in enumerate(new_flows):
+                if new_flow["type"] == Flow.CUSTOM:
+                    new_idx = num_flows + idx
+                    self.customised_flow_functions[new_idx] = self.customised_flow_functions[n_flow]
+
+            all_new_flows += new_flows
+
+        if all_new_flows:
+            self.transition_flows = self.transition_flows.append(all_new_flows, ignore_index=True)
 
     def add_adjusted_parameter(
         self, _unadjusted_parameter, _stratification_name, _stratum, _adjustment_requests
@@ -880,19 +860,6 @@ class StratifiedModel(EpiModel):
         else:
             self.output_to_user("\tretaining existing parameter value %s" % unstratified_name)
             return unstratified_name
-
-    def update_customised_flow_function_dict(self, _n_flow):
-        """
-        when a stratified flow is being created and if the original unstratified flow was customised, we need to update
-            the dictionary listing the functions associated with the customised flows with a new key to refer to the
-            same function
-
-        :param _n_flow: int
-            the index of the unstratified flow
-        """
-        self.customised_flow_functions[
-            self.transition_flows.shape[0] - 1
-        ] = self.customised_flow_functions[_n_flow]
 
     def stratify_entry_flows(
         self, _stratification_name, _strata_names, _entry_proportions, _requested_proportions
