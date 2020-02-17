@@ -25,6 +25,7 @@ class Flow:
     INFECTION_FREQUENCY = "infection_frequency"
     INFECTION_DENSITY = "infection_density"
     COMPARTMENT_DEATH = "compartment_death"
+    STRATA_CHANGE = "strata_change"
 
 
 class BirthApproach:

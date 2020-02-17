@@ -1,10 +1,5 @@
 """
 Test the results of stratifying a model.
-
-TODO: test
-
-- set_ageing_rates - break up into 'get ageing flows'
-
 """
 import pytest
 import pandas as pd
@@ -14,15 +9,233 @@ from summer_py.summer_model import StratifiedModel
 from summer_py.constants import Compartment, Flow, BirthApproach, Stratification, IntegrationType
 
 
-def _get_model_kwargs():
-    return {
-        "times": [2000, 2001, 2002, 2003, 2004, 2005],
-        "compartment_types": [Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS],
-        "initial_conditions": {Compartment.INFECTIOUS: 100},
-        "parameters": {},
-        "requested_flows": [],
-        "starting_population": 1000,
-    }
+PARAM_VARS = "flows, params, adjustment, comps, expected_flows, expected_params"
+PARAM_VALS = [
+    # Start with two transition flows and two parameters,
+    # Apply 2x strata and 1x parameter adjustment
+    # Apply strata to all compartments
+    # Expect 4 new transition flows and 2 new parameters.
+    [
+        [
+            ["standard_flows", "flow_0", "susceptible", "infectious", 0, None, None],
+            ["standard_flows", "flow_1", "infectious", "susceptible", 0, None, None],
+        ],
+        {"flow_0": 0.5, "flow_1": 0.1,},
+        {"flow_0": {"foo": 0.2, "bar": 0.7,}},
+        ["susceptible", "infectious"],
+        [
+            ["standard_flows", "flow_0", "susceptible", "infectious", 0, None, None],
+            ["standard_flows", "flow_1", "infectious", "susceptible", 0, None, None],
+            [
+                "standard_flows",
+                "flow_0Xtest_foo",
+                "susceptibleXtest_foo",
+                "infectiousXtest_foo",
+                1,
+                None,
+                None,
+            ],
+            [
+                "standard_flows",
+                "flow_0Xtest_bar",
+                "susceptibleXtest_bar",
+                "infectiousXtest_bar",
+                1,
+                None,
+                None,
+            ],
+            [
+                "standard_flows",
+                "flow_1",
+                "infectiousXtest_foo",
+                "susceptibleXtest_foo",
+                1,
+                None,
+                None,
+            ],
+            [
+                "standard_flows",
+                "flow_1",
+                "infectiousXtest_bar",
+                "susceptibleXtest_bar",
+                1,
+                None,
+                None,
+            ],
+        ],
+        {"flow_0": 0.5, "flow_1": 0.1, "flow_0Xtest_foo": 0.2, "flow_0Xtest_bar": 0.7},
+    ],
+    # Same as above but only stratify one compartment
+    [
+        [
+            ["standard_flows", "flow_0", "susceptible", "infectious", 0, None, None],
+            ["standard_flows", "flow_1", "infectious", "susceptible", 0, None, None],
+        ],
+        {"flow_0": 0.5, "flow_1": 0.1,},
+        {"flow_0": {"foo": 0.2, "bar": 0.7,}},
+        ["susceptible"],
+        [
+            ["standard_flows", "flow_0", "susceptible", "infectious", 0, None, None],
+            ["standard_flows", "flow_1", "infectious", "susceptible", 0, None, None],
+            [
+                "standard_flows",
+                "flow_0Xtest_foo",
+                "susceptibleXtest_foo",
+                "infectious",
+                1,
+                None,
+                None,
+            ],
+            [
+                "standard_flows",
+                "flow_0Xtest_bar",
+                "susceptibleXtest_bar",
+                "infectious",
+                1,
+                None,
+                None,
+            ],
+            [
+                "standard_flows",
+                "flow_1Xtest_foo",
+                "infectious",
+                "susceptibleXtest_foo",
+                1,
+                None,
+                None,
+            ],
+            [
+                "standard_flows",
+                "flow_1Xtest_bar",
+                "infectious",
+                "susceptibleXtest_bar",
+                1,
+                None,
+                None,
+            ],
+        ],
+        {
+            "flow_0": 0.5,
+            "flow_1": 0.1,
+            "flow_0Xtest_foo": 0.2,
+            "flow_0Xtest_bar": 0.7,
+            "flow_1Xtest_foo": 0.5,
+            "flow_1Xtest_bar": 0.5,
+        },
+    ],
+]
+
+
+@pytest.mark.parametrize(PARAM_VARS, PARAM_VALS)
+def test_stratify_transition_flows(
+    flows, params, adjustment, comps, expected_flows, expected_params
+):
+    """
+    Ensure that `stratify_compartments` splits up transition flows correctly.
+    """
+    model = StratifiedModel(**_get_model_kwargs())
+    cols = ["type", "parameter", "origin", "to", "implement", "strain", "force_index"]
+    model.transition_flows = pd.DataFrame(flows, columns=cols).astype(object)
+    model.parameters = params
+    strat_name = "test"
+    strata_names = ["foo", "bar"]
+    model.all_stratifications = {strat_name: strata_names}
+    model.stratify_compartments(strat_name, strata_names, {"foo": 0.5, "bar": 0.5}, comps)
+    model.stratify_transition_flows(strat_name, strata_names, adjustment, comps)
+    # Check flows df stratified
+    expected_flows_df = pd.DataFrame(expected_flows, columns=cols).astype(object)
+    assert_frame_equal(expected_flows_df, model.transition_flows)
+    # Check params are stratified
+    for k, v in expected_params.items():
+        assert model.parameters[k] == v
+
+
+PARAM_VARS = "back_one, include_change, all_stratifications, flows, expected_idxs"
+PARAM_VALS = [
+    # Test default case - expect all flow idxs.
+    [
+        0,
+        False,
+        {},
+        [
+            ["standard_flows", "flow_name_0", "comp_0", "comp_1", 0, None, None],
+            ["standard_flows", "flow_name_1", "comp_1", "comp_0", 0, None, None],
+        ],
+        [0, 1],
+    ],
+    # Test default case, but 1 flow has wrong implement - expect all flow idxs except that one.
+    [
+        0,
+        False,
+        {},
+        [
+            ["standard_flows", "flow_name_0", "comp_0", "comp_1", 1, None, None],
+            ["standard_flows", "flow_name_1", "comp_1", "comp_0", 0, None, None],
+        ],
+        [1],
+    ],
+    # Test default case, but 1 strats added yet with back 1 - expect all flow idxs.
+    [
+        1,
+        False,
+        {"age": [0, 5, 15, 50]},
+        [
+            ["standard_flows", "flow_name_0", "comp_0", "comp_1", 0, None, None],
+            ["standard_flows", "flow_name_1", "comp_1", "comp_0", 0, None, None],
+        ],
+        [0, 1],
+    ],
+    # Test default case, but 1 strats added yet no back 1 - expect no flow idxs.
+    [
+        0,
+        False,
+        {"age": [0, 5, 15, 50]},
+        [
+            ["standard_flows", "flow_name_0", "comp_0", "comp_1", 0, None, None],
+            ["standard_flows", "flow_name_1", "comp_1", "comp_0", 0, None, None],
+        ],
+        [],
+    ],
+    # Test default case, but with a strata change flow - expect all flow idxs except strata change flow.
+    [
+        0,
+        False,
+        {},
+        [
+            ["standard_flows", "flow_name_0", "comp_0", "comp_1", 0, None, None],
+            ["strata_change", "flow_name_0", "comp_0", "comp_1", 0, None, None],
+            ["standard_flows", "flow_name_1", "comp_1", "comp_0", 0, None, None],
+        ],
+        [0, 2],
+    ],
+    # Test default case, but with a strata change flow and 'include change' - expect all flow idxs.
+    [
+        0,
+        True,
+        {},
+        [
+            ["standard_flows", "flow_name_0", "comp_0", "comp_1", 0, None, None],
+            ["strata_change", "flow_name_0", "comp_0", "comp_1", 0, None, None],
+            ["standard_flows", "flow_name_1", "comp_1", "comp_0", 0, None, None],
+        ],
+        [0, 1, 2],
+    ],
+]
+
+
+@pytest.mark.parametrize(PARAM_VARS, PARAM_VALS)
+def test_find_transition_indices_to_implement(
+    back_one, include_change, all_stratifications, flows, expected_idxs
+):
+    """
+    Ensure `find_transition_indices_to_implement` returns the correct list of indices.
+    """
+    model = StratifiedModel(**_get_model_kwargs())
+    cols = ["type", "parameter", "origin", "to", "implement", "strain", "force_index"]
+    model.transition_flows = pd.DataFrame(flows, columns=cols).astype(object)
+    model.all_stratifications = all_stratifications
+    actual_idxs = model.find_transition_indices_to_implement(back_one, include_change)
+    assert expected_idxs == actual_idxs
 
 
 PARAM_VARS = "strata,proportions,to_stratify,expected_names,expected_values"
@@ -67,7 +280,7 @@ PARAM_VALS = [
 @pytest.mark.parametrize(PARAM_VARS, PARAM_VALS)
 def test_stratify_compartments(strata, proportions, to_stratify, expected_names, expected_values):
     """
-    Ensure that ageing flows are added to the transition flows dataframe
+    Ensure that `stratify_compartments` splits up compartment names and values correctly.
     """
     model = StratifiedModel(**_get_model_kwargs())
     model.stratify_compartments("test", strata, proportions, to_stratify)
@@ -161,7 +374,7 @@ PARAM_VALS = [
 @pytest.mark.parametrize(PARAM_VARS, PARAM_VALS)
 def test_set_ageing_rates(age_strata, expected_flows, expected_ageing):
     """
-    Ensure that ageing flows are added to the transition flows dataframe  
+    Ensure that `set_ageing_rates` adds ageing flows to the transition flows dataframe
     """
     model = StratifiedModel(**_get_model_kwargs())
     cols = ["type", "parameter", "origin", "to", "implement", "strain", "force_index"]
@@ -178,3 +391,14 @@ def test_set_ageing_rates(age_strata, expected_flows, expected_ageing):
     for k, v in expected_ageing.items():
         assert model.parameters[k] == v
 
+
+def _get_model_kwargs(**kwargs):
+    return {
+        "times": [2000, 2001, 2002, 2003, 2004, 2005],
+        "compartment_types": [Compartment.SUSCEPTIBLE, Compartment.INFECTIOUS],
+        "initial_conditions": {Compartment.INFECTIOUS: 100},
+        "parameters": {},
+        "requested_flows": [],
+        "starting_population": 1000,
+        **kwargs,
+    }
