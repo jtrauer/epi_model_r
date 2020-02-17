@@ -127,4 +127,3 @@ def remove_multiple_elements_from_list(a_list, indices_to_be_removed):
         list of the elements that are no longer needed
     """
     return [a_list[i] for i in range(len(a_list)) if i not in indices_to_be_removed]
-
