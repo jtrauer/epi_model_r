@@ -3,9 +3,9 @@ import copy
 import matplotlib.pyplot
 import numpy
 import pandas as pd
-from scipy.integrate import odeint, solve_ivp
 
 from ..constants import Compartment, Flow, BirthApproach, Stratification, IntegrationType
+from .utils.solver import solve_ode
 from .utils.validation import validate_model
 from .utils import (
     convert_boolean_list_to_indices,
@@ -302,7 +302,7 @@ class EpiModel:
     model running methods
     """
 
-    def run_model(self, integration_type=IntegrationType.ODE_INT, stopping_tolerance=1e-6):
+    def run_model(self, integration_type=IntegrationType.ODE_INT, solver_args={}):
         """
         Calculates the model's outputs using an ODE solver.
 
@@ -312,54 +312,24 @@ class EpiModel:
         The final result is an array of compartment values at each timestep (self.outputs).
         Also calculates post-processing outputs after the ODE integration is complete.
         """
-        self.output_to_user("\n-----\nnow integrating")
         self.prepare_to_run()
 
-        if integration_type == IntegrationType.ODE_INT:
-            # Basic, default integration method
-            def ode_func(compartment_values, time):
-                """
-                Inner loop of ODE solver which describes ODE dynamics.
-                Returns the flow rates at the current timestep,
-                given the current compartment values and time.
-                """
-                self.update_tracked_quantities(compartment_values)
-                return self.apply_all_flow_types_to_odes(compartment_values, time)
+        def ode_func(compartment_values, time):
+            """
+            Inner loop of ODE solver which describes ODE dynamics.
+            Returns the flow rates at the current timestep,
+            given the current compartment values and time.
+            """
+            self.update_tracked_quantities(compartment_values)
+            return self.apply_all_flow_types_to_odes(compartment_values, time)
 
-            self.outputs = odeint(
-                ode_func, self.compartment_values, self.times, atol=1.0e-3, rtol=1.0e-3
-            )
-
-        elif integration_type == IntegrationType.SOLVE_IVP:
-            # Alternative integration method, which allows us to set a stopping condition.
-            def ode_func(time, compartment_values):
-                self.update_tracked_quantities(compartment_values)
-                return self.apply_all_flow_types_to_odes(compartment_values, time)
-
-            def set_stopping_conditions(time, compartment_values):
-                self.update_tracked_quantities(compartment_values)
-                return (
-                    max(list(map(abs, self.apply_all_flow_types_to_odes(compartment_values, time))))
-                    - stopping_tolerance
-                )
-
-            set_stopping_conditions.terminal = True
-            self.outputs = solve_ivp(
-                ode_func,
-                (self.times[0], self.times[-1]),
-                self.compartment_values,
-                t_eval=self.times,
-                events=set_stopping_conditions,
-            )["y"].transpose()
-
-        else:
-            raise ValueError("Integration approach requested not available")
+        self.outputs = solve_ode(
+            integration_type, ode_func, self.compartment_values, self.times, solver_args
+        )
 
         # Check that all compartment values are >= 0
         if numpy.any(self.outputs < 0.0):
             print("Warning: compartment(s) with negative values.")
-
-        self.output_to_user("Integration complete")
 
         # Collate outputs to be calculated post-integration that are not just compartment sizes.
         self.calculate_post_integration_connection_outputs()

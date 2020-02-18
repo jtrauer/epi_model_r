@@ -45,6 +45,7 @@ class IntegrationType:
 
     ODE_INT = "odeint"
     SOLVE_IVP = "solve_ivp"
+    EULER = "euler"
 
 
 class Stratification:
