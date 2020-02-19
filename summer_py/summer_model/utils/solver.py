@@ -5,6 +5,7 @@ from typing import List, Callable, Dict
 
 import numpy as np
 from scipy.integrate import odeint, solve_ivp
+from scipy.interpolate import interp1d
 
 from summer_py.constants import IntegrationType
 
@@ -66,24 +67,33 @@ def solve_with_euler(
     """
     Solve ODE with Euler's method.
 
-    WARNING: This code is untested, don't use it for important stuff.
+    WARNING: This code is not rigorously tested, don't use it for important stuff.
     """
     step_size = solver_args.get("step_size", 0.1)
     start_time = times[0]
     end_time = times[-1]
     time_span = end_time - start_time
-    num_timesteps = int(time_span / step_size)
+    num_timesteps = int(time_span / step_size) + 1
     assert (
-        num_timesteps == time_span / step_size
+        num_timesteps == time_span / step_size + 1
     ), f"Step size {step_size} must be a factor of the time span {time_span}."
-    output_arr = np.zeros([num_timesteps, len(values)])
-    output_arr[0] = np.array(values)
-    timestep = 0
-    while timestep < num_timesteps - 1:
-        time = start_time + timestep * step_size
-        values_arr = output_arr[timestep]
+    integration_times = np.linspace(start_time, end_time, num_timesteps)
+    results_arr = np.zeros([num_timesteps, len(values)])
+    results_arr[0] = np.array(values)
+
+    # Perform Euler's method integration
+    for time_idx, time in enumerate(integration_times[:-1]):
+        values_arr = results_arr[time_idx]
         gradient_arr = ode_func(values_arr, time)
-        output_arr[timestep + 1] = values_arr + step_size * gradient_arr
-        timestep += 1
+        results_arr[time_idx + 1] = values_arr + step_size * gradient_arr
+
+    # Interpolate results to match the requested output times
+    solved_func = interp1d(integration_times, results_arr, axis=0)
+    output_arr = np.zeros([len(times), len(values)])
+    output_arr[0] = np.array(values)
+    num_times = len(times)
+    for time_idx in range(1, num_times):
+        time = times[time_idx]
+        output_arr[time_idx] = solved_func(time)
 
     return output_arr
