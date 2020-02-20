@@ -23,6 +23,8 @@ def solve_ode(
         return solve_with_ivp(ode_func, values, times, solver_args)
     elif solver_type == IntegrationType.EULER:
         return solve_with_euler(ode_func, values, times, solver_args)
+    elif solver_type == IntegrationType.RUNGE_KUTTA:
+        return solve_with_rk4(ode_func, values, times, solver_args)
     else:
         raise ValueError("Integration approach requested not available")
 
@@ -66,7 +68,7 @@ def solve_with_euler(
 ):
     """
     Solve ODE with Euler's method.
-
+    https://en.wikipedia.org/wiki/Euler_method
     WARNING: This code is not rigorously tested, don't use it for important stuff.
     """
     step_size = solver_args.get("step_size", 0.1)
@@ -87,13 +89,56 @@ def solve_with_euler(
         gradient_arr = ode_func(values_arr, time)
         results_arr[time_idx + 1] = values_arr + step_size * gradient_arr
 
-    # Interpolate results to match the requested output times
+    return _interpolate_solver_results(results_arr, integration_times, times)
+
+
+def solve_with_rk4(ode_func: Callable, values: List[float], times: List[float], solver_args: Dict):
+    """
+    Solve ODE with the Runge-Kutta 4 method.
+    https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta_methods
+    WARNING: This code is not rigorously tested, don't use it for important stuff.
+    """
+    step_size = solver_args.get("step_size", 0.1)
+    start_time = times[0]
+    end_time = times[-1]
+    time_span = end_time - start_time
+    num_timesteps = int(time_span / step_size) + 1
+    assert (
+        num_timesteps == time_span / step_size + 1
+    ), f"Step size {step_size} must be a factor of the time span {time_span}."
+    integration_times = np.linspace(start_time, end_time, num_timesteps)
+    results_arr = np.zeros([num_timesteps, len(values)])
+    results_arr[0] = np.array(values)
+
+    # Perform Runge-Kutta 4 method integration
+    for time_idx, time in enumerate(integration_times[:-1]):
+        values_arr = results_arr[time_idx]
+        k1 = step_size * ode_func(values_arr, time)
+        k2 = step_size * ode_func(values_arr + k1 / 2, time + step_size / 2)
+        k3 = step_size * ode_func(values_arr + k2 / 2, time + step_size / 2)
+        k4 = step_size * ode_func(values_arr + k3, time + step_size)
+        results_arr[time_idx + 1] = values_arr + (1 / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
+
+    return _interpolate_solver_results(results_arr, integration_times, times)
+
+
+def _interpolate_solver_results(results_arr, integration_times, requested_times):
+    """
+    Interpolate solver results into an output array that matches the requested times
+
+    results_arr: Solver results, 2D Numpy array
+    integration_times: Times used to get solver results
+    requested_times: Times to interpolate
+    """
+    # Build a function to produce interpolated results
     solved_func = interp1d(integration_times, results_arr, axis=0)
-    output_arr = np.zeros([len(times), len(values)])
-    output_arr[0] = np.array(values)
-    num_times = len(times)
+    # Create output array to store values for requested times.
+    output_arr = np.zeros([len(requested_times), results_arr.shape[1]])
+    output_arr[0] = results_arr[0]
+    # Populate output array with interpolated results
+    num_times = len(requested_times)
     for time_idx in range(1, num_times):
-        time = times[time_idx]
+        time = requested_times[time_idx]
         output_arr[time_idx] = solved_func(time)
 
     return output_arr
