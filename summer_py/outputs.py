@@ -710,6 +710,32 @@ class Outputs:
             file_name = os.path.join(scenario_name, requested_output + "BY" + stratification)
             self.finish_off_figure(fig, filename=file_name, title_text=requested_output + "Xamong")
 
+    def plot_input_function(self, input_function_name, input_function, sc_index=0):
+        """
+        Plot single simple plot of a function
+        """
+
+        times_to_plot = self.post_processing_list[sc_index].model.times
+        fig, axes, max_dims, n_rows, n_cols = initialise_figures_axes(1)
+        axis = find_panel_grid_indices([axes], 0, n_rows, n_cols)
+        axis.plot(
+            times_to_plot,
+            list(map(input_function, times_to_plot)),
+            color=self.colour_theme[sc_index])
+        self.tidy_x_axis(
+            axis,
+            start=self.plot_start_time,
+            end=max(times_to_plot),
+            max_dims=max_dims,
+            x_label="time",
+        )
+        self.tidy_y_axis(
+            axis, quantity="", max_dims=max_dims
+        )
+        scenario_name = list(self.scenario_names.values())[sc_index]
+        file_name = os.path.join(scenario_name, input_function_name)
+        self.finish_off_figure(fig, filename=file_name, title_text=input_function_name)
+
 
 if __name__ == "__main__":
     # build and run an example model
