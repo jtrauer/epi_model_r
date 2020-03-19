@@ -673,10 +673,15 @@ class EpiModel:
             check_origin_stem = find_stem(origin) == output_conn["origin"]
             check_target_stem = find_stem(target) == output_conn["to"]
             check_origin_condition = (
-                "origin_condition" in output_conn and output_conn["origin_condition"] in origin
+                "origin_condition" in output_conn and
+                output_conn["origin_condition"] in find_name_components(origin) or
+                output_conn['origin_condition'] == ''
+
             )
             check_target_condition = (
-                "to_condition" in output_conn and output_conn["to_condition"] in target
+                "to_condition" in output_conn and
+                output_conn["to_condition"] in find_name_components(target) or
+                output_conn['to_condition'] == ''
             )
             return (
                 check_implement
