@@ -676,13 +676,15 @@ class EpiModel:
                 'origin_condition' not in output_conn or \
                 (
                         'origin_condition' in output_conn and
-                        output_conn["origin_condition"] in origin
+                        output_conn["origin_condition"] in find_name_components(origin) or
+                        output_conn['origin_condition'] == ''
                 )
             check_target_condition = \
                 'to_condition' not in output_conn or \
                 (
                         'to_condition' in output_conn and
-                        output_conn["to_condition"] in target
+                        output_conn["to_condition"] in find_name_components(target) or
+                        output_conn['to_condition'] == ''
                 )
             return (
                 check_implement
