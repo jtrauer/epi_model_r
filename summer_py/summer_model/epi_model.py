@@ -676,14 +676,16 @@ class EpiModel:
                 'origin_condition' not in output_conn or \
                 (
                         'origin_condition' in output_conn and
-                        output_conn["origin_condition"] in find_name_components(origin) or
+                        all(tag in find_name_components(origin) for
+                            tag in find_name_components(output_conn["origin_condition"])) or
                         output_conn['origin_condition'] == ''
                 )
             check_target_condition = \
                 'to_condition' not in output_conn or \
                 (
                         'to_condition' in output_conn and
-                        output_conn["to_condition"] in find_name_components(target) or
+                        all(tag in find_name_components(target) for
+                            tag in find_name_components(output_conn["to_condition"])) or
                         output_conn['to_condition'] == ''
                 )
             return (
