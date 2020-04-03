@@ -353,7 +353,7 @@ class EpiModel:
         """
         if self.ticker:
             print("Integrating at time: %s" % time)
-
+        self.prepare_time_step(time)
         flow_rates = numpy.zeros(len(self.compartment_names))
         flow_rates = self.apply_transition_flows(flow_rates, compartment_values, time)
         # Apply deaths before births so that we can use 'total deaths' to calculate the birth rate, if required.
@@ -362,6 +362,12 @@ class EpiModel:
         flow_rates = self.apply_birth_rate(flow_rates, compartment_values, time)
         flow_rates = self.apply_change_rates(flow_rates, compartment_values, time)
         return flow_rates
+
+    def prepare_time_step(self, _time):
+        """
+        Perform any tasks needed for execution of each integration time step
+        """
+        pass
 
     def apply_change_rates(self, flow_rates, compartment_values, time):
         """

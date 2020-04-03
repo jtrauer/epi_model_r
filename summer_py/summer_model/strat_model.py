@@ -211,6 +211,7 @@ class StratifiedModel(EpiModel):
         self.heterogeneous_mixing = False
         self.mixing_matrix = None
         self.available_death_rates = [""]
+        self.dynamic_mixing_matrix = False
 
     """
     stratification methods
@@ -633,7 +634,7 @@ class StratifiedModel(EpiModel):
     ):
         """
         Stratify the model compartments into sub-compartments, based on the strata names provided,
-        splitting the population according to the provided proprotions. Stratification will be applied 
+        splitting the population according to the provided proprotions. Stratification will be applied
         to compartment_names and compartment_values.
 
         Only compartments specified in `self.compartment_types_to_stratify` will be stratified.
@@ -1671,13 +1672,26 @@ class StratifiedModel(EpiModel):
             return 1.0
         strain = "all_strains" if not self.strains else strain
         mixing_elements = (
-            [1.0] if self.mixing_matrix is None else list(self.mixing_matrix[force_index, :])
+            [1.0] if self.mixing_matrix is None else self.mixing_matrix[force_index, :]
         )
         denominator = 1.0 if "_density" in flow_type else self.infectious_denominators
         return (
             sum(element_list_multiplication(self.infectious_populations[strain], mixing_elements))
             / denominator
         )
+
+    def prepare_time_step(self, _time):
+        """
+        Perform any tasks needed for execution of each integration time step
+        """
+        if self.dynamic_mixing_matrix:
+            self.mixing_matrix = self.find_dynamic_mixing_matrix(_time)
+
+    def find_dynamic_mixing_matrix(self, _time):
+        """
+        Function for overwriting in application to create time-variant mixing matrix
+        """
+        return self.mixing_matrix
 
     def get_compartment_death_rate(self, _compartment, _time):
         """
